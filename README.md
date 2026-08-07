@@ -1,94 +1,121 @@
 # OpenKartLine
 
-> Open-source 2D kart racing-line and lap-time optimization.
+![OpenKartLine racing line lab](docs/assets/openkartline-logo.svg)
 
-[Leia em Português](README.pt-BR.md)
+> An open-source, local-first 2D kart racing-line and lap-planning application.
 
-OpenKartLine aims to turn track geometry and kart characteristics into an explainable minimum-time lap plan: racing line, target speed, braking zones, turn-in, apex, and throttle application.
+[![CI](https://github.com/Navesz/openkartline/actions/workflows/ci.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml)
+[![Documentation](https://github.com/Navesz/openkartline/actions/workflows/docs.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/docs.yml)
+[![License](https://img.shields.io/github/license/Navesz/openkartline)](LICENSE)
+[![Status](https://img.shields.io/badge/status-alpha-orange)](docs/ROADMAP.md)
 
-The project is currently in **planning / pre-alpha**. The repository is public early so drivers, engineers, students, and developers can shape the model before implementation choices become expensive.
+[Leia em português](README.pt-BR.md) · [Try the web demo](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribute](CONTRIBUTING.md)
 
-## Why this project
+OpenKartLine turns a metric track shape and kart characteristics into an explainable lap estimate: a baseline racing line, speed profile, estimated lap time, and braking, apex, and acceleration references. The runnable alpha works in a browser without an account; when the local Python engine is available, the same interface automatically uses its stricter geometry and point-mass simulation.
 
-Most tools are either engineering simulators that are difficult for drivers to use, or telemetry analyzers that require an existing reference lap. OpenKartLine is intended to bridge that gap with a visual, local-first workflow:
+This is an engineering and learning tool, not a safety system. Its output is an unvalidated planning estimate and must be checked progressively in a controlled environment.
 
-1. Import or draw a 2D circuit.
-2. Define the usable track boundaries and direction.
-3. Describe or calibrate a kart.
-4. Compute a racing line and speed profile.
-5. Present the result as practical, explainable driving guidance.
-6. Compare the prediction with real telemetry and improve the model.
+## What works today
 
-## Planned output
+- Edit a closed 2D centerline, add or drag points, pan, zoom, fit, and undo/redo.
+- Set track width and direction and start from three synthetic circuits.
+- Describe kart power, mass, top speed, lateral grip, and braking capability.
+- Calculate a deterministic minimum-bending path and cyclic point-mass speed profile.
+- Inspect a color-coded line, synchronized distance charts, metrics, and driving references.
+- Save and reopen portable `.okl.json` projects.
+- Run entirely in the browser with a simplified fallback or connect to the local FastAPI engine.
+- Receive explicit assumptions, geometry errors, solver state, model version, and diagnostics.
 
-- Racing line inside explicit track boundaries.
-- Target speed and estimated lap time.
-- Brake, coast, partial-throttle, and full-throttle zones.
-- Turn-in, apex, and exit markers.
-- Synchronized 2D animation and distance-based charts.
-- Comparison between simulated and recorded laps.
-- Confidence and calibration information instead of false precision.
+The current solver is a constrained baseline, **not** a globally optimal minimum-time trajectory. Independent boundaries, image/GPS import, telemetry calibration, joint path/control optimization, and native installers are roadmap work.
 
-## Architecture at a glance
+## Quick start
+
+Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.13, and [uv](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/Navesz/openkartline.git
+cd openkartline
+corepack enable
+pnpm install --frozen-lockfile
+uv sync --locked --all-extras --dev
+```
+
+Run the API in one terminal:
+
+```bash
+uv run openkartline-api
+```
+
+Run the web application in another:
+
+```bash
+pnpm dev
+```
+
+Open `http://localhost:5173`. The header says **Motor conectado** when the Python API is in use and **Modo local** when the deterministic browser fallback is active. API documentation is available at `http://127.0.0.1:8000/docs`.
+
+Run the complete local verification:
+
+```bash
+pnpm check
+pnpm exec playwright install chromium
+pnpm test:e2e
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy engine services
+uv run pytest
+```
+
+See [Development](docs/DEVELOPMENT.md) for platform notes and troubleshooting.
+
+## How it fits together
 
 ```mermaid
 flowchart LR
-    A["Image, KML, GPX or CSV"] --> B["2D track editor"]
-    B --> C["Track geometry pipeline"]
-    D["Kart profile and telemetry"] --> E["Vehicle model"]
-    C --> F["Trajectory optimizer"]
+    A["2D track editor"] --> B["Versioned request adapter"]
+    K["Kart and driver inputs"] --> B
+    B --> C{"Local API available?"}
+    C -->|yes| D["Python geometry + physics engine"]
+    C -->|no| E["Browser fallback"]
+    D --> F["Lap plan + diagnostics"]
     E --> F
-    F --> G["Lap plan"]
-    G --> H["Line, speed, brake and throttle UI"]
-    I["Recorded laps"] --> J["Calibration"]
-    J --> E
+    F --> G["Line, charts and driving references"]
+    A <--> H[".okl.json project"]
 ```
 
-The initial stack is React/TypeScript for the editor, FastAPI for a small local API, and Python scientific libraries for geometry and optimization. The solver runs outside the API process so a long optimization cannot freeze the application. See [Architecture](docs/ARCHITECTURE.md) and [Stack decisions](docs/STACK.md).
+| Layer | Current implementation | Responsibility |
+|---|---|---|
+| Web | React 19, TypeScript, Vite, SVG | Metric editor, local files, visualization, browser fallback |
+| API | FastAPI, Pydantic | Versioned HTTP boundary, validation, OpenAPI |
+| Engine | Python, NumPy | Geometry preparation, minimum-bending baseline, speed profile, markers |
+| Quality | pytest, Vitest, Playwright, Ruff, mypy, ESLint, Prettier | Deterministic regression and cross-platform gates |
+| Operations | GitHub Actions, CodeQL, Dependabot, Pages | CI, security checks, dependency updates, static demo |
 
-## Delivery strategy
+The scientific core has no React or HTTP dependency. The local API is deliberately synchronous and bounded for this alpha; a separate worker is reserved for future long-running nonlinear solvers. Read [Architecture](docs/ARCHITECTURE.md), [Physics](docs/PHYSICS.md), the evidence standards in [Validation](docs/VALIDATION.md), and the measured [v0.1.0 validation report](docs/VALIDATION_REPORT.md).
 
-OpenKartLine will grow through models that can be independently tested:
-
-- **Geometry baseline:** shortest-path and minimum-curvature lines.
-- **Physics MVP:** point-mass kart, friction envelope, and forward/backward speed profile.
-- **Minimum-time model:** jointly optimize path and controls with CasADi/IPOPT.
-- **Calibrated model:** estimate unknown kart parameters from telemetry.
-- **Advanced model:** optional transient kart dynamics and higher-performance solver backends.
-
-The detailed phases and acceptance criteria are in the [Roadmap](docs/ROADMAP.md).
-
-## Repository layout
+## Repository map
 
 ```text
-apps/web/          React track editor and visualization
-services/api/      Local FastAPI boundary and job orchestration
-engine/            Physics, geometry, calibration, and optimization
-packages/schemas/  Versioned data contracts shared across components
-docs/              Product, architecture, physics, formats, and ADRs
-examples/          Redistributable example tracks and kart profiles
-tests/fixtures/    Deterministic validation fixtures
+apps/web/          Interactive editor, viewer, and browser solver
+services/api/      Thin local FastAPI service
+engine/            Framework-independent geometry and physics
+packages/schemas/  Shared format documentation and schemas
+tests/python/      Engine/API tests and deterministic fixtures
+docs/              Architecture, product, safety, roadmap, and operations
+examples/          Synthetic or explicitly redistributable examples only
 ```
 
-Directories are placeholders until their corresponding roadmap milestone starts. There is no runnable simulator yet.
+## Contributing and project health
 
-## Project principles
+Contributions in English or Brazilian Portuguese are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), choose an issue, and use the pull-request template. The project includes governance, a code of conduct, security and privacy policies, issue forms, locked dependencies, release procedures, and a public roadmap.
 
-- Physics first; machine learning may calibrate a model but must not hide it.
-- Local-first, no account required, and no mandatory cloud service.
-- SI units inside the engine; display units are a UI concern.
-- Every result includes assumptions, solver status, and model version.
-- Simple models must be validated before more complex models are added.
-- The application provides planning estimates, not a safety guarantee.
+Funding is intentionally transparent: no donation destination is published until the repository owner activates and verifies one. See [Funding](docs/FUNDING.md).
 
-## Contributing
+## Safety and privacy
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md), the [Roadmap](docs/ROADMAP.md), and an issue. Architectural changes use short ADRs under `docs/adr/`. Contributions in English or Brazilian Portuguese are welcome; canonical technical documents are maintained in English so the project can serve an international community.
+Track accuracy, tires, surface, temperature, kart condition, and driver behavior can move every suggested reference. Keep a conservative margin, obey the circuit, and never treat a predicted brake point as an instruction to exceed your ability. Project files remain local unless you choose to share them; do not commit private telemetry or imagery without redistribution rights. Read [Safety](docs/SAFETY.md) and [Privacy](docs/PRIVACY.md).
 
-## Safety
+## License and citation
 
-Simulation results depend on track accuracy, tires, surface, weather, kart condition, and driver inputs. Treat all recommendations as estimates, validate progressively in a controlled environment, obey the circuit's rules, and never use the tool as a reason to exceed your ability or available safety margin.
-
-## License
-
-OpenKartLine is licensed under the [Apache License 2.0](LICENSE). Third-party projects are not automatically part of OpenKartLine; proposed integrations and their license boundaries are tracked in [THIRD_PARTY.md](THIRD_PARTY.md).
+Code is licensed under [Apache-2.0](LICENSE). Third-party and data provenance rules are in [THIRD_PARTY.md](THIRD_PARTY.md). If the project contributes to research, cite the exact release or commit using [CITATION.cff](CITATION.cff).

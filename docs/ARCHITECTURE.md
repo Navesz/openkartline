@@ -1,92 +1,110 @@
 # Architecture
 
-## Goals
+This document separates the architecture that runs today from the components planned for heavier solvers. That distinction is intentional: an alpha should be easy to reproduce without pretending that future infrastructure already exists.
 
-- Keep physics usable from a CLI, notebook, test, API, or future desktop shell.
-- Keep UI pixels and framework state out of scientific code.
-- Make solver choice replaceable.
-- Make every result reproducible and diagnosable.
-- Work locally without authentication or network access after installation.
+## Design rules
 
-## Logical components
+- Scientific code is usable without React or HTTP.
+- Canonical geometry uses meters; SVG pixels are only a view transform.
+- Every public payload and project file has an explicit version.
+- A failed or rejected solve never becomes a successful-looking scientific result.
+- Identical valid inputs and settings produce equivalent outputs.
+- The application remains useful locally without accounts, a database, or telemetry upload.
+
+## Runnable alpha
 
 ```mermaid
 flowchart TB
-    subgraph Client["apps/web"]
-      Editor["Track editor"]
-      KartForm["Kart profile"]
-      Viewer["Lap viewer and charts"]
+    subgraph Web["apps/web"]
+      Editor["SVG track editor"]
+      Form["Kart + solver inputs"]
+      Adapter["Versioned API adapter"]
+      BrowserSolver["Simplified browser fallback"]
+      Viewer["Line + charts + references"]
+      Project[".okl.json reader/writer"]
     end
-    subgraph Service["services/api"]
-      HTTP["Typed API"]
-      Jobs["Job supervisor"]
-    end
-    subgraph Core["engine"]
-      Import["Import and normalization"]
-      Geometry["Geometry pipeline"]
-      Models["Vehicle models"]
-      Solvers["Solver adapters"]
-      Explain["Marker and explanation builder"]
-      Calibrate["Telemetry calibration"]
-    end
-    Schema["packages/schemas"]
-    Files[".okl.json projects"]
 
-    Editor --> HTTP
-    KartForm --> HTTP
-    HTTP --> Jobs
-    Jobs --> Import
-    Import --> Geometry
-    Geometry --> Solvers
-    Models --> Solvers
-    Solvers --> Explain
-    Calibrate --> Models
-    Explain --> HTTP
-    HTTP --> Viewer
-    Files <--> Client
-    Schema --- Client
-    Schema --- Service
-    Schema --- Core
+    subgraph API["services/api"]
+      HTTP["FastAPI / OpenAPI"]
+    end
+
+    subgraph Core["engine"]
+      Contract["Strict Pydantic contracts"]
+      Geometry["Validation + metric geometry"]
+      Path["Minimum-bending baseline"]
+      Physics["Cyclic point-mass speed profile"]
+      Explain["Diagnostics + markers"]
+    end
+
+    Editor --> Adapter
+    Form --> Adapter
+    Adapter -->|API available| HTTP
+    Adapter -->|network unavailable| BrowserSolver
+    HTTP --> Contract --> Geometry --> Path --> Physics --> Explain
+    Explain --> Viewer
+    BrowserSolver --> Viewer
+    Project <--> Editor
+    Project <--> Form
 ```
 
-## Dependency rule
+The Vite development server proxies `/api` to a loopback-only FastAPI service. The endpoint runs a bounded synchronous MVP calculation. The static GitHub Pages demo cannot host Python, so it explicitly uses the less rigorous browser fallback.
 
-Dependencies point inward:
+### Current HTTP contract
 
-1. Domain schemas and pure math have no web dependency.
-2. Solver adapters depend on domain interfaces, not UI or HTTP.
-3. The API translates requests into engine commands.
-4. The UI consumes versioned schemas and never imports Python implementation details.
+```text
+GET  /health
+POST /v1/tracks/validate
+POST /v1/simulations
+GET  /docs
+GET  /openapi.json
+```
+
+`POST /v1/simulations` accepts explicit left/right boundaries, kart parameters, and solver settings. A syntactically valid request returns one structured state: `success`, `invalid_input`, or `numerical_failure`. Validation and scientific failures are returned to the UI; only transport unavailability permits browser fallback.
+
+### Dependency direction
+
+1. `engine/openkartline_engine` depends on Pydantic and NumPy, never FastAPI or React.
+2. `services/api` translates HTTP requests to engine calls.
+3. `apps/web` owns presentation and maps its centerline/width editor model to explicit boundaries.
+4. `.okl.json` is a local user-project format; API request/result schemas are separate contracts.
 
 ## Coordinate and unit conventions
 
-- Engine length: meters.
+- Length: meters.
 - Time: seconds.
-- Speed: meters per second.
+- Speed: meters per second inside the engine; km/h only for display/input fields that say so.
 - Angles: radians.
-- Power: watts.
 - Mass: kilograms.
-- Local track frame: right-handed Cartesian `(x, y)`.
-- Curvilinear coordinate `s`: meters from the start line in driving direction.
-- Boundary orientation and normal-vector convention will be locked by fixtures in M0.
+- Local frame: right-handed Cartesian `(x, y)`.
+- Distance `s`: meters from the start sample in driving direction.
+- Boundaries: `left_boundary` and `right_boundary` as seen while travelling in the declared direction.
 
-Imports keep their original coordinate reference metadata. Geographic coordinates are projected to a suitable local metric frame before smoothing or optimization. Canvas transforms never mutate the canonical metric geometry.
+The API accepts `power_hp` because it is familiar in karting and converts it immediately to mechanical watts. Raw project centerline coordinates remain metric and are independent of viewport size.
 
-## Track geometry pipeline
+## Current calculation pipeline
 
-1. Import raw points and provenance.
-2. Calibrate/project into meters.
-3. Normalize direction and closure.
-4. Remove duplicates and diagnose gaps.
-5. Fit periodic splines with user-controlled smoothing.
-6. Resample by arc length.
-7. derive center/reference line and signed widths.
-8. Check self-intersections, crossing normals, minimum width, and start continuity.
-9. Produce an immutable `TrackModel` consumed by solvers.
+1. Validate size, finite numeric range, closure, self-intersections, nesting, side semantics, and usable width.
+2. Normalize direction and align the two boundaries.
+3. Produce a periodic smooth representation and resample it by arc length.
+4. Search for a corridor-constrained, deterministic minimum-bending baseline.
+5. Derive station, heading, signed curvature, and segment lengths.
+6. Apply lateral speed limits and cyclic forward-acceleration/backward-braking passes under a combined friction envelope.
+7. Return samples, assumptions, warnings, solver/path diagnostics, and reproducible driving references.
 
-Raw points are preserved so a new smoothing algorithm does not destroy user input.
+The path is a local baseline, not proof of global minimum curvature and not a joint minimum-time solution.
 
-## Job lifecycle
+## Failure boundaries
+
+- HTML limits improve input ergonomics but domain validation remains authoritative.
+- Project imports have byte, point-count, numeric-range, and schema-version limits.
+- API request collections and solver iterations are bounded.
+- Domain rejection is shown to the user and is never silently replaced by fallback output.
+- Numeric arrays are returned only for a successful state.
+- Localhost CORS is explicit and credentials are disabled.
+
+## Planned long-running solver architecture
+
+Joint path/control optimization may take seconds or minutes and must not run inside FastAPI background tasks. When that backend lands, an ADR must introduce a supervised process and a lifecycle such as:
 
 ```text
 queued -> validating -> running -> succeeded
@@ -94,37 +112,12 @@ queued -> validating -> running -> succeeded
                  \------------> cancelled
 ```
 
-A job records input hash, model and solver versions, settings, progress, timestamps, status, warnings, and diagnostics. The API process may restart without corrupting project data. Cloud-scale persistence is deferred.
-
-## Solver interface
-
-Each backend accepts a validated track, kart model, environmental assumptions, solver settings, and optional initial guess. It returns either:
-
-- a successful, dimensioned lap solution;
-- an infeasible result with constraint diagnostics;
-- a numerical failure with iteration diagnostics; or
-- cancellation/timeout.
-
-Backends must not return partially valid arrays as a successful result.
-
-## API outline
-
-The exact OpenAPI schema lands in M0. Expected local endpoints are:
-
-```text
-POST   /v1/tracks/validate
-POST   /v1/jobs
-GET    /v1/jobs/{job_id}
-DELETE /v1/jobs/{job_id}
-GET    /v1/jobs/{job_id}/result
-POST   /v1/telemetry/inspect
-POST   /v1/calibrations
-```
+That future API would add job submission, progress, timeout, cancellation, restart recovery, and immutable input/result hashes. None of those endpoints are claimed by the current alpha.
 
 ## Deployment modes
 
-- **Developer:** Vite dev server + FastAPI + local worker.
-- **Local release:** one launcher serves the built web app and starts the worker.
-- **Container:** optional reproducible Docker image after the physics MVP.
-- **Desktop:** optional Tauri shell after cross-platform sidecar builds are automated.
-- **Hosted:** future stateless API plus a durable job queue and object storage.
+- **Static demo:** GitHub Pages plus browser fallback; no Python engine.
+- **Developer/local:** Vite plus loopback FastAPI; current complete alpha workflow.
+- **Future local release:** one launcher serving the built UI and supervised solver process.
+- **Future container/desktop:** evaluated only after the physics MVP and cross-platform packaging tests.
+- **Future hosted service:** requires authentication, quotas, durable jobs, privacy review, and abuse controls.

@@ -1,0 +1,47 @@
+{
+  "schema_version": "0.1.0",
+  "project": {
+    "name": "Circuito Aurora",
+    "created_at": "2026-08-06T00:00:00.000Z",
+    "updated_at": "2026-08-06T00:00:00.000Z"
+  },
+  "track": {
+    "coordinate_system": "local_cartesian_m",
+    "direction": "clockwise",
+    "width_m": 8,
+    "raw_centerline": [
+      [5, 50],
+      [12, 23],
+      [35, 8],
+      [68, 7],
+      [92, 21],
+      [99, 43],
+      [86, 59],
+      [66, 52],
+      [53, 65],
+      [66, 83],
+      [47, 96],
+      [22, 89],
+      [26, 69]
+    ]
+  },
+  "kart": {
+    "model": "point_mass_v1",
+    "total_mass_kg": 190,
+    "parameters": {
+      "power_hp": 13,
+      "kart_mass_kg": 115,
+      "driver_mass_kg": 75,
+      "top_speed_kph": 82,
+      "grip_coefficient": 1.05,
+      "brake_decel_mps2": 7.5
+    }
+  },
+  "simulation": {
+    "solver": "speed_profile_v1",
+    "settings": {
+      "sample_count": 200
+    },
+    "safety_margin_m": 0.55
+  }
+}

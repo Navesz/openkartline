@@ -1,0 +1,16 @@
+exclude = [
+  "http://localhost",
+  "http://127.0.0.1",
+  "https://github.com/Navesz/openkartline/issues/[0-9]+",
+  "https://github.com/Navesz/openkartline/discussions",
+  # These exact public artifacts are created by the first main deployment/release.
+  "https://navesz\\.github\\.io/openkartline/?",
+  "https://github\\.com/Navesz/openkartline/compare/v0\\.1\\.0\\.\\.\\.HEAD",
+  "https://github\\.com/Navesz/openkartline/releases/tag/v0\\.1\\.0"
+]
+exclude_path = ["\\.git", "\\.venv", "node_modules"]
+max_concurrency = 16
+max_retries = 1
+retry_wait_time = 2
+timeout = 10
+accept = [200, 204, 206, 429]
