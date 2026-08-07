@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import cast
 
@@ -21,6 +22,8 @@ FloatArray = NDArray[np.float64]
 _EPS = 1e-9
 _MAX_TRACK_SPAN_M = 100_000.0
 _MAX_BOUNDARY_LENGTH_M = 1_000_000.0
+_GRADIENT_SMOOTHING_PASSES = 24
+_GRADIENT_SMOOTHING_REFERENCE_SAMPLES = 300
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,26 +194,64 @@ def _segment_intersections(
     return cast(NDArray[np.bool_], crosses | collinear)
 
 
+def _sweep_pairs(
+    x_min: FloatArray,
+    x_max: FloatArray,
+) -> Iterator[tuple[int, NDArray[np.int64]]]:
+    """Yield each segment with the earlier segments whose x-ranges still overlap.
+
+    A closed track polyline keeps only a couple of segments active at any station,
+    so this replaces the exhaustive quadratic pairing without weakening the exact
+    predicate applied afterwards: every overlapping pair is still reported once.
+    """
+
+    active: list[int] = []
+    for index in np.argsort(x_min, kind="stable"):
+        position = int(index)
+        threshold = x_min[position] - _EPS
+        active = [other for other in active if x_max[other] >= threshold]
+        if active:
+            yield position, np.asarray(active, dtype=np.int64)
+        active.append(position)
+
+
 def _has_self_intersection(points: FloatArray) -> bool:
     count = len(points)
+    if count < 3:
+        return False
     starts = points
     ends = np.roll(points, -1, axis=0)
-    for i in range(count):
-        a, b = points[i], points[(i + 1) % count]
-        intersects = _segment_intersections(a, b, starts, ends)
-        intersects[i] = False
-        intersects[(i - 1) % count] = False
-        intersects[(i + 1) % count] = False
-        if np.any(intersects):
+    x_min = np.minimum(starts[:, 0], ends[:, 0])
+    x_max = np.maximum(starts[:, 0], ends[:, 0])
+    for index, candidates in _sweep_pairs(x_min, x_max):
+        neighbours = {index, (index - 1) % count, (index + 1) % count}
+        candidates = candidates[[int(other) not in neighbours for other in candidates]]
+        if not len(candidates):
+            continue
+        if np.any(
+            _segment_intersections(starts[index], ends[index], starts[candidates], ends[candidates])
+        ):
             return True
     return False
 
 
 def _boundaries_intersect(first: FloatArray, second: FloatArray) -> bool:
-    second_end = np.roll(second, -1, axis=0)
-    for i, a in enumerate(first):
-        b = first[(i + 1) % len(first)]
-        if np.any(_segment_intersections(a, b, second, second_end)):
+    split = len(first)
+    starts = np.vstack((first, second))
+    ends = np.vstack((np.roll(first, -1, axis=0), np.roll(second, -1, axis=0)))
+    x_min = np.minimum(starts[:, 0], ends[:, 0])
+    x_max = np.maximum(starts[:, 0], ends[:, 0])
+    for index, candidates in _sweep_pairs(x_min, x_max):
+        # Only cross-boundary pairs matter; each edge is checked for self
+        # intersection separately.
+        candidates = (
+            candidates[candidates >= split] if index < split else candidates[candidates < split]
+        )
+        if not len(candidates):
+            continue
+        if np.any(
+            _segment_intersections(starts[index], ends[index], starts[candidates], ends[candidates])
+        ):
             return True
     return False
 
@@ -241,16 +282,21 @@ def _normalized_orientation(points: FloatArray, direction: str) -> FloatArray:
 
 
 def _align_samples(reference: FloatArray, candidate: FloatArray) -> FloatArray:
-    """Rotate equally directed samples to minimize whole-lap pairing distance."""
+    """Rotate equally directed samples to minimize whole-lap pairing distance.
 
-    costs = np.asarray(
-        [
-            np.mean(np.sum((reference - np.roll(candidate, -offset, axis=0)) ** 2, axis=1))
-            for offset in range(len(candidate))
-        ]
-    )
-    offset = int(np.argmin(costs))
-    return np.roll(candidate, -offset, axis=0)
+    Minimizing ``sum |reference - roll(candidate, -offset)|**2`` is equivalent to
+    maximizing their circular cross-correlation, because the two squared-norm
+    terms do not depend on the offset. The correlation is evaluated with an FFT
+    instead of testing every rotation explicitly.
+    """
+
+    count = len(candidate)
+    correlation = np.zeros(count, dtype=np.float64)
+    for axis in range(reference.shape[1]):
+        spectrum = np.conjugate(np.fft.fft(reference[:, axis])) * np.fft.fft(candidate[:, axis])
+        correlation += np.fft.ifft(spectrum).real
+    offset = int(np.argmax(correlation))
+    return cast(FloatArray, np.roll(candidate, -offset, axis=0))
 
 
 def prepare_track(
@@ -547,6 +593,54 @@ def _fraction_gradient(path: FloatArray, corridor: FloatArray, epsilon: float = 
     ) / (2 * epsilon)
 
 
+def _smooth_periodic(values: FloatArray, passes: int) -> FloatArray:
+    """Apply the ``[1, 2, 1]/4`` circular filter ``passes`` times, in one FFT pair.
+
+    One pass scales Fourier mode ``f`` (in cycles per sample) by ``cos(pi f)**2``,
+    so ``passes`` of them scale it by ``cos(pi f)**(2 * passes)``. Evaluating that
+    directly keeps the cost at O(n log n) no matter how wide the filter is.
+    """
+
+    if passes <= 0:
+        return values
+    weights = np.cos(np.pi * np.fft.rfftfreq(len(values))) ** (2 * passes)
+    return np.fft.irfft(np.fft.rfft(values) * weights, len(values))
+
+
+def _smoothing_passes(sample_count: int) -> int:
+    """Keep the gradient filter's width constant in arc length, not in samples.
+
+    The filter behaves like diffusion, so its width grows with the square root of
+    the pass count. Holding the physical width fixed therefore needs a pass count
+    that grows with the square of the resolution; otherwise the preconditioner
+    silently weakens as ``sample_count`` rises and the same track converges to a
+    measurably different line.
+    """
+
+    scale = sample_count / _GRADIENT_SMOOTHING_REFERENCE_SAMPLES
+    return max(1, round(_GRADIENT_SMOOTHING_PASSES * scale * scale))
+
+
+def _free_direction(
+    direction: FloatArray,
+    fraction: FloatArray,
+    lower: FloatArray,
+    upper: FloatArray,
+) -> FloatArray:
+    """Zero the components that the corridor bounds would immediately clip away.
+
+    The step is ``fraction - t * direction``, so a positive component is blocked
+    at the lower bound and a negative one at the upper bound. Clipping those
+    afterwards instead of removing them here can flip an otherwise descending
+    preconditioned step into an ascending one.
+    """
+
+    blocked = ((fraction <= lower + _EPS) & (direction > 0)) | (
+        (fraction >= upper - _EPS) & (direction < 0)
+    )
+    return cast(FloatArray, np.where(blocked, 0.0, direction))
+
+
 def minimum_bending_path(
     track: PreparedTrack,
     *,
@@ -571,6 +665,7 @@ def minimum_bending_path(
     termination_reason: PathTerminationReason = "skipped" if iterations == 0 else "iteration_limit"
     completed = 0
     max_fraction_step = 0.0
+    smoothing_passes = _smoothing_passes(len(track.center))
 
     for iteration in range(1, iterations + 1):
         gradient = _fraction_gradient(path, corridor)
@@ -597,9 +692,8 @@ def minimum_bending_path(
         # The polyline representation produces high-frequency vertex noise in
         # curvature derivatives. A compact periodic low-pass is a deterministic
         # preconditioner and also favours driveable lateral-offset variation.
-        for _ in range(24):
-            gradient = 0.25 * np.roll(gradient, 1) + 0.5 * gradient + 0.25 * np.roll(gradient, -1)
-        maximum_gradient = float(np.max(np.abs(gradient)))
+        smoothed = _smooth_periodic(gradient, smoothing_passes)
+        maximum_gradient = float(np.max(np.abs(smoothed)))
         if maximum_gradient < 1e-10:
             converged = True
             termination_reason = "gradient_tolerance"
@@ -609,24 +703,37 @@ def minimum_bending_path(
         # projected step is the scale-independent KKT residual used to
         # distinguish convergence at a corridor edge from a stalled line search.
         projected_fraction = np.clip(
-            fraction - 0.08 * gradient / maximum_gradient,
+            fraction - 0.08 * gradient / float(np.max(np.abs(gradient))),
             lower,
             upper,
         )
         projected_residual = float(np.max(np.abs(projected_fraction - fraction)))
-        step_size = 0.08 / maximum_gradient
+        # Accepting on an absolute epsilon rejects usable steps once the
+        # objective is far from zero, so scale the tolerance with its magnitude.
+        acceptance_tolerance = 1e-12 * max(1.0, abs(objective))
         accepted = False
         candidate_fraction = fraction
         candidate_path = path
         candidate_objective = objective
-        for _ in range(16):
-            candidate_fraction = np.clip(fraction - step_size * gradient, lower, upper)
-            candidate_path = track.right + candidate_fraction[:, None] * corridor
-            candidate_objective = _bending_objective(candidate_path)
-            if candidate_objective <= objective + 1e-12:
-                accepted = True
+        # The smoothed direction is only a preconditioner and can stall while a
+        # feasible descent step still exists, so fall back to the raw gradient
+        # before reporting that the line search made no progress.
+        for direction in (smoothed, gradient):
+            free = _free_direction(direction, fraction, lower, upper)
+            maximum_free = float(np.max(np.abs(free)))
+            if maximum_free < 1e-10:
+                continue
+            step_size = 0.08 / maximum_free
+            for _ in range(16):
+                candidate_fraction = np.clip(fraction - step_size * free, lower, upper)
+                candidate_path = track.right + candidate_fraction[:, None] * corridor
+                candidate_objective = _bending_objective(candidate_path)
+                if candidate_objective <= objective - acceptance_tolerance:
+                    accepted = True
+                    break
+                step_size *= 0.5
+            if accepted:
                 break
-            step_size *= 0.5
         if not accepted:
             completed = iteration
             if global_accepted:

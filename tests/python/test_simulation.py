@@ -58,6 +58,62 @@ def test_lap_time_is_stable_across_sample_counts(
     assert (max(lap_times) - min(lap_times)) / float(np.mean(lap_times)) < 0.01
 
 
+def test_lap_time_is_stable_across_sample_counts_on_a_corner_rich_track(
+    serpentine_track: TrackV1, kart: KartV1
+) -> None:
+    """Guard the discretization bias that a circle fixture cannot expose.
+
+    Before the gradient filter was made resolution independent, this same
+    circuit drifted by more than 10% between 300 and 2400 samples, which is a
+    change in the headline lap estimate rather than a rounding difference.
+    """
+
+    lap_times: list[float] = []
+    lengths: list[float] = []
+    for sample_count in (256, 512, 1024):
+        result = simulate(
+            SimulationRequestV1(
+                track=serpentine_track,
+                kart=kart,
+                settings=SimulationSettingsV1(sample_count=sample_count),
+            )
+        )
+        assert result.status.state == "success"
+        assert result.summary is not None
+        lap_times.append(result.summary.lap_time_s)
+        lengths.append(result.summary.track_length_m)
+    assert (max(lap_times) - min(lap_times)) / float(np.mean(lap_times)) < 0.03
+    assert (max(lengths) - min(lengths)) / float(np.mean(lengths)) < 0.01
+
+
+def test_more_path_iterations_keep_reducing_the_bending_objective(
+    serpentine_track: TrackV1, kart: KartV1
+) -> None:
+    """The smoothing budget must stay a real knob on corner-rich geometry.
+
+    A preconditioned step that is only clipped, never projected, used to stall
+    here: the line search rejected every step and extra iterations changed
+    nothing at all.
+    """
+
+    def final_objective(iterations: int) -> float:
+        result = simulate(
+            SimulationRequestV1(
+                track=serpentine_track,
+                kart=kart,
+                settings=SimulationSettingsV1(
+                    sample_count=256,
+                    path_smoothing_iterations=iterations,
+                ),
+            )
+        )
+        assert result.path_diagnostics is not None
+        assert result.path_diagnostics.termination_reason != "no_progress"
+        return result.path_diagnostics.final_objective
+
+    assert final_objective(40) < final_objective(5)
+
+
 def test_oval_has_actionable_brake_and_acceleration_markers(
     track_factory: Callable[..., TrackV1], kart: KartV1
 ) -> None:

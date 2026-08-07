@@ -30,6 +30,10 @@ interface NumberFieldProps {
 }
 
 function NumberField({ id, label, value, unit, min, max, step = 1, hint, icon, onChange }: NumberFieldProps) {
+  // Keep what the user typed while it is still incomplete ("", "-", "1."), so
+  // the field can be cleared and retyped instead of snapping to 0 on the first
+  // keystroke. Committed values still flow out as numbers.
+  const [draft, setDraft] = useState<string | null>(null)
   return (
     <label className="field" htmlFor={id}>
       <span className="field-label">
@@ -40,11 +44,17 @@ function NumberField({ id, label, value, unit, min, max, step = 1, hint, icon, o
         <input
           id={id}
           type="number"
-          value={value}
+          value={draft ?? value}
           min={min}
           max={max}
           step={step}
-          onChange={(event) => onChange(Number(event.target.value))}
+          onChange={(event) => {
+            const text = event.target.value
+            setDraft(text)
+            const parsed = Number(text)
+            if (text.trim() !== '' && Number.isFinite(parsed)) onChange(parsed)
+          }}
+          onBlur={() => setDraft(null)}
         />
         <span>{unit}</span>
       </span>

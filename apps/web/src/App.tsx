@@ -55,7 +55,21 @@ export default function App() {
   const safeSelectedSample = clampSelectedSample(selectedSample, result)
 
   useEffect(() => {
-    checkApiHealth().then(setApiAvailable)
+    let cancelled = false
+    const probe = () => {
+      checkApiHealth().then((available) => {
+        if (!cancelled) setApiAvailable(available)
+      })
+    }
+    probe()
+    // The engine is a separate local process, so it can appear or disappear
+    // after load. Re-probing on focus lets a user start it in a terminal and
+    // come back without reloading the page.
+    window.addEventListener('focus', probe)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', probe)
+    }
   }, [])
 
   useEffect(() => {
@@ -118,7 +132,6 @@ export default function App() {
     setStatus('running')
     setMessage('Calculando trajetória e perfil de velocidade…')
     setSelectedSample(null)
-    await new Promise((resolve) => window.setTimeout(resolve, 160))
     try {
       const next = await runSimulation({ track: trackHistory.value, kart, settings }, apiAvailable === true)
       setResult(next)

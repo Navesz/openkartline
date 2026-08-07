@@ -1,7 +1,8 @@
 import { coalesceSimulationEvents } from '../domain/events'
 import { curvatureAt } from '../domain/geometry'
+import { DRIVETRAIN_EFFICIENCY, FRICTION_EXPONENT, kartEnvelope } from '../domain/kartModel'
 import { simulateInBrowser } from '../domain/simulator'
-import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
+import { buildCanonicalTrackGeometry, matchCenterlineIndices } from '../domain/trackGeometry'
 import type { SimulationRequest, SimulationResult } from '../domain/types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -59,6 +60,10 @@ export async function runSimulation(
     throw error
   }
   if (!response.ok) {
+    // 429 means the bounded local compute slots are busy, not that the request
+    // is wrong. The deterministic browser solver is the intended relief valve,
+    // so use it instead of surfacing a transient capacity error.
+    if (response.status === 429) return simulateInBrowser(request)
     let detail = ''
     try {
       const payload = (await response.json()) as { detail?: unknown }
@@ -103,6 +108,7 @@ interface ApiResult {
 export function toApiRequest(request: SimulationRequest) {
   const { track, kart, settings } = request
   const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
+  const envelope = kartEnvelope(kart)
   const asApiPoints = (points: { x: number; y: number }[]): ApiPoint[] =>
     points.map((point) => ({ x_m: point.x, y_m: point.y }))
   return {
@@ -118,18 +124,19 @@ export function toApiRequest(request: SimulationRequest) {
     kart: {
       schema_version: '1.0',
       name: 'Kart personalizado',
-      total_mass_kg: kart.kartMassKg + kart.driverMassKg,
+      total_mass_kg: envelope.totalMassKg,
       power_hp: kart.powerHp,
-      top_speed_mps: kart.topSpeedKph / 3.6,
-      max_accel_mps2: Math.min(5, kart.gripCoefficient * 9.80665 * 0.52),
-      max_brake_mps2: kart.brakeDecelMps2,
-      max_lateral_accel_mps2: kart.gripCoefficient * 9.80665,
-      drivetrain_efficiency: 0.82,
+      top_speed_mps: envelope.topSpeedMps,
+      max_accel_mps2: envelope.maxAccelMps2,
+      max_brake_mps2: envelope.maxBrakeMps2,
+      max_lateral_accel_mps2: envelope.maxLateralAccelMps2,
+      drivetrain_efficiency: DRIVETRAIN_EFFICIENCY,
     },
     settings: {
       schema_version: '1.0',
       sample_count: settings.sampleCount,
       safety_margin_m: settings.safetyMarginM,
+      friction_exponent: FRICTION_EXPONENT,
     },
   }
 }
@@ -142,6 +149,10 @@ export function fromApiResult(result: ApiResult, request: SimulationRequest): Si
     )
   }
   const canonical = buildCanonicalTrackGeometry(request.track, result.samples.length)
+  const stations = matchCenterlineIndices(
+    canonical.center,
+    result.samples.map((sample) => ({ x: sample.x_m, y: sample.y_m })),
+  )
   const events = coalesceSimulationEvents(
     result.markers
       .filter((marker) => marker.kind !== 'brake_end')
@@ -178,19 +189,20 @@ export function fromApiResult(result: ApiResult, request: SimulationRequest): Si
     samples: result.samples.map((sample, index) => {
       const throttle = Math.max(0, Math.min(1, sample.throttle))
       const brake = Math.max(0, Math.min(1, sample.brake))
+      const station = stations[index]
       return {
         index,
         position: { x: sample.x_m, y: sample.y_m },
-        center: canonical.center[index],
+        center: canonical.center[station],
         distanceM: sample.s_m,
-        leftBoundary: canonical.left[index],
-        rightBoundary: canonical.right[index],
+        leftBoundary: canonical.left[station],
+        rightBoundary: canonical.right[station],
         speedMps: sample.speed_mps,
         throttle,
         brake,
         curvature: Number.isFinite(sample.curvature_1pm)
           ? sample.curvature_1pm
-          : curvatureAt(canonical.center, index),
+          : curvatureAt(canonical.center, station),
         mode:
           brake > 0.08 ? ('brake' as const) : throttle > 0.08 ? ('throttle' as const) : ('coast' as const),
       }
