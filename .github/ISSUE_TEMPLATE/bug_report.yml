@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible defect
+title: "[Bug]: "
+labels: ["type: bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach private telemetry, licensed imagery, secrets, or precise location data without permission.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. Open...\n2. Select...\n3. Run..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Track editor, Geometry, Physics/solver, API/jobs, Telemetry, Packaging, Documentation, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, browser, Python/Node version, and solver backend if relevant.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Sanitized logs, solver status, constraint violation, or a synthetic project file.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Data and safety check
+      options:
+        - label: I removed secrets and private or non-redistributable data.
+          required: true

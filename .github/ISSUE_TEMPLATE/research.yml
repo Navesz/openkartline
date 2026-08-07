@@ -1,0 +1,25 @@
+name: Research task
+description: Investigate a technical or scientific decision before implementation
+title: "[Research]: "
+labels: ["type: research"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Decision to unblock
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence
+      description: Primary references, prototype, benchmark, analytic case, or telemetry protocol.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected output
+      description: ADR, benchmark, test fixture, recommendation, or rejected alternative.
+    validations:
+      required: true

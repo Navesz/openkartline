@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# JavaScript
+node_modules/
+.vite/
+coverage/
+playwright-report/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local projects and telemetry
+*.okl.json
+*.gpx
+*.kml
+*.fit
+telemetry/
+!examples/**/*.okl.json
+!examples/**/*.gpx
+!examples/**/*.kml
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
