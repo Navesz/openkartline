@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "OpenKartLine contributors" }]
 dependencies = [
   "fastapi>=0.115,<1",
-  "numpy>=2.0,<2.4",
+  "numpy>=2.0,<2.5",
   "pydantic>=2.10,<3",
   "uvicorn[standard]>=0.34,<1",
 ]
