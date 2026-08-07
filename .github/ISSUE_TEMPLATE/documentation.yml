@@ -1,0 +1,33 @@
+name: Documentation improvement
+description: Report missing, unclear, incorrect, or inaccessible documentation
+title: "[Docs]: "
+labels: ["area: docs", "needs-triage"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or section
+      description: Link to the page or identify the file and heading.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear or incorrect?
+      description: Include the audience and the task they could not complete.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: A proposed correction, example, translation, or restructuring.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and documentation.
+          required: true
+        - label: This report contains no secrets or private/non-redistributable data.
+          required: true

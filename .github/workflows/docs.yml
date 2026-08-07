@@ -1,0 +1,51 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.md"
+      - "CITATION.cff"
+      - "packages/schemas/**/*.json"
+      - "examples/**/*.json"
+      - ".github/workflows/docs.yml"
+      - ".github/.markdownlint-cli2.jsonc"
+      - ".github/lychee.toml"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  markdown:
+    name: Documentation, schema, and citation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.31"
+          enable-cache: false
+      - name: Validate citation metadata
+        run: uvx --from cffconvert==2.0.0 cffconvert --validate
+      - name: Validate project schema and example
+        run: |
+          uvx --from check-jsonschema==0.36.1 check-jsonschema --check-metaschema packages/schemas/okl-project-0.1.0.schema.json
+          uvx --from check-jsonschema==0.36.1 check-jsonschema --schemafile packages/schemas/okl-project-0.1.0.schema.json examples/tracks/circuito-aurora.okl.json
+      - uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e # v20
+        with:
+          config: .github/.markdownlint-cli2.jsonc
+          globs: "**/*.md"
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: --config .github/lychee.toml "**/*.md"
+          fail: true
+          token: ${{ secrets.GITHUB_TOKEN }}

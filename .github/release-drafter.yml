@@ -1,0 +1,37 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: "\\<*_&"
+categories:
+  - title: "Breaking changes"
+    labels: ["breaking-change"]
+  - title: "Features"
+    labels: ["type: feature", "enhancement"]
+  - title: "Fixes"
+    labels: ["type: bug", "bug"]
+  - title: "Physics and research"
+    labels: ["area: physics", "type: research"]
+  - title: "Documentation"
+    labels: ["area: docs", "documentation"]
+  - title: "Maintenance"
+    labels: ["dependencies", "maintenance", "type: maintenance"]
+exclude-labels:
+  - "skip-changelog"
+version-resolver:
+  major:
+    labels: ["major", "breaking-change"]
+  minor:
+    labels: ["minor", "type: feature", "enhancement"]
+  patch:
+    labels: ["patch", "type: bug", "bug", "dependencies"]
+  default: patch
+template: |
+  ## What changed
+
+  $CHANGES
+
+  ## Before using this release
+
+  OpenKartLine provides planning estimates, not guaranteed safe driving inputs. Review the documented assumptions and validate recommendations progressively at the circuit.
+
+  Installers exist only when they are explicitly attached to this release. Source-based contributor setup is documented in [the development guide](https://github.com/Navesz/openkartline/blob/main/docs/DEVELOPMENT.md); compatibility and known limitations belong in these release notes.
