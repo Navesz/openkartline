@@ -6,11 +6,18 @@ All notable changes to OpenKartLine are documented here. The format follows [Kee
 
 ### Added
 
+- Lap playback: a toggle animates the kart along the racing line at 1x, 2x or 3x, with a scrub bar and live speed, throttle and brake. The rate scales the replay clock only; the simulated lap time and every channel stay exactly as solved, and one clock drives the kart, the chart cursor and the panels.
+- Per-sample elapsed time on the result contract, integrated from the same trapezoidal clock that produces the reported lap time.
+- Drive-mode stabilisation that drops brake/throttle bands too short to be a real input. On the reference circuit this takes the racing line from 85 colour bands to 17.
+
 - Corner-rich synthetic fixture plus regressions for sample-count stability and for path-iteration effectiveness, which the near-analytic circle fixture could not detect.
 - Web coverage thresholds enforced in CI, matching the intent of the Python `fail_under` gate.
 
 ### Changed
 
+- Engine power and mass now change the lap. The longitudinal ceiling was a flat `0.52 * mu * g`, an undocumented constant that in practice set the lap time: every kart above roughly 30 hp produced an identical lap, and 10 kg of ballast cost 0.022 s against 0.7-0.8 s measured in the field. The ceiling is now the rear-axle traction limit including longitudinal load transfer, aerodynamic drag and rolling resistance are modelled, and tyre load sensitivity makes cornering respond to mass. Ballast sensitivity rose to 0.158 s per 10 kg and a 3 hp kart is now 4 s a lap slower than a 13 hp one.
+- The usable corridor accounts for the kart's 1.4 m width, so the racing line can reach the track edge exactly as far as the chassis allows. `safety_margin_m` is now the driver's own buffer on top of that, defaulting to 0.15 m.
+- The racing line uses the full remaining corridor at the apex, following the out-in-out principle, instead of 62% of it.
 - The path-solver gradient filter keeps a constant width in arc length instead of in samples, so the returned line no longer depends on the requested resolution. Lap-time spread across 300–2400 samples on the serpentine fixture fell from 12.0% to 1.8%.
 - Boundary self-intersection and corridor-crossing checks use an x-interval sweep for the broad phase, halving simulation wall time at 4,000 samples. The exact intersection predicate is unchanged.
 - Sample alignment between the two boundaries uses an FFT cross-correlation instead of testing every rotation.
@@ -27,6 +34,9 @@ All notable changes to OpenKartLine are documented here. The format follows [Kee
 - Numeric fields can be cleared and retyped instead of collapsing to `0` on the first keystroke.
 - The engine health probe repeats when the window regains focus, so an engine started after page load is detected.
 - Removed the artificial 160 ms delay before every simulation and an unused exported component.
+- The selection ring no longer follows the kart during playback: it tracked an integer sample index, so it jumped roughly every 145 ms next to the smoothly interpolated kart marker.
+- The racing line renders as one filtered group rather than one filter per colour band, so overlapping blurs no longer make the line look thick at some joins and thin at others.
+- The playback toggle no longer drives other state from inside a state updater, which StrictMode ran twice.
 
 ## [0.1.0] - 2026-08-07
 

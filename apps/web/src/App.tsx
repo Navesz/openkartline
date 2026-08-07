@@ -14,8 +14,10 @@ import {
 } from 'lucide-react'
 import { ControlPanel } from './components/ControlPanel'
 import { LapCharts } from './components/LapCharts'
+import { PlaybackBar } from './components/PlaybackBar'
 import { ResultsPanel } from './components/ResultsPanel'
 import { TrackCanvas, type EditorTool } from './components/TrackCanvas'
+import { frameAtElapsed, wrapElapsed, type PlaybackRate } from './domain/playback'
 import { clonePoints, DEFAULT_KART, PRESETS } from './domain/presets'
 import { clampSelectedSample } from './domain/selection'
 import { simulateInBrowser } from './domain/simulator'
@@ -25,7 +27,7 @@ import { useHistory } from './hooks/useHistory'
 import { checkApiHealth, runSimulation } from './services/api'
 import { downloadProject, parseProject, toProject } from './services/projectFile'
 
-const DEFAULT_SETTINGS: SimulationSettings = { safetyMarginM: 0.55, sampleCount: 200 }
+const DEFAULT_SETTINGS: SimulationSettings = { safetyMarginM: 0.15, sampleCount: 200 }
 
 function freshPreset(key: string): TrackInput {
   const preset = PRESETS[key] ?? PRESETS.technical
@@ -41,6 +43,10 @@ export default function App() {
   )
   const [selectedSample, setSelectedSample] = useState<number | null>(null)
   const [tool, setTool] = useState<EditorTool>('edit')
+  const [playbackEnabled, setPlaybackEnabled] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [rate, setRate] = useState<PlaybackRate>(1)
+  const [elapsedS, setElapsedS] = useState(0)
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null)
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('success')
   const [message, setMessage] = useState('Exemplo pronto para explorar.')
@@ -52,7 +58,34 @@ export default function App() {
     [trackHistory.value, kart, settings],
   )
   const hasErrors = issues.some((issue) => issue.level === 'error')
-  const safeSelectedSample = clampSelectedSample(selectedSample, result)
+  const playbackFrame = useMemo(
+    () => (playbackEnabled ? frameAtElapsed(result, elapsedS) : null),
+    [playbackEnabled, result, elapsedS],
+  )
+  // While the lap is playing back, the charts and the results panel follow the
+  // kart instead of the pointer, so every panel reads the same instant.
+  const safeSelectedSample = playbackFrame ? playbackFrame.index : clampSelectedSample(selectedSample, result)
+
+  // One clock drives the whole replay. `rate` scales wall-clock advance only:
+  // the simulated lap time and every channel stay exactly as solved, so 3x
+  // simply finishes the same lap in a third of the real time.
+  useEffect(() => {
+    if (!playbackEnabled || !playing || !result || !(result.lapTimeS > 0)) return
+    let frame = 0
+    let previous = performance.now()
+    const tick = (now: number) => {
+      const deltaS = Math.min(0.25, (now - previous) / 1000)
+      previous = now
+      setElapsedS((current) => wrapElapsed(current + deltaS * rate, result.lapTimeS))
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [playbackEnabled, playing, rate, result])
+
+  useEffect(() => {
+    setElapsedS(0)
+  }, [result])
 
   useEffect(() => {
     let cancelled = false
@@ -73,8 +106,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (selectedSample !== safeSelectedSample) setSelectedSample(safeSelectedSample)
-  }, [safeSelectedSample, selectedSample])
+    if (!playbackFrame && selectedSample !== safeSelectedSample) setSelectedSample(safeSelectedSample)
+  }, [playbackFrame, safeSelectedSample, selectedSample])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -297,6 +330,17 @@ export default function App() {
               selectedSample={safeSelectedSample}
               tool={tool}
               fitRequest={fitRequest}
+              playbackEnabled={playbackEnabled}
+              playbackFrame={playbackFrame}
+              onPlaybackToggle={() => {
+                // State updaters must stay pure: StrictMode runs them twice, so
+                // driving the other three pieces of playback state from inside
+                // one would fire their side effects twice as well.
+                const next = !playbackEnabled
+                setPlaybackEnabled(next)
+                setPlaying(next)
+                if (!next) setElapsedS(0)
+              }}
               onToolChange={setTool}
               onPointsChange={(centerline, checkpoint = true) => {
                 trackHistory.set((current) => ({ ...current, centerline }), checkpoint)
@@ -324,11 +368,24 @@ export default function App() {
                 {status === 'running' ? 'Calculando…' : dirty ? 'Recalcular volta' : 'Simular novamente'}
               </button>
             </div>
+            {playbackFrame && (
+              <PlaybackBar
+                frame={playbackFrame}
+                lapTimeS={result.lapTimeS}
+                playing={playing}
+                rate={rate}
+                onPlayingChange={setPlaying}
+                onRateChange={setRate}
+                onSeek={(next) => setElapsedS(wrapElapsed(next, result.lapTimeS))}
+              />
+            )}
             {result && (
               <LapCharts
                 result={result}
                 selectedSample={safeSelectedSample}
-                onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}
+                onSelectedSample={(index) =>
+                  playbackEnabled ? undefined : setSelectedSample(clampSelectedSample(index, result))
+                }
               />
             )}
           </div>

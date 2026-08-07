@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Crosshair, Hand, LocateFixed, MousePointer2, Plus, Trash2 } from 'lucide-react'
+import { Clapperboard, Crosshair, Hand, LocateFixed, MousePointer2, Plus, Trash2 } from 'lucide-react'
 import { insertPointNearestSegment } from '../domain/editorGeometry'
+import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
 import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
@@ -13,6 +14,9 @@ interface TrackCanvasProps {
   selectedSample: number | null
   tool: EditorTool
   fitRequest: number
+  playbackEnabled: boolean
+  playbackFrame: PlaybackFrame | null
+  onPlaybackToggle: () => void
   onToolChange: (tool: EditorTool) => void
   onPointsChange: (points: Point[], checkpoint?: boolean) => void
   onSelectedSample: (index: number | null) => void
@@ -73,6 +77,9 @@ export function TrackCanvas({
   selectedSample,
   tool,
   fitRequest,
+  playbackEnabled,
+  playbackFrame,
+  onPlaybackToggle,
   onToolChange,
   onPointsChange,
   onSelectedSample,
@@ -192,6 +199,16 @@ export function TrackCanvas({
           <LocateFixed size={16} />
           <span className="desktop-only"> Enquadrar</span>
         </button>
+        <button
+          className={playbackEnabled ? 'active' : ''}
+          onClick={onPlaybackToggle}
+          disabled={!result}
+          aria-pressed={playbackEnabled}
+          title="Animar a volta"
+        >
+          <Clapperboard size={16} />
+          <span className="desktop-only"> Animar</span>
+        </button>
       </div>
       <div className="canvas-hint">
         {tool === 'edit'
@@ -256,18 +273,21 @@ export function TrackCanvas({
         {!result && (
           <path d={pathOf(display)} fill="none" stroke="#7b8b80" strokeWidth=".65" strokeDasharray="2 1.4" />
         )}
-        {racingLine.map((run, index) => (
-          <polyline
-            key={`${run.mode}-${index}`}
-            points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
-            fill="none"
-            stroke={MODE_COLORS[run.mode]}
-            strokeWidth="1.45"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            filter="url(#line-glow)"
-          />
-        ))}
+        {!!racingLine.length && (
+          <g filter="url(#line-glow)">
+            {racingLine.map((run, index) => (
+              <polyline
+                key={`${run.mode}-${index}`}
+                points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
+                fill="none"
+                stroke={MODE_COLORS[run.mode]}
+                strokeWidth="1.45"
+                strokeLinecap="butt"
+                strokeLinejoin="round"
+              />
+            ))}
+          </g>
+        )}
         {startLeft && startRight && (
           <g aria-label="Linha de largada">
             <line
@@ -312,7 +332,24 @@ export function TrackCanvas({
             </g>
           )
         })}
-        {selectedSample !== null && result?.samples[selectedSample] && (
+        {playbackFrame && (
+          <g
+            className={`playback-kart ${playbackFrame.mode}`}
+            transform={`translate(${playbackFrame.position.x} ${playbackFrame.position.y}) rotate(${(playbackFrame.headingRad * 180) / Math.PI})`}
+            pointerEvents="none"
+            aria-hidden="true"
+          >
+            <circle r="3.8" className="kart-halo" fill={MODE_COLORS[playbackFrame.mode]} />
+            <path
+              d="M 2.9 0 L -2 1.9 L -1.1 0 L -2 -1.9 Z"
+              fill={MODE_COLORS[playbackFrame.mode]}
+              stroke="#0d120f"
+              strokeWidth=".38"
+              strokeLinejoin="round"
+            />
+          </g>
+        )}
+        {!playbackEnabled && selectedSample !== null && result?.samples[selectedSample] && (
           <g className="selected-kart" pointerEvents="none">
             <circle
               cx={result.samples[selectedSample].position.x}
