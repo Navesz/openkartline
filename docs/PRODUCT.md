@@ -15,7 +15,15 @@ OpenKartLine is an application, not only a numerical library. Its value is the c
 
 The first product slice targets a dry, closed, flat circuit and one kart running a flying lap without traffic.
 
-## Core user journey
+## Runnable alpha journey
+
+1. Choose a synthetic circuit or edit a closed metric centerline.
+2. Set uniform width, direction, kart, driver, grip, braking, and solver inputs.
+3. Run the local Python model or the clearly labeled browser fallback.
+4. Inspect the reference line, target speed, controls, assumptions, and diagnostics.
+5. Save or reopen the local `.okl.json` project.
+
+## Target product journey
 
 1. Create a project and select metric or imperial display units.
 2. Import a background image, KML/GPX/CSV, or start with a blank canvas.
@@ -26,7 +34,9 @@ The first product slice targets a dry, closed, flat circuit and one kart running
 7. Export a shareable project and CSV result.
 8. Optionally import telemetry, align it to the track, and calibrate the kart.
 
-## Functional requirements
+## Target functional requirements
+
+The following requirements define the product direction; the delivery status and exit criteria are tracked in [ROADMAP.md](ROADMAP.md).
 
 ### Track authoring
 

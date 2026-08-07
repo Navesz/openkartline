@@ -1,86 +1,85 @@
 # Data formats
 
-## Design goals
+OpenKartLine has two deliberately separate contract families:
 
-- Human-readable and versioned.
-- SI units in canonical fields.
-- Forward-compatible readers that preserve unknown fields when possible.
-- Raw input retained separately from processed geometry.
-- Provenance for measured, estimated, default, and calibrated values.
-- Deterministic hashes for reproducibility.
+1. `.okl.json` stores the editable local user project.
+2. API request/result models describe explicit boundaries and scientific output.
 
-## OpenKartLine project
+Do not send a project file directly to `/v1/simulations`; the web adapter validates it and derives an API request.
 
-The planned extension is `.okl.json`. The schema itself will be generated and checked into `packages/schemas/` during M0.
+## Project format 0.1.0
 
-Illustrative structure:
+The current schema is [okl-project-0.1.0.schema.json](../packages/schemas/okl-project-0.1.0.schema.json), with a redistributable example at [circuito-aurora.okl.json](../examples/tracks/circuito-aurora.okl.json). TypeScript representation and runtime checks live beside the web reader/writer.
 
 ```json
 {
   "schema_version": "0.1.0",
   "project": {
     "name": "Synthetic oval",
-    "created_at": "2026-08-06T00:00:00Z"
+    "created_at": "2026-08-06T00:00:00.000Z",
+    "updated_at": "2026-08-06T00:00:00.000Z"
   },
   "track": {
     "coordinate_system": "local_cartesian_m",
     "direction": "clockwise",
-    "start_s_m": 0.0,
-    "raw_boundaries": {
-      "left": [[0.0, 0.0]],
-      "right": [[0.0, 0.0]]
-    },
-    "smoothing": {
-      "algorithm": "periodic_spline",
-      "settings": {}
-    }
+    "width_m": 8.0,
+    "raw_centerline": [[0.0, 0.0], [20.0, 0.0], [20.0, 10.0], [0.0, 10.0]]
   },
   "kart": {
     "model": "point_mass_v1",
-    "total_mass_kg": 175.0,
-    "parameters": {}
+    "total_mass_kg": 190.0,
+    "parameters": {
+      "power_hp": 13.0,
+      "kart_mass_kg": 115.0,
+      "driver_mass_kg": 75.0,
+      "top_speed_kph": 82.0,
+      "grip_coefficient": 1.05,
+      "brake_decel_mps2": 7.5
+    }
   },
   "simulation": {
     "solver": "speed_profile_v1",
-    "settings": {},
-    "safety_margin_m": 0.5
+    "settings": { "sample_count": 200 },
+    "safety_margin_m": 0.55
   }
 }
 ```
 
-This example is not yet a stable contract.
+The centerline contains distinct points and closes implicitly. `width_m` is the uniform total usable width. Project timestamps describe the file record; they do not affect simulation. The reader rejects unsupported versions, excessive file/point sizes, non-finite or out-of-range values, and unsafe solver settings.
 
-## Result format
+`0.1.0` is an alpha contract. Readers reject incompatible versions with an actionable message. Unknown-field preservation and automated migrations are future work and must land before any stable-format promise.
 
-Results contain metadata and numeric channels. Large arrays may move to a compact attachment format after profiling; JSON remains the manifest.
+## API contract 1.0
 
-Required metadata:
+Pydantic models in `engine/openkartline_engine/schemas.py` are authoritative. FastAPI publishes their JSON Schema through `GET /openapi.json`, and interactive documentation through `GET /docs`.
 
-- input/project hash;
-- schema, engine, model, and solver versions;
-- solver termination state;
-- iteration count and runtime;
-- maximum constraint violation;
-- assumptions and warnings;
-- units and channel definitions.
+A simulation request contains:
 
-## Telemetry import
+- a closed metric track with explicit travel-left and travel-right boundaries;
+- a point-mass kart with total mass, power, top speed, acceleration, braking, lateral grip, and drivetrain efficiency;
+- sample count, safety margin, smoothing iterations, and friction exponent.
 
-Import adapters normalize source-specific data into an internal table with:
+A successful result contains:
 
-- monotonic timestamp;
-- latitude/longitude or local position;
-- speed;
-- optional longitudinal/lateral acceleration;
-- optional RPM, throttle, brake, steering, and lap markers;
-- source, sampling rate, and quality flags.
+- schema and engine versions;
+- structured solver state and runtime/constraint diagnostics;
+- validation findings and modeling assumptions;
+- path-optimization diagnostics;
+- lap summary;
+- distance-indexed position, heading, curvature, speed, time, acceleration, controls, and friction-use samples;
+- reproducible driving-reference markers.
 
-Original files are not modified. Imported data must declare user consent and redistribution status before it can be added as a public fixture.
+`invalid_input` and `numerical_failure` use the same envelope but do not include successful numeric arrays.
 
-## Versioning and migrations
+## Units and compatibility
 
-- Patch versions clarify or add optional fields without changing meaning.
-- Minor versions may add fields and require a reversible migration.
-- Major versions may change field meaning or structure.
-- Readers reject unsupported major versions with a clear message.
-- Migration tests retain golden before/after fixtures.
+Engine fields use SI units and include unit suffixes such as `_m`, `_mps`, `_kg`, or `_rad`. `power_hp` is the explicit exception and is converted internally. Changing a field's physical meaning requires a new schema version and an ADR.
+
+- Patch versions may clarify behavior or add optional fields without changing meaning.
+- Minor versions may add compatible fields and require a reversible migration.
+- Major versions may change structure or semantics.
+- Golden examples remain deterministic and redistributable.
+
+## Future telemetry imports
+
+GPX/CSV adapters are not implemented in the alpha. When added, they must preserve the original file, declare coordinate/projection metadata, report sampling quality, and keep source, consent, and redistribution status. Public fixtures may contain only synthetic or explicitly licensed data.

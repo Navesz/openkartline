@@ -1,76 +1,74 @@
 # Stack review and decisions
 
-## Recommended MVP stack
+The alpha uses the smallest stack that can deliver a credible vertical slice. Packages considered for later milestones are not presented as installed dependencies.
 
-| Area | Choice | Why it fits | Main risk and mitigation |
+## Shipped stack
+
+| Area | Choice | Why it fits now | Deliberate limit |
 |---|---|---|---|
-| Web UI | React + TypeScript + Vite | Large contributor pool, typed state, simple static build | Keep domain logic outside React components. |
-| 2D editor | React Konva | Canvas interaction, layers, images, drag, zoom, and export | Canvas is not the canonical data model; store metric geometry separately. |
-| Charts | Apache ECharts | Linked plots and large numeric series | Wrap it behind project-owned components. |
-| API | FastAPI + Pydantic | Typed Python boundary and generated OpenAPI | Keep it thin; physics cannot depend on HTTP. |
-| Geometry | NumPy + SciPy + Shapely | Mature numerical and planar geometry tools | Define tolerance, orientation, and coordinate conventions centrally. |
-| Baseline QP | OSQP | Convex quadratic solver, warm starts, infeasibility detection, Apache-2.0 | Minimum-time dynamics are nonlinear; use only for suitable baselines. |
-| Optimal control | CasADi + IPOPT | Symbolic derivatives and nonlinear optimal-control formulation | Optional dependency; pin tested wheels and expose solver diagnostics. |
-| Heavy jobs | Local process pool/subprocess | Isolates CPU/native solver work from the web API | Define cancellation and cleanup before adding concurrency. |
-| Python tooling | uv, Ruff, mypy, pytest | Reproducible lockfile and cross-platform developer workflow | Pin a tested Python compatibility range. |
-| JS tooling | pnpm, ESLint, Prettier, Vitest, Playwright | Efficient monorepo and browser testing | Keep one lockfile and avoid unnecessary workspace packages. |
-| Storage | Versioned `.okl.json` project files | Local-first, portable, inspectable, no account or database | Use JSON Schema, migrations, checksums for attachments, and size limits. |
-| Packaging | Local web app + Docker after M1 | Lowest native packaging risk and works on all major desktops | Docker is optional for users; native installers come later. |
+| Web UI | React 19 + TypeScript + Vite | Familiar contributor workflow, typed state, fast static build | Domain geometry stays outside components. |
+| 2D editor | Native SVG + pointer/keyboard events | Crisp vector rendering, accessible DOM, no canvas dependency | Benchmark before supporting very dense imported tracks. |
+| Charts | Project-owned SVG | Synchronizes small alpha result arrays without another runtime dependency | Add a chart library only after measured interaction/performance need. |
+| Browser mode | TypeScript point-mass fallback | Makes the static demo and offline exploration useful | Clearly labeled and less authoritative than the Python engine. |
+| Local API | FastAPI + Pydantic | Strict contracts, useful validation errors, generated OpenAPI | Synchronous solver is bounded and loopback-oriented. |
+| Scientific core | Python + NumPy | Transparent vector math, easy analytic tests, cross-platform wheels | More advanced optimization remains optional. |
+| Python tools | uv + Ruff + mypy + pytest | Locked environment, formatting, strict types, coverage | CI pins the uv action and binary version. |
+| Web tools | pnpm + ESLint + Prettier + Vitest + Playwright | One lockfile and unit/browser gates | Avoid duplicate workspace tooling. |
+| Storage | Versioned `.okl.json` files | Portable, inspectable, private by default | No accounts, database, or hidden server state. |
+| Public demo | GitHub Pages | Free static distribution from the same reviewed source | Uses browser fallback; scientific API is not hosted. |
 
-## Important corrections to the initial proposal
+## Decisions that removed unnecessary risk
 
-### No mandatory SQLite in the MVP
+### SVG instead of React Konva
 
-A database adds migrations, backup behavior, and hidden state without helping the first single-user workflow. The source of truth will be a portable project file. SQLite may later index recent local projects or support a hosted service, but it must not own the only copy.
+The current editor needs hundreds, not tens of thousands, of points. Native SVG provides direct accessibility semantics and keeps the dependency graph smaller. Canvas/Konva remains an option only if profiling shows that SVG misses a documented performance budget.
 
-### Do not run optimization in FastAPI `BackgroundTasks`
+### Project-owned plots instead of ECharts
 
-Lap optimization is CPU-heavy and may execute native code for seconds or minutes. The local API submits a job to a separate process and exposes status, progress, cancellation, and result endpoints. A distributed queue such as Celery/Redis is justified only for a hosted multi-user deployment.
+The alpha visualizes a few synchronized channels with the same SVG coordinate system as the track. A general charting runtime would add weight before a proven need. ECharts can be introduced behind a component boundary if zooming, larger telemetry data, or richer accessibility justifies it.
 
-### Tauri is deferred
+### NumPy without SciPy, Shapely, or OSQP
 
-Tauri supports bundling a Python service as an external sidecar, but every supported OS and CPU architecture needs a matching binary. CasADi/IPOPT make those release artifacts more demanding. First make the browser-served local application reliable; add Tauri only after automated Windows, macOS, and Linux packaging is proven.
+The baseline can be implemented and analytically checked with NumPy. SciPy periodic splines, Shapely robust predicates, or OSQP convex programs may improve later models, but each addition must show a failing benchmark or correctness case that it resolves. This keeps first-time Windows installation simple.
 
-### C++ and acados are performance options, not the starting point
+### No database
 
-Python is fast enough to coordinate vectorized numeric libraries and native solvers, while allowing rapid model iteration. All solver backends will implement a narrow interface so a C++/Fastest-lap or acados backend can be added after profiling without changing the UI or file format.
+Portable project files are the source of truth. SQLite may one day index local history, and PostgreSQL may support a hosted collaboration service, but neither belongs in the single-user alpha.
+
+### Bounded synchronous API before a worker
+
+The current deterministic solver is bounded and completes interactively. A process worker is mandatory before adding long nonlinear optimization, but implementing job recovery and cancellation now would create infrastructure with no current workload.
 
 ### No machine learning in the first solver
 
-The deterministic model provides testable ground truth, explicit constraints, and understandable failure states. Data-driven methods can later estimate parameters, provide initial guesses, or rank confidence; they do not replace physical constraints.
+The deterministic physics model provides inspectable constraints and tests. Data-driven methods may later estimate parameters or uncertainty; they do not replace physical failure states.
 
-## What may fail if ignored
+## Future candidates and gates
 
-| Risk | Consequence | Planned control |
+| Candidate | Possible use | Gate before adoption |
 |---|---|---|
-| Track supplied as only a centerline | Optimizer has no valid corridor in which to choose a line | Require two boundaries or centerline plus measured widths. |
-| Horsepower treated as a complete kart model | Unrealistic braking and corner speeds | Guided presets plus measured acceleration, braking, and lateral grip. |
-| Pixel coordinates reach the engine | Results change with image resolution | Convert once into a metric, right-handed local frame. |
-| Solver returns a local optimum | Plausible but inferior line | Deterministic baselines, multiple initial guesses later, and diagnostics. |
-| No telemetry alignment/versioning | Calibration overfits bad data | Quality checks, held-out laps, and immutable calibration records. |
-| Native dependencies are compiled by every beginner | Poor adoption, especially on Windows | Use tested wheels, containers, and CI artifacts before source builds. |
-| A detailed model is introduced before validation | Complexity without trustworthy accuracy | Model ladder with acceptance tests at every stage. |
-| External track or imagery is committed casually | Copyright/privacy problems | Synthetic fixtures and documented redistribution rights. |
+| SciPy | Periodic interpolation and optimization utilities | Sample-invariance/accuracy improvement plus wheel matrix. |
+| Shapely | Robust planar geometry predicates | Demonstrated correctness or performance gap in project-owned predicates. |
+| OSQP | Convex path baseline | Explicit QP formulation, infeasibility fixtures, license/size review. |
+| CasADi + IPOPT | Joint minimum-time optimal control | Optional install, diagnostics, cancellation, and supported-platform smoke tests. |
+| Process worker | Long solver isolation | Defined job schema, timeout, cancellation, crash recovery, and load tests. |
+| Tauri | Native desktop distribution | Reproducible signed sidecar builds on advertised systems. |
+| C++/acados/Fastest-lap adapter | Measured performance bottleneck or advanced model | Narrow backend interface, benchmarks, independent validation, license review. |
+| Pyodide/WASM | Python-equivalent browser solver | Bundle, startup, numerical-equivalence, and licensing study. |
+| PostgreSQL/object storage | Hosted accounts and sharing | Privacy model, deletion/export, quotas, operations ownership. |
 
-## Deferred alternatives
+## Known stack risks
 
-- **SVG editor:** attractive for simple vectors, but Canvas is preferable for dense imagery and interaction. Exported geometry remains independent so this can change.
-- **Electron:** easier JavaScript packaging but larger distribution; not needed yet.
-- **Pyodide/WebAssembly:** a browser-only engine would be excellent long-term, but the native optimization stack needs a dedicated feasibility project.
-- **PostgreSQL/Supabase:** relevant only for accounts, public track sharing, or hosted jobs.
-- **Redis/Celery:** relevant only when job execution spans processes or servers beyond the local application.
+| Risk | Consequence | Current control |
+|---|---|---|
+| A centerline is mistaken for precise boundaries | False corridor confidence | UI labels uniform width; API uses explicit boundaries; independent sides remain roadmap work. |
+| Horsepower is treated as a full kart model | Unrealistic braking/corner estimates | UI also requires mass, top speed, braking, and lateral grip and lists assumptions. |
+| Pixels reach the engine | Resolution-dependent output | Canonical coordinates stay metric; rendering applies a reversible view transform. |
+| A local optimum looks authoritative | Unsafe confidence | Solver/model version, diagnostics, limitations, and conservative language stay visible. |
+| Browser fallback hides a domain error | Invalid guidance | Fallback is transport-only; scientific rejection remains an error. |
+| Native dependencies block beginners | Poor adoption | Current runtime uses packages with standard wheels and no native solver build. |
+| External track/telemetry enters casually | Copyright or privacy harm | Synthetic fixtures and documented provenance are required. |
 
-## Compatibility gate for M0
+## Runtime policy
 
-Before implementation is merged, CI must install the chosen locked versions on current Windows, Ubuntu, and macOS runners. CasADi is optional until a three-platform solver smoke test passes.
-
-## Primary references
-
-- [React Konva documentation](https://konvajs.org/docs/react/)
-- [FastAPI documentation](https://fastapi.tiangolo.com/)
-- [FastAPI guidance for heavy background computation](https://fastapi.tiangolo.com/tutorial/background-tasks/#caveat)
-- [CasADi documentation and binary downloads](https://web.casadi.org/get/)
-- [OSQP documentation](https://osqp.org/docs/)
-- [Tauri sidecar documentation](https://v2.tauri.app/develop/sidecar/)
-- [Fastest-lap](https://github.com/juanmanzanero/fastest-lap)
-- [TUMFTM global racetrajectory optimization](https://github.com/TUMFTM/global_racetrajectory_optimization)
+Supported development targets are Node.js 24, pnpm 11, and Python 3.11–3.13. Lockfiles are committed. CI runs the Python suite on Ubuntu, Windows, and macOS, the web quality/build suite, browser smoke tests, documentation checks, dependency review, and CodeQL.
