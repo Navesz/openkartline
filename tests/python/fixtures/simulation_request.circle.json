@@ -1,0 +1,55 @@
+{
+  "track": {
+    "schema_version": "1.0",
+    "name": "Synthetic 20 m radius circle",
+    "coordinate_system": "local_cartesian_m",
+    "direction": "counterclockwise",
+    "closed": true,
+    "left_boundary": [
+      {"x_m": 18.0, "y_m": 0.0},
+      {"x_m": 15.588457, "y_m": 9.0},
+      {"x_m": 9.0, "y_m": 15.588457},
+      {"x_m": 0.0, "y_m": 18.0},
+      {"x_m": -9.0, "y_m": 15.588457},
+      {"x_m": -15.588457, "y_m": 9.0},
+      {"x_m": -18.0, "y_m": 0.0},
+      {"x_m": -15.588457, "y_m": -9.0},
+      {"x_m": -9.0, "y_m": -15.588457},
+      {"x_m": 0.0, "y_m": -18.0},
+      {"x_m": 9.0, "y_m": -15.588457},
+      {"x_m": 15.588457, "y_m": -9.0}
+    ],
+    "right_boundary": [
+      {"x_m": 22.0, "y_m": 0.0},
+      {"x_m": 19.052559, "y_m": 11.0},
+      {"x_m": 11.0, "y_m": 19.052559},
+      {"x_m": 0.0, "y_m": 22.0},
+      {"x_m": -11.0, "y_m": 19.052559},
+      {"x_m": -19.052559, "y_m": 11.0},
+      {"x_m": -22.0, "y_m": 0.0},
+      {"x_m": -19.052559, "y_m": -11.0},
+      {"x_m": -11.0, "y_m": -19.052559},
+      {"x_m": 0.0, "y_m": -22.0},
+      {"x_m": 11.0, "y_m": -19.052559},
+      {"x_m": 19.052559, "y_m": -11.0}
+    ]
+  },
+  "kart": {
+    "schema_version": "1.0",
+    "name": "Rental baseline",
+    "total_mass_kg": 175.0,
+    "power_hp": 13.0,
+    "top_speed_mps": 22.0,
+    "max_accel_mps2": 3.0,
+    "max_brake_mps2": 7.0,
+    "max_lateral_accel_mps2": 10.0,
+    "drivetrain_efficiency": 0.85
+  },
+  "settings": {
+    "schema_version": "1.0",
+    "sample_count": 96,
+    "safety_margin_m": 0.35,
+    "path_smoothing_iterations": 10,
+    "friction_exponent": 2.0
+  }
+}

@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openkartline"
+version = "0.1.0"
+description = "Open-source kart racing line and lap simulation engine"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "OpenKartLine contributors" }]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "numpy>=2.0,<2.4",
+  "pydantic>=2.10,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=1.15,<2",
+  "pytest>=9.0.3,<10",
+  "pytest-cov>=6,<7",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+openkartline-api = "openkartline_api.main:run"
+
+[tool.setuptools.packages.find]
+where = ["engine", "services/api"]
+include = ["openkartline_engine*", "openkartline_api*"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=openkartline_engine --cov=openkartline_api --cov-report=term-missing"
+testpaths = ["tests/python"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["engine", "services/api", "tests/python"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["engine", "services/api"]
+
+[[tool.mypy.overrides]]
+module = ["numpy.*"]
+ignore_missing_imports = true

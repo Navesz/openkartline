@@ -30,7 +30,17 @@ body:
     id: area
     attributes:
       label: Area
-      options: [Track editor, Geometry, Physics/solver, API/jobs, Telemetry, Packaging, Documentation, Other]
+      options:
+        [
+          Track editor,
+          Geometry,
+          Physics/solver,
+          API/jobs,
+          Telemetry,
+          Packaging,
+          Documentation,
+          Other,
+        ]
     validations:
       required: true
   - type: textarea

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="title description">
+  <title id="title">OpenKartLine</title>
+  <desc id="description">Three green racing lines beside the OpenKartLine wordmark.</desc>
+  <rect width="720" height="180" rx="28" fill="#07110d"/>
+  <g transform="translate(36 30)">
+    <rect width="120" height="120" rx="30" fill="#0d1b15" stroke="#315a47" stroke-width="3"/>
+    <path d="M24 87 C44 77 53 63 73 53 C89 45 98 37 105 25" fill="none" stroke="#34c982" stroke-width="8" stroke-linecap="round"/>
+    <path d="M20 101 C47 91 60 75 80 65 C94 58 103 50 109 42" fill="none" stroke="#6ee7aa" stroke-width="5" stroke-linecap="round" opacity=".9"/>
+    <path d="M20 69 C37 60 50 47 68 38 C80 32 89 25 96 18" fill="none" stroke="#248f61" stroke-width="5" stroke-linecap="round" opacity=".8"/>
+  </g>
+  <text x="185" y="92" fill="#f4f8f6" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="53" font-weight="760" letter-spacing="-2">OpenKartLine</text>
+  <text x="189" y="126" fill="#66dfa3" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="17" font-weight="700" letter-spacing="5">RACING LINE LAB</text>
+</svg>

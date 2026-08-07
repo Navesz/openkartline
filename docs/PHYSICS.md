@@ -1,5 +1,9 @@
 # Physics and optimization plan
 
+## Current implementation
+
+The runnable alpha implements a constrained minimum-bending geometry baseline plus P1, the quasi-steady point-mass speed profile. It returns solver/path diagnostics and explicit assumptions. G0 shortest-path/minimum-curvature alternatives, P2 joint minimum-time optimization, telemetry calibration, and transient dynamics remain planned.
+
 ## Model ladder
 
 OpenKartLine deliberately uses a sequence of models. A more complex model is accepted only when it improves a defined validation case.
@@ -10,7 +14,7 @@ OpenKartLine deliberately uses a sequence of models. A more complex model is acc
 - Shortest path inside the track corridor.
 - Minimum-curvature path with a configurable safety margin.
 
-These models do not claim minimum lap time. They provide deterministic initial guesses and reveal geometry errors cheaply.
+These models do not claim minimum lap time. The current `minimum_bending_v1` implementation is one deterministic G0-style baseline; shortest-path and formal minimum-curvature variants remain roadmap work.
 
 ### P1 — quasi-steady point-mass kart
 

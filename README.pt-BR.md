@@ -1,65 +1,109 @@
 # OpenKartLine
 
-> Aplicação open source para otimização 2D da trajetória e do tempo de volta no kart.
+![OpenKartLine racing line lab](docs/assets/openkartline-logo.svg)
 
-[Read in English](README.md)
+> Uma aplicação 2D, open source e local-first para planejar linha de corrida e volta de kart.
 
-O OpenKartLine pretende transformar a geometria de uma pista e as características de um kart em um plano de volta mínima explicável: traçado, velocidade-alvo, zonas de frenagem, ponto de tangência, ápice e aplicação do acelerador.
+[![CI](https://github.com/Navesz/openkartline/actions/workflows/ci.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml)
+[![Documentação](https://github.com/Navesz/openkartline/actions/workflows/docs.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/docs.yml)
+[![Licença](https://img.shields.io/github/license/Navesz/openkartline)](LICENSE)
+[![Estado](https://img.shields.io/badge/estado-alpha-orange)](docs/ROADMAP.md)
 
-O projeto está em **planejamento / pré-alpha**. Ele nasce público para que pilotos, engenheiros, estudantes e desenvolvedores possam participar antes que decisões técnicas se tornem caras de mudar.
+[Read in English](README.md) · [Testar a demo web](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribuir](CONTRIBUTING.md)
 
-## A experiência pretendida
+O OpenKartLine transforma o formato métrico de uma pista e as características do kart em uma estimativa explicável de volta: linha-base, perfil de velocidade, tempo estimado e referências de frenagem, ápice e retomada. O alpha já funciona no navegador sem conta; quando o motor Python local está disponível, a mesma interface passa automaticamente a usar sua geometria e simulação point-mass mais rigorosas.
 
-1. Importar uma imagem, KML, GPX ou CSV — ou desenhar a pista.
-2. Marcar as bordas utilizáveis, escala, sentido e linha de chegada.
-3. Informar os dados do kart ou calibrá-lo com telemetria.
-4. Calcular a linha e o perfil de velocidade.
-5. Ver onde frear, tangenciar, atingir o ápice e voltar ao acelerador.
-6. Comparar a previsão com voltas reais e melhorar o modelo.
+Este é um projeto de engenharia e aprendizado, não um sistema de segurança. O resultado atual é uma estimativa de planejamento ainda sem validação em pista e deve ser conferido progressivamente em ambiente controlado.
 
-## O que o projeto deverá mostrar
+## O que já funciona
 
-- Linha ideal dentro dos limites reais da pista.
-- Velocidade-alvo e tempo estimado da volta.
-- Regiões de freio, transição, aceleração parcial e aceleração total.
-- Pontos de tangência, ápice e saída.
-- Animação 2D sincronizada com gráficos por distância.
-- Comparação entre a volta simulada e a telemetria real.
-- Grau de confiança e dados usados na calibração.
+- Editar uma linha central 2D fechada, adicionar ou arrastar pontos, mover, ampliar, enquadrar e desfazer/refazer.
+- Definir largura e sentido da pista ou começar com três circuitos sintéticos.
+- Informar potência, massa, velocidade máxima, aderência lateral e capacidade de frenagem.
+- Calcular uma linha determinística de mínima flexão e um perfil cíclico de velocidade point-mass.
+- Ver linha colorida, gráficos por distância, métricas e referências práticas sincronizadas.
+- Salvar e reabrir projetos portáteis `.okl.json`.
+- Rodar somente no navegador com um modelo simplificado ou conectar o motor FastAPI local.
+- Receber hipóteses, erros de geometria, estado do solver, versão do modelo e diagnósticos explícitos.
 
-## Stack inicial
+O solver atual é uma linha-base restrita, **não** uma trajetória de tempo mínimo global. Bordas independentes, importação de imagem/GPS, calibração por telemetria, otimização conjunta de caminho/controle e instaladores nativos estão no roadmap.
 
-- React + TypeScript + Vite para a interface.
-- React Konva para o editor 2D.
-- FastAPI como uma API local e pequena.
-- Python, NumPy, SciPy e Shapely para geometria e física.
-- CasADi + IPOPT para a etapa de otimização de tempo mínimo.
-- Arquivos `.okl.json` como formato principal, sem banco obrigatório.
-- Processo separado para os cálculos pesados.
+## Início rápido
 
-Tauri, C++, acados e execução distribuída ficam como opções futuras, ativadas apenas quando medições mostrarem que são necessárias. Leia a [revisão da stack](docs/STACK.md), a [arquitetura](docs/ARCHITECTURE.md) e o [roadmap](docs/ROADMAP.md).
+Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.13 e [uv](https://docs.astral.sh/uv/).
 
-## Princípios
+```bash
+git clone https://github.com/Navesz/openkartline.git
+cd openkartline
+corepack enable
+pnpm install --frozen-lockfile
+uv sync --locked --all-extras --dev
+```
 
-- Física primeiro; aprendizado de máquina poderá calibrar, não esconder, o modelo.
-- Local-first, sem conta obrigatória e sem dependência de nuvem.
-- Unidades SI dentro do motor.
-- Todo resultado deverá informar hipóteses, versão do modelo e situação do solver.
-- Modelos simples serão validados antes da introdução de modelos complexos.
-- As recomendações são estimativas de planejamento, não garantia de segurança.
+Execute a API em um terminal:
 
-## Situação atual
+```bash
+uv run openkartline-api
+```
 
-Ainda não existe um simulador executável. O primeiro marco entrega o formato de dados e a geometria de uma pista circular sintética; depois virão o editor, o perfil de velocidade e a otimização conjunta.
+Em outro terminal, execute a aplicação web:
 
-## Como colaborar
+```bash
+pnpm dev
+```
 
-Leia [CONTRIBUTING.md](CONTRIBUTING.md), escolha uma atividade no [Roadmap](docs/ROADMAP.md) e participe por uma issue. Discussões em português ou inglês são bem-vindas. A documentação técnica canônica será mantida em inglês para facilitar colaboração internacional.
+Abra `http://localhost:5173`. O cabeçalho mostra **Motor conectado** quando usa a API Python e **Modo local** quando usa o fallback determinístico do navegador. A documentação interativa da API fica em `http://127.0.0.1:8000/docs`.
 
-## Segurança
+Para executar a verificação local completa:
 
-Pista, pneus, temperatura, aderência e estado do kart alteram profundamente o resultado. Valide qualquer recomendação gradualmente, em ambiente controlado, obedecendo às regras do kartódromo e mantendo margem compatível com sua experiência.
+```bash
+pnpm check
+pnpm exec playwright install chromium
+pnpm test:e2e
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy engine services
+uv run pytest
+```
 
-## Licença
+Consulte [Desenvolvimento](docs/DEVELOPMENT.md) para detalhes por plataforma e solução de problemas.
 
-Apache 2.0. Consulte [LICENSE](LICENSE) e [THIRD_PARTY.md](THIRD_PARTY.md).
+## Arquitetura atual
+
+```mermaid
+flowchart LR
+    A["Editor 2D"] --> B["Adaptador de requisição versionada"]
+    K["Kart e piloto"] --> B
+    B --> C{"API local disponível?"}
+    C -->|sim| D["Motor Python de geometria + física"]
+    C -->|não| E["Fallback no navegador"]
+    D --> F["Plano de volta + diagnósticos"]
+    E --> F
+    F --> G["Linha, gráficos e referências"]
+    A <--> H["Projeto .okl.json"]
+```
+
+| Camada | Implementação atual | Responsabilidade |
+|---|---|---|
+| Web | React 19, TypeScript, Vite, SVG | Editor métrico, arquivos locais, visualização e fallback |
+| API | FastAPI, Pydantic | Contrato HTTP versionado, validação e OpenAPI |
+| Motor | Python, NumPy | Preparação geométrica, linha de mínima flexão, velocidade e marcadores |
+| Qualidade | pytest, Vitest, Playwright, Ruff, mypy, ESLint, Prettier | Regressão determinística e gates multiplataforma |
+| Operação | GitHub Actions, CodeQL, Dependabot, Pages | CI, segurança, dependências e demo estática |
+
+O núcleo científico não depende de React nem de HTTP. A API local é síncrona e limitada neste alpha; um worker separado fica reservado para futuros solvers não lineares demorados. Leia [Arquitetura](docs/ARCHITECTURE.md), [Física](docs/PHYSICS.md), os critérios em [Validação](docs/VALIDATION.md) e o [relatório medido da v0.1.0](docs/VALIDATION_REPORT.md).
+
+## Como participar
+
+Contribuições em português brasileiro ou inglês são bem-vindas. Comece por [CONTRIBUTING.md](CONTRIBUTING.md), escolha uma issue e use o template de pull request. O projeto inclui governança, código de conduta, políticas de segurança e privacidade, formulários de issue, dependências travadas, processo de release e roadmap público.
+
+O financiamento é transparente: nenhum destino de doação será publicado antes de o proprietário ativar e verificar uma conta. Consulte [Financiamento](docs/FUNDING.md).
+
+## Segurança e privacidade
+
+Precisão da pista, pneus, piso, temperatura, condição do kart e comportamento do piloto alteram cada referência. Mantenha margem conservadora, obedeça ao kartódromo e nunca trate um ponto de frenagem previsto como autorização para superar sua habilidade. Os projetos ficam locais até você decidir compartilhá-los. Leia [Segurança na pista](docs/SAFETY.md) e [Privacidade](docs/PRIVACY.md).
+
+## Licença e citação
+
+O código usa a licença [Apache-2.0](LICENSE). Regras de terceiros e proveniência estão em [THIRD_PARTY.md](THIRD_PARTY.md). Em pesquisa, cite a versão ou commit exato usando [CITATION.cff](CITATION.cff).

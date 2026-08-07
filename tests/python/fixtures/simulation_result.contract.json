@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "engine_version": "0.1.0",
+  "status": {
+    "state": "success",
+    "code": "SPEED_PROFILE_CONVERGED",
+    "message": "Geometry baseline and cyclic speed profile converged.",
+    "iterations": 1,
+    "runtime_ms": 1.0,
+    "max_constraint_violation": 0.0
+  },
+  "validation": {
+    "schema_version": "1.0",
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "metrics": {
+      "track_length_m": 100.0,
+      "min_width_m": 4.0,
+      "mean_width_m": 4.0,
+      "max_width_m": 4.0,
+      "sample_count": 1
+    }
+  },
+  "summary": {
+    "track_length_m": 100.0,
+    "lap_time_s": 10.0,
+    "min_speed_mps": 10.0,
+    "max_speed_mps": 10.0,
+    "average_speed_mps": 10.0,
+    "sample_count": 1
+  },
+  "path_diagnostics": {
+    "algorithm": "minimum_bending_v1",
+    "objective": "integrated_squared_curvature",
+    "initial_objective": 0.08,
+    "final_objective": 0.06,
+    "iterations": 10,
+    "converged": true,
+    "termination_reason": "step_tolerance",
+    "max_fraction_step": 0.05,
+    "min_corridor_fraction": 0.1,
+    "max_corridor_fraction": 0.9
+  },
+  "samples": [{
+    "s_m": 0.0,
+    "x_m": 20.0,
+    "y_m": 0.0,
+    "heading_rad": 1.5707963267948966,
+    "curvature_1pm": 0.05,
+    "speed_mps": 10.0,
+    "elapsed_time_s": 0.0,
+    "longitudinal_accel_mps2": 0.0,
+    "lateral_accel_mps2": 5.0,
+    "throttle": 0.0,
+    "brake": 0.0,
+    "friction_utilization": 0.5
+  }],
+  "markers": [{
+    "kind": "apex",
+    "sample_index": 0,
+    "s_m": 0.0,
+    "x_m": 20.0,
+    "y_m": 0.0,
+    "speed_mps": 10.0,
+    "reason": "Contract fixture"
+  }],
+  "assumptions": ["Contract fixture only."],
+  "warnings": []
+}

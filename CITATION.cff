@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: >-
+  If OpenKartLine contributes to your research, please cite the software and
+  the exact release or commit used so its model and solver assumptions remain
+  reproducible.
+title: OpenKartLine
+type: software
+version: 0.1.0
+date-released: 2026-08-07
+authors:
+  - name: OpenKartLine contributors
+abstract: >-
+  An open-source, local-first application for authoring kart circuits,
+  simulating physically constrained racing lines and speed profiles, and
+  explaining braking, apex, and acceleration references.
+license: Apache-2.0
+repository-code: https://github.com/Navesz/openkartline
+url: https://navesz.github.io/openkartline/
+keywords:
+  - karting
+  - racing line
+  - lap-time simulation
+  - trajectory optimization
+  - vehicle dynamics

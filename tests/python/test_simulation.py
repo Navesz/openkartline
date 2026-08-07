@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import numpy as np
+import pytest
+
+from openkartline_engine.schemas import KartV1, SimulationRequestV1, SimulationSettingsV1, TrackV1
+from openkartline_engine.simulation import simulate
+
+
+def test_circle_simulation_is_successful_and_deterministic(
+    circle_request: SimulationRequestV1,
+) -> None:
+    first = simulate(circle_request)
+    second = simulate(circle_request)
+    assert first.status.state == "success"
+    assert first.summary is not None
+    assert first.summary.sample_count == circle_request.settings.sample_count
+    assert len(first.samples) == circle_request.settings.sample_count
+    assert [sample.model_dump() for sample in first.samples] == [
+        sample.model_dump() for sample in second.samples
+    ]
+    assert first.summary.model_dump() == second.summary.model_dump()  # type: ignore[union-attr]
+    assert first.status.max_constraint_violation < 2e-4
+    assert any(marker.kind == "apex" for marker in first.markers)
+
+
+def test_summary_lap_time_is_reproducible_from_returned_samples(
+    circle_request: SimulationRequestV1,
+) -> None:
+    result = simulate(circle_request)
+    assert result.summary is not None
+    positions = np.asarray([(sample.x_m, sample.y_m) for sample in result.samples])
+    speeds = np.asarray([sample.speed_mps for sample in result.samples])
+    lengths = np.linalg.norm(np.roll(positions, -1, axis=0) - positions, axis=1)
+    reconstructed = float(np.sum(2 * lengths / (speeds + np.roll(speeds, -1))))
+    assert result.summary.lap_time_s == pytest.approx(reconstructed, rel=1e-12)
+
+
+def test_lap_time_is_stable_across_sample_counts(
+    track_factory: Callable[..., TrackV1], kart: KartV1
+) -> None:
+    lap_times: list[float] = []
+    for sample_count in (64, 128, 256):
+        request = SimulationRequestV1(
+            track=track_factory(radius_x=20, radius_y=20, count=32),
+            kart=kart,
+            settings=SimulationSettingsV1(
+                sample_count=sample_count,
+                path_smoothing_iterations=40,
+            ),
+        )
+        result = simulate(request)
+        assert result.status.state == "success"
+        assert result.summary is not None
+        lap_times.append(result.summary.lap_time_s)
+    assert (max(lap_times) - min(lap_times)) / float(np.mean(lap_times)) < 0.01
+
+
+def test_oval_has_actionable_brake_and_acceleration_markers(
+    track_factory: Callable[..., TrackV1], kart: KartV1
+) -> None:
+    request = SimulationRequestV1(
+        track=track_factory(radius_x=55, radius_y=12, count=120),
+        kart=kart,
+        settings=SimulationSettingsV1(sample_count=240, path_smoothing_iterations=12),
+    )
+    result = simulate(request)
+    assert result.status.state == "success"
+    kinds = {marker.kind for marker in result.markers}
+    assert "brake_start" in kinds
+    assert "acceleration_start" in kinds
+    assert "apex" in kinds
+    assert result.summary is not None and result.summary.lap_time_s > 0
+
+
+def test_invalid_track_returns_structured_failure(
+    track_factory: Callable[..., TrackV1], kart: KartV1
+) -> None:
+    request = SimulationRequestV1(
+        track=track_factory(width=1),
+        kart=kart,
+        settings=SimulationSettingsV1(safety_margin_m=0.6),
+    )
+    result = simulate(request)
+    assert result.status.state == "invalid_input"
+    assert result.status.code == "TRACK_VALIDATION_FAILED"
+    assert result.summary is None
+    assert result.samples == []
+    assert result.validation.errors
+
+
+def test_disabled_path_optimization_is_reported_without_false_convergence(
+    circle_request: SimulationRequestV1,
+) -> None:
+    request = circle_request.model_copy(
+        update={
+            "settings": circle_request.settings.model_copy(update={"path_smoothing_iterations": 0})
+        }
+    )
+    result = simulate(request)
+    assert result.status.state == "success"
+    assert result.status.code == "PATH_NOT_CONVERGED"
+    assert result.path_diagnostics is not None
+    assert not result.path_diagnostics.converged
+    assert result.path_diagnostics.termination_reason == "skipped"
+    assert any("disabled" in warning for warning in result.warnings)
+
+
+def test_path_iteration_limit_is_reported_without_false_convergence(
+    track_factory: Callable[..., TrackV1], kart: KartV1
+) -> None:
+    request = SimulationRequestV1(
+        track=track_factory(radius_x=55, radius_y=12, count=80),
+        kart=kart,
+        settings=SimulationSettingsV1(sample_count=192, path_smoothing_iterations=1),
+    )
+    result = simulate(request)
+    assert result.status.state == "success"
+    assert result.status.code == "PATH_NOT_CONVERGED"
+    assert result.path_diagnostics is not None
+    assert not result.path_diagnostics.converged
+    assert result.path_diagnostics.termination_reason == "iteration_limit"
+    assert any("iteration limit" in warning for warning in result.warnings)
+
+
+def test_numerical_error_returns_structured_failure(
+    circle_request: SimulationRequestV1,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_solver(*args: object, **kwargs: object) -> None:
+        raise ArithmeticError("synthetic convergence failure")
+
+    monkeypatch.setattr("openkartline_engine.simulation.solve_speed_profile", fail_solver)
+    result = simulate(circle_request)
+    assert result.status.state == "numerical_failure"
+    assert result.status.code == "NUMERICAL_FAILURE"
+    assert "synthetic convergence failure" in result.status.message
+    assert result.validation.valid
+    assert result.summary is None

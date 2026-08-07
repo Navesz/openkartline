@@ -1,27 +1,35 @@
-## Problem
+## Problem and user impact
 
-What user or engineering problem does this change address?
+<!-- What is wrong or missing? Who benefits? Link the issue with “Closes #123” when appropriate. -->
 
 ## Approach
 
-What changed, and what alternatives were considered?
+<!-- Explain the design, important tradeoffs, and alternatives considered. -->
 
 ## Validation
 
+<!-- List exact commands, fixtures, platforms, measurements, screenshots, or recordings. -->
+
 - [ ] Automated tests added or updated
-- [ ] Geometry/physics claim has a reproducible reference
-- [ ] Failure and edge cases tested
-- [ ] UI changes checked for keyboard/accessibility impact
-- [ ] Documentation updated
+- [ ] Failure and edge cases covered
+- [ ] Geometry/physics claims have reproducible analytic or telemetry evidence
+- [ ] UI changes checked for keyboard use, narrow screens, and readable contrast
+- [ ] Full relevant local checks pass
 
-## Compatibility and safety
+## Compatibility, safety, and data
 
-- [ ] No public schema change
-- [ ] Public schema change includes migration and ADR
+- [ ] No public schema or file-format change
+- [ ] Schema change includes versioning, fixtures, migration/rejection behavior, docs, and an ADR
 - [ ] Units and coordinate conventions are explicit
-- [ ] Solver failure cannot appear as a valid result
-- [ ] New dependencies/data have documented licenses and provenance
+- [ ] Failed, infeasible, partial, cancelled, or timed-out work cannot appear successful
+- [ ] New dependencies and data have documented license and provenance
+- [ ] No secrets, private telemetry, or non-redistributable assets are included
+
+## Documentation and release note
+
+- [ ] User and contributor documentation is updated
+- [ ] `CHANGELOG.md` is updated, or this change has no user-visible effect
 
 ## Evidence
 
-Logs, plots, screenshots, benchmark results, or validation notes.
+<!-- Add before/after screenshots, plots, sanitized logs, benchmarks, or validation artifacts. -->

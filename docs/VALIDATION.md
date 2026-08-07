@@ -2,6 +2,14 @@
 
 OpenKartLine separates software correctness, numerical correctness, and real-world correlation. Passing one does not prove the others.
 
+## Evidence in the runnable alpha
+
+The repository currently gates strict Python types/lint/coverage, TypeScript types/lint/formatting, web unit tests, a Playwright smoke test, production builds, analytic/synthetic geometry and physics regressions, API contracts, schema examples, documentation links, dependency changes, and CodeQL. Hosted operating-system results become release evidence only after the pull request runs.
+
+No real telemetry-validation dataset has been published. The UI and documentation therefore call current results estimates, never universally accurate predictions.
+
+The exact alpha commands, counts, bundle sizes, and sample-invariance measurement are recorded in [VALIDATION_REPORT.md](VALIDATION_REPORT.md).
+
 ## Test layers
 
 ### Geometry
@@ -27,10 +35,10 @@ OpenKartLine separates software correctness, numerical correctness, and real-wor
 - Repeatability with pinned settings.
 - Explicit fixtures for infeasible problems and timeouts.
 
-### API and UI
+### API and UI targets
 
 - Schema compatibility and migration tests.
-- Cancellation and process-crash recovery.
+- Cancellation and process-crash recovery for the future worker architecture.
 - Editor undo/redo and metric coordinate preservation.
 - Visual regression for line, markers, and charts.
 

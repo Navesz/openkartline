@@ -1,0 +1,42 @@
+name: Data or fixture contribution
+description: Propose telemetry, a track fixture, imagery, or another validation dataset
+title: "[Data]: "
+labels: ["type: research", "needs-triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Dataset and intended use
+      description: Describe its contents, format, scale, and which validation question it supports.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and license
+      description: Who created it, where it came from, and the exact redistribution/modification terms.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Consent and privacy review
+      description: Explain consent, anonymization, location/timestamp handling, and whether people can be re-identified.
+    validations:
+      required: true
+  - type: textarea
+    id: quality
+    attributes:
+      label: Measurement quality
+      description: Logger, sample rate, coordinate system, calibration, missing data, weather, kart, and known limitations.
+    validations:
+      required: true
+  - type: checkboxes
+    id: rights
+    attributes:
+      label: Rights confirmation
+      options:
+        - label: I have the right to share this material under the stated terms.
+          required: true
+        - label: I removed secrets and data that should not be public.
+          required: true
