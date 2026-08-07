@@ -22,6 +22,18 @@ export default defineConfig({
     css: true,
     coverage: {
       reporter: ['text', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      // Bootstrap and declaration-only modules have no behaviour to cover and
+      // would otherwise dilute the gate.
+      exclude: ['src/main.tsx', 'src/vite-env.d.ts', 'src/domain/types.ts', 'src/test/**'],
+      // Matches the intent of the Python `fail_under` gate so both workspaces
+      // are held to a comparable standard.
+      thresholds: {
+        statements: 85,
+        branches: 78,
+        functions: 55,
+        lines: 85,
+      },
     },
   },
 })

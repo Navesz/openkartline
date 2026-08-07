@@ -1,5 +1,6 @@
 import { coalesceSimulationEvents } from './events'
 import { curvatureAt, distance, normalAt, pathLength } from './geometry'
+import { DRIVETRAIN_EFFICIENCY, kartEnvelope, remainingGripFraction } from './kartModel'
 import { buildCanonicalTrackGeometry } from './trackGeometry'
 import type {
   DriveMode,
@@ -10,34 +11,25 @@ import type {
   SimulationResult,
 } from './types'
 
-const G = 9.80665
-const HP_TO_WATTS = 745.7
-const FRICTION_EXPONENT = 2
-
-function remainingGripFraction(lateralAcceleration: number, maximumLateral: number): number {
-  const lateralFraction = Math.min(1, Math.abs(lateralAcceleration) / maximumLateral)
-  return Math.max(0, 1 - lateralFraction ** FRICTION_EXPONENT) ** (1 / FRICTION_EXPONENT)
-}
-
 export function availableDriveAcceleration(
   speedMps: number,
   lateralAccelerationMps2: number,
   kart: KartInput,
 ): number {
-  const topSpeedMps = kart.topSpeedKph / 3.6
-  if (speedMps >= topSpeedMps) return 0
-  const totalMass = kart.kartMassKg + kart.driverMassKg
-  const powerLimited = (kart.powerHp * HP_TO_WATTS * 0.82) / (totalMass * Math.max(speedMps, 1))
-  const topSpeedTaper = Math.max(0, 1 - (speedMps / topSpeedMps) ** 4)
+  const envelope = kartEnvelope(kart)
+  if (speedMps >= envelope.topSpeedMps) return 0
+  const powerLimited =
+    (envelope.powerW * DRIVETRAIN_EFFICIENCY) / (envelope.totalMassKg * Math.max(speedMps, 1))
+  const topSpeedTaper = Math.max(0, 1 - (speedMps / envelope.topSpeedMps) ** 4)
   const driveEnvelope = powerLimited * topSpeedTaper
-  const maximumLongitudinal = kart.gripCoefficient * G * 0.52
-  const maximumLateral = kart.gripCoefficient * G
-  const tireLimited = maximumLongitudinal * remainingGripFraction(lateralAccelerationMps2, maximumLateral)
+  const tireLimited =
+    envelope.maxAccelMps2 * remainingGripFraction(lateralAccelerationMps2, envelope.maxLateralAccelMps2)
   return Math.max(0, Math.min(driveEnvelope, tireLimited))
 }
 
 export function availableBrakingAcceleration(lateralAccelerationMps2: number, kart: KartInput): number {
-  return kart.brakeDecelMps2 * remainingGripFraction(lateralAccelerationMps2, kart.gripCoefficient * G)
+  const envelope = kartEnvelope(kart)
+  return envelope.maxBrakeMps2 * remainingGripFraction(lateralAccelerationMps2, envelope.maxLateralAccelMps2)
 }
 
 function smoothCircular(values: number[], passes = 3): number[] {
@@ -113,8 +105,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     return { x: point.x + normal.x * offsets[index], y: point.y + normal.y * offsets[index] }
   })
   const curvature = line.map((_, index) => curvatureAt(line, index))
-  const topSpeed = kart.topSpeedKph / 3.6
-  const maximumLateral = kart.gripCoefficient * G
+  const { topSpeedMps: topSpeed, maxLateralAccelMps2: maximumLateral } = kartEnvelope(kart)
   const speeds = curvature.map((value) =>
     Math.min(topSpeed, Math.sqrt(maximumLateral / Math.max(0.0005, Math.abs(value)))),
   )

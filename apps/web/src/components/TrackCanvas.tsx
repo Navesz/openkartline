@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Crosshair, Hand, LocateFixed, MousePointer2, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Crosshair, Hand, LocateFixed, MousePointer2, Plus, Trash2 } from 'lucide-react'
 import { insertPointNearestSegment } from '../domain/editorGeometry'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
-import type { Point, SimulationResult, TrackInput } from '../domain/types'
+import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 
 export type EditorTool = 'edit' | 'add' | 'pan'
@@ -44,6 +44,29 @@ const pathOf = (points: Point[], close = true) =>
     ? `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')}${close ? ' Z' : ''}`
     : ''
 
+interface ModeRun {
+  mode: DriveMode
+  points: Point[]
+}
+
+/**
+ * Group consecutive samples that share a drive mode into single polylines.
+ *
+ * One filtered `<line>` per sample means hundreds of blurred SVG nodes to
+ * repaint on every drag; a lap only has a handful of brake/coast/throttle runs.
+ * Each run repeats its successor's first point so the colours stay joined.
+ */
+function racingLineRuns(samples: LapSample[]): ModeRun[] {
+  const runs: ModeRun[] = []
+  samples.forEach((sample, index) => {
+    const next = samples[(index + 1) % samples.length]
+    const current = runs[runs.length - 1]
+    if (current && current.mode === sample.mode) current.points.push(next.position)
+    else runs.push({ mode: sample.mode, points: [sample.position, next.position] })
+  })
+  return runs
+}
+
 export function TrackCanvas({
   track,
   result,
@@ -63,6 +86,7 @@ export function TrackCanvas({
   const canonical = useMemo(() => buildCanonicalTrackGeometry(track, 180), [track])
   const display = canonical.center
   const boundaries = { left: canonical.left, right: canonical.right }
+  const racingLine = useMemo(() => (result ? racingLineRuns(result.samples) : []), [result])
 
   useEffect(() => setViewBox(fitPoints(latestPoints.current)), [fitRequest])
 
@@ -75,16 +99,31 @@ export function TrackCanvas({
     }
   }
 
-  const onWheel = (event: React.WheelEvent<SVGSVGElement>) => {
-    event.preventDefault()
-    const cursor = clientToWorld(event.clientX, event.clientY)
-    const factor = event.deltaY > 0 ? 1.12 : 0.89
-    const width = Math.min(600, Math.max(25, viewBox.width * factor))
-    const height = (viewBox.height * width) / viewBox.width
-    const ratioX = (cursor.x - viewBox.x) / viewBox.width
-    const ratioY = (cursor.y - viewBox.y) / viewBox.height
-    setViewBox({ x: cursor.x - ratioX * width, y: cursor.y - ratioY * height, width, height })
-  }
+  // React registers `wheel` passively on the root, so a JSX `onWheel` handler
+  // cannot call preventDefault: the page would scroll while the canvas zoomed.
+  // Binding it directly with `{ passive: false }` is the only way to stop that.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const rect = svg.getBoundingClientRect()
+      setViewBox((current) => {
+        const cursor = {
+          x: current.x + ((event.clientX - rect.left) / rect.width) * current.width,
+          y: current.y + ((event.clientY - rect.top) / rect.height) * current.height,
+        }
+        const factor = event.deltaY > 0 ? 1.12 : 0.89
+        const width = Math.min(600, Math.max(25, current.width * factor))
+        const height = (current.height * width) / current.width
+        const ratioX = (cursor.x - current.x) / current.width
+        const ratioY = (cursor.y - current.y) / current.height
+        return { x: cursor.x - ratioX * width, y: cursor.y - ratioY * height, width, height }
+      })
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', onWheel)
+  }, [])
 
   const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.button === 1 || tool === 'pan') {
@@ -167,7 +206,6 @@ export function TrackCanvas({
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         role="img"
         aria-label={`Traçado ${track.name} com ${track.centerline.length} pontos de controle`}
-        onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => {
@@ -218,22 +256,18 @@ export function TrackCanvas({
         {!result && (
           <path d={pathOf(display)} fill="none" stroke="#7b8b80" strokeWidth=".65" strokeDasharray="2 1.4" />
         )}
-        {result?.samples.map((sample, index) => {
-          const next = result.samples[(index + 1) % result.samples.length]
-          return (
-            <line
-              key={index}
-              x1={sample.position.x}
-              y1={sample.position.y}
-              x2={next.position.x}
-              y2={next.position.y}
-              stroke={MODE_COLORS[sample.mode]}
-              strokeWidth="1.45"
-              strokeLinecap="round"
-              filter="url(#line-glow)"
-            />
-          )
-        })}
+        {racingLine.map((run, index) => (
+          <polyline
+            key={`${run.mode}-${index}`}
+            points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
+            fill="none"
+            stroke={MODE_COLORS[run.mode]}
+            strokeWidth="1.45"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#line-glow)"
+          />
+        ))}
         {startLeft && startRight && (
           <g aria-label="Linha de largada">
             <line
@@ -340,13 +374,5 @@ export function TrackCanvas({
         <span>N</span>
       </div>
     </section>
-  )
-}
-
-export function EmptyTrackAction({ onReset }: { onReset: () => void }) {
-  return (
-    <button onClick={onReset}>
-      <RotateCcw size={16} /> Restaurar exemplo
-    </button>
   )
 }
