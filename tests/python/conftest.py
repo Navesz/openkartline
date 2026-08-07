@@ -32,6 +32,33 @@ def kart() -> KartV1:
 
 
 @pytest.fixture
+def serpentine_track() -> TrackV1:
+    """A corner-rich closed circuit, unlike the near-analytic circle and oval.
+
+    Discretization error and path-solver behaviour are both curvature driven, so
+    a low-curvature fixture cannot detect regressions that only appear once a
+    circuit actually has corners.
+    """
+
+    theta = np.linspace(0, 2 * np.pi, 400, endpoint=False)
+    radius = 50 + 14 * np.sin(5 * theta)
+
+    def ring(offset: float) -> list[Point2D]:
+        scaled = radius + offset
+        return [
+            Point2D(x_m=float(r * np.cos(t)), y_m=float(r * np.sin(t)))
+            for r, t in zip(scaled, theta, strict=True)
+        ]
+
+    return TrackV1(
+        name="Synthetic serpentine",
+        direction="counterclockwise",
+        left_boundary=ring(-4.0),
+        right_boundary=ring(4.0),
+    )
+
+
+@pytest.fixture
 def track_factory() -> Callable[..., TrackV1]:
     def make_track(
         *,

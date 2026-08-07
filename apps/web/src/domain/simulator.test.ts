@@ -59,7 +59,9 @@ describe('browser simulator', () => {
         )
       } else {
         const lateral = next.speedMps ** 2 * Math.abs(next.curvature)
-        expect(-acceleration).toBeLessThanOrEqual(availableBrakingAcceleration(lateral, DEFAULT_KART) + 1e-6)
+        expect(-acceleration).toBeLessThanOrEqual(
+          availableBrakingAcceleration(lateral, DEFAULT_KART, next.speedMps) + 1e-6,
+        )
       }
     })
   })

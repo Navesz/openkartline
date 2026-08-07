@@ -46,6 +46,46 @@ For the same synthetic circle with 32 controls and 40 path iterations:
 
 Relative spread: **0.0578777%**. All runs terminated by `step_tolerance`. This regression protects against the earlier polygon-corner behavior in which adding samples could incorrectly make the same circuit much slower.
 
+A circle is a weak fixture for this property: discretization error and path-solver
+behavior are both curvature driven, so a near-analytic shape cannot expose a
+regression that only appears once a circuit has corners. On the synthetic
+serpentine fixture (`r = 50 + 14 sin 5θ`, 8 m corridor) the same measurement gave:
+
+| Samples | Lap time before | Lap time after | Path length before | Path length after |
+|---:|---:|---:|---:|---:|
+| 300 | 34.335 s | 33.893 s | 432.71 m | 432.69 m |
+| 600 | 35.346 s | 34.261 s | 441.57 m | 432.95 m |
+| 1200 | 37.208 s | 34.486 s | 449.49 m | 432.97 m |
+| 2400 | 38.439 s | 34.501 s | 452.90 m | 432.99 m |
+
+Relative lap-time spread fell from **12.0%** to **1.8%**, and path-length spread
+from **4.6%** to **0.07%**. The cause was a gradient preconditioner whose width
+was fixed in samples rather than in arc length, so it silently weakened as the
+resolution rose. `tests/python/test_simulation.py` now covers both fixtures.
+
+### Path-solver termination
+
+On the same serpentine fixture the projected-gradient line search previously
+rejected every candidate step after 7–23 iterations and reported `no_progress`,
+so `path_smoothing_iterations` had no observable effect between 20 and 200. The
+preconditioned direction is now restricted to the free set before the corridor
+bounds are applied, with the unsmoothed gradient as a fallback; every run makes
+measurable progress and terminates on `iteration_limit` or `step_tolerance`.
+
+### Geometry preparation cost
+
+Boundary self-intersection and corridor-crossing checks used exhaustive pairwise
+testing and dominated the request. Replacing the broad phase with an x-interval
+sweep — the exact narrow-phase predicate is unchanged — gave, on the serpentine
+fixture (Apple Silicon, Python 3.12.13):
+
+| Samples | Before | After |
+|---:|---:|---:|
+| 2000 | 648 ms | 428 ms |
+| 4000 | 1018 ms | 501 ms |
+
+`prepare_track` remains the dominant cost of a simulation request.
+
 ### Covered failure/correctness cases
 
 - periodic C2 continuity, analytic circle curvature, seam behavior, and sample invariance;
