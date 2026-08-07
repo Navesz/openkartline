@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { kartEnvelope } from '../domain/kartModel'
+import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import type { SimulationRequest } from '../domain/types'
 import { ScientificSimulationError, runSimulation, toApiRequest } from './api'
@@ -22,7 +22,9 @@ describe('engine API adapter', () => {
     )
     expect(body.kart.total_mass_kg).toBe(DEFAULT_KART.kartMassKg + DEFAULT_KART.driverMassKg)
     expect(body.kart.top_speed_mps).toBeCloseTo(DEFAULT_KART.topSpeedKph / 3.6)
-    expect(body.settings.safety_margin_m).toBe(0.5)
+    // The engine constrains the line's centre, so the margin it receives has to
+    // include half a kart on top of the driver's own buffer.
+    expect(body.settings.safety_margin_m).toBe(0.5 + KART_HALF_WIDTH_M)
     expect(body).not.toHaveProperty('centerline')
   })
 

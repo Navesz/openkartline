@@ -37,6 +37,8 @@ export interface LapSample {
   leftBoundary: Point
   rightBoundary: Point
   distanceM: number
+  /** Simulated time since the start line, in seconds. Drives lap playback. */
+  elapsedS: number
   speedMps: number
   throttle: number
   brake: number
