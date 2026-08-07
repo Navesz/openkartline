@@ -1,0 +1,685 @@
+"""Closed-track geometry preparation and conservative baseline line generation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import cast
+
+import numpy as np
+from numpy.typing import NDArray
+
+from openkartline_engine.schemas import (
+    Issue,
+    PathTerminationReason,
+    Point2D,
+    TrackMetrics,
+    TrackV1,
+    TrackValidationResult,
+)
+
+FloatArray = NDArray[np.float64]
+_EPS = 1e-9
+_MAX_TRACK_SPAN_M = 100_000.0
+_MAX_BOUNDARY_LENGTH_M = 1_000_000.0
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedTrack:
+    """Aligned, equally sampled corridor geometry used by the solver."""
+
+    left: FloatArray
+    right: FloatArray
+    center: FloatArray
+    widths: FloatArray
+    length_m: float
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryOutcome:
+    validation: TrackValidationResult
+    prepared: PreparedTrack | None
+
+
+@dataclass(frozen=True, slots=True)
+class BendingDiagnostics:
+    initial_objective: float
+    final_objective: float
+    iterations: int
+    converged: bool
+    termination_reason: PathTerminationReason
+    max_fraction_step: float
+    min_corridor_fraction: float
+    max_corridor_fraction: float
+
+
+def _as_array(points: list[Point2D]) -> FloatArray:
+    return np.asarray([(point.x_m, point.y_m) for point in points], dtype=np.float64)
+
+
+def _clean_closed(points: FloatArray) -> FloatArray:
+    """Remove an explicit closure point and consecutive zero-length segments."""
+
+    if len(points) > 1 and np.linalg.norm(points[0] - points[-1]) <= _EPS:
+        points = points[:-1]
+    if len(points) == 0:
+        return points
+    keep = np.ones(len(points), dtype=np.bool_)
+    keep[1:] = np.linalg.norm(np.diff(points, axis=0), axis=1) > _EPS
+    points = points[keep]
+    if len(points) > 1 and np.linalg.norm(points[0] - points[-1]) <= _EPS:
+        points = points[:-1]
+    return points
+
+
+def _signed_area(points: FloatArray) -> float:
+    following = np.roll(points, -1, axis=0)
+    return float(0.5 * np.sum(points[:, 0] * following[:, 1] - following[:, 0] * points[:, 1]))
+
+
+def _closed_length(points: FloatArray) -> float:
+    return float(np.sum(np.linalg.norm(np.roll(points, -1, axis=0) - points, axis=1)))
+
+
+def _linear_resample_closed(points: FloatArray, sample_count: int) -> FloatArray:
+    """Equal-arc resampling helper for an already prepared closed polyline."""
+
+    if len(points) < 3:
+        raise ValueError("a closed curve needs at least three distinct points")
+    following = np.roll(points, -1, axis=0)
+    segment_lengths = np.linalg.norm(following - points, axis=1)
+    if np.any(segment_lengths <= _EPS):
+        raise ValueError("closed curve contains a zero-length segment")
+    cumulative = np.concatenate((np.array([0.0]), np.cumsum(segment_lengths)))
+    total = float(cumulative[-1])
+    targets = np.linspace(0.0, total, sample_count, endpoint=False)
+    indices = np.searchsorted(cumulative, targets, side="right") - 1
+    indices = np.clip(indices, 0, len(points) - 1)
+    fractions = (targets - cumulative[indices]) / segment_lengths[indices]
+    return cast(
+        FloatArray,
+        points[indices] + fractions[:, None] * (following[indices] - points[indices]),
+    )
+
+
+def _periodic_cubic_spline(points: FloatArray, sample_count: int) -> FloatArray:
+    """Evaluate the C2 periodic interpolating cubic spline for equal-spaced controls."""
+
+    position = np.arange(sample_count, dtype=np.float64) * len(points) / sample_count
+    index = np.floor(position).astype(np.int64)
+    t = (position - index)[:, None]
+    rhs = 6 * (np.roll(points, -1, axis=0) - 2 * points + np.roll(points, 1, axis=0))
+    frequencies = 2 * np.pi * np.arange(len(points), dtype=np.float64) / len(points)
+    eigenvalues = 4 + 2 * np.cos(frequencies)
+    second_derivative = np.fft.ifft(
+        np.fft.fft(rhs, axis=0) / eigenvalues[:, None],
+        axis=0,
+    ).real
+    start = index % len(points)
+    end = (index + 1) % len(points)
+    one_minus_t = 1 - t
+    return (
+        second_derivative[start] * one_minus_t**3 / 6
+        + second_derivative[end] * t**3 / 6
+        + (points[start] - second_derivative[start] / 6) * one_minus_t
+        + (points[end] - second_derivative[end] / 6) * t
+    )
+
+
+def resample_closed(points: FloatArray, sample_count: int) -> FloatArray:
+    """Periodically spline and equal-arc resample a non-repeated closed curve.
+
+    Input vertices are first put on an equal-distance parameter. This avoids the
+    speed/curvature instability caused by directly differentiating a piecewise
+    linear drawing and makes results substantially less sensitive to sample count.
+    """
+
+    points = _clean_closed(np.asarray(points, dtype=np.float64))
+    if len(points) < 3:
+        raise ValueError("a closed curve needs at least three distinct points")
+    control_count = len(points)
+    controls = _linear_resample_closed(points, control_count)
+    dense_count = min(16_000, max(sample_count * 8, control_count * 8))
+    dense = _periodic_cubic_spline(controls, dense_count)
+    return _linear_resample_closed(dense, sample_count)
+
+
+def _segment_intersections(
+    a: FloatArray,
+    b: FloatArray,
+    starts: FloatArray,
+    ends: FloatArray,
+) -> NDArray[np.bool_]:
+    """Vectorized intersection test between one segment and many segments."""
+
+    ab = b - a
+    o1 = ab[0] * (starts[:, 1] - a[1]) - ab[1] * (starts[:, 0] - a[0])
+    o2 = ab[0] * (ends[:, 1] - a[1]) - ab[1] * (ends[:, 0] - a[0])
+    other = ends - starts
+    o3 = other[:, 0] * (a[1] - starts[:, 1]) - other[:, 1] * (a[0] - starts[:, 0])
+    o4 = other[:, 0] * (b[1] - starts[:, 1]) - other[:, 1] * (b[0] - starts[:, 0])
+    crosses = (((o1 > _EPS) & (o2 < -_EPS)) | ((o1 < -_EPS) & (o2 > _EPS))) & (
+        ((o3 > _EPS) & (o4 < -_EPS)) | ((o3 < -_EPS) & (o4 > _EPS))
+    )
+
+    def on_segment(first: FloatArray, second: FloatArray, points: FloatArray) -> NDArray[np.bool_]:
+        return cast(
+            NDArray[np.bool_],
+            (points[:, 0] >= min(first[0], second[0]) - _EPS)
+            & (points[:, 0] <= max(first[0], second[0]) + _EPS)
+            & (points[:, 1] >= min(first[1], second[1]) - _EPS)
+            & (points[:, 1] <= max(first[1], second[1]) + _EPS),
+        )
+
+    collinear = (
+        ((np.abs(o1) <= _EPS) & on_segment(a, b, starts))
+        | ((np.abs(o2) <= _EPS) & on_segment(a, b, ends))
+        | (
+            (np.abs(o3) <= _EPS)
+            & (a[0] >= np.minimum(starts[:, 0], ends[:, 0]) - _EPS)
+            & (a[0] <= np.maximum(starts[:, 0], ends[:, 0]) + _EPS)
+            & (a[1] >= np.minimum(starts[:, 1], ends[:, 1]) - _EPS)
+            & (a[1] <= np.maximum(starts[:, 1], ends[:, 1]) + _EPS)
+        )
+        | (
+            (np.abs(o4) <= _EPS)
+            & (b[0] >= np.minimum(starts[:, 0], ends[:, 0]) - _EPS)
+            & (b[0] <= np.maximum(starts[:, 0], ends[:, 0]) + _EPS)
+            & (b[1] >= np.minimum(starts[:, 1], ends[:, 1]) - _EPS)
+            & (b[1] <= np.maximum(starts[:, 1], ends[:, 1]) + _EPS)
+        )
+    )
+    return cast(NDArray[np.bool_], crosses | collinear)
+
+
+def _has_self_intersection(points: FloatArray) -> bool:
+    count = len(points)
+    starts = points
+    ends = np.roll(points, -1, axis=0)
+    for i in range(count):
+        a, b = points[i], points[(i + 1) % count]
+        intersects = _segment_intersections(a, b, starts, ends)
+        intersects[i] = False
+        intersects[(i - 1) % count] = False
+        intersects[(i + 1) % count] = False
+        if np.any(intersects):
+            return True
+    return False
+
+
+def _boundaries_intersect(first: FloatArray, second: FloatArray) -> bool:
+    second_end = np.roll(second, -1, axis=0)
+    for i, a in enumerate(first):
+        b = first[(i + 1) % len(first)]
+        if np.any(_segment_intersections(a, b, second, second_end)):
+            return True
+    return False
+
+
+def _inside_polygon(point: FloatArray, polygon: FloatArray) -> bool:
+    """Even-odd containment test for a point not on the polygon boundary."""
+
+    x, y = float(point[0]), float(point[1])
+    inside = False
+    previous = polygon[-1]
+    for current in polygon:
+        y_crosses = (current[1] > y) != (previous[1] > y)
+        if y_crosses:
+            intersection_x = (previous[0] - current[0]) * (y - current[1]) / (
+                previous[1] - current[1]
+            ) + current[0]
+            if x < intersection_x:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def _normalized_orientation(points: FloatArray, direction: str) -> FloatArray:
+    wants_positive_area = direction == "counterclockwise"
+    if (_signed_area(points) > 0) != wants_positive_area:
+        return points[::-1].copy()
+    return points
+
+
+def _align_samples(reference: FloatArray, candidate: FloatArray) -> FloatArray:
+    """Rotate equally directed samples to minimize whole-lap pairing distance."""
+
+    costs = np.asarray(
+        [
+            np.mean(np.sum((reference - np.roll(candidate, -offset, axis=0)) ** 2, axis=1))
+            for offset in range(len(candidate))
+        ]
+    )
+    offset = int(np.argmin(costs))
+    return np.roll(candidate, -offset, axis=0)
+
+
+def prepare_track(
+    track: TrackV1,
+    *,
+    sample_count: int,
+    safety_margin_m: float,
+) -> GeometryOutcome:
+    """Validate and normalize a track; never raises for geometric user errors."""
+
+    errors: list[Issue] = []
+    warnings: list[Issue] = []
+    left_raw = _clean_closed(_as_array(track.left_boundary))
+    right_raw = _clean_closed(_as_array(track.right_boundary))
+
+    for name, boundary in (("left_boundary", left_raw), ("right_boundary", right_raw)):
+        if len(boundary) < 3:
+            errors.append(
+                Issue(
+                    code="TOO_FEW_POINTS",
+                    message="Boundary has fewer than 3 usable points.",
+                    field=name,
+                )
+            )
+            continue
+        length = _closed_length(boundary)
+        if length < 5.0:
+            errors.append(
+                Issue(
+                    code="BOUNDARY_TOO_SHORT",
+                    message="Boundary length must be at least 5 m.",
+                    field=name,
+                )
+            )
+        if length > _MAX_BOUNDARY_LENGTH_M:
+            errors.append(
+                Issue(
+                    code="BOUNDARY_TOO_LONG",
+                    message="Boundary length exceeds the 1,000 km local-coordinate limit.",
+                    field=name,
+                )
+            )
+        if abs(_signed_area(boundary)) < 0.5:
+            errors.append(
+                Issue(
+                    code="DEGENERATE_BOUNDARY",
+                    message="Boundary encloses too little area.",
+                    field=name,
+                )
+            )
+
+    combined = np.vstack((left_raw, right_raw))
+    coordinate_span = np.ptp(combined, axis=0)
+    if float(np.max(coordinate_span)) > _MAX_TRACK_SPAN_M:
+        errors.append(
+            Issue(
+                code="COORDINATE_SPAN_TOO_LARGE",
+                message="Local track coordinates may span at most 100 km per axis.",
+                field="track",
+            )
+        )
+
+    # The public schema caps each edge at 2,000 vertices, so these checks are
+    # exact on every submitted segment. Silently downsampling can hide a narrow
+    # crossing and is unsafe for a track corridor.
+    if _has_self_intersection(left_raw):
+        errors.append(
+            Issue(
+                code="SELF_INTERSECTION",
+                message="Left boundary crosses itself.",
+                field="left_boundary",
+            )
+        )
+    if _has_self_intersection(right_raw):
+        errors.append(
+            Issue(
+                code="SELF_INTERSECTION",
+                message="Right boundary crosses itself.",
+                field="right_boundary",
+            )
+        )
+    if _boundaries_intersect(left_raw, right_raw):
+        errors.append(Issue(code="BOUNDARIES_INTERSECT", message="Track boundaries intersect."))
+
+    if not errors:
+        outer, inner = (
+            (left_raw, right_raw)
+            if abs(_signed_area(left_raw)) >= abs(_signed_area(right_raw))
+            else (right_raw, left_raw)
+        )
+        if not _inside_polygon(inner[0], outer):
+            errors.append(
+                Issue(
+                    code="BOUNDARIES_NOT_NESTED",
+                    message="One closed boundary must sit inside the other without crossing.",
+                )
+            )
+
+        left_area = abs(_signed_area(left_raw))
+        right_area = abs(_signed_area(right_raw))
+        left_should_be_outer = track.direction == "clockwise"
+        left_is_outer = left_area > right_area
+        if left_is_outer != left_should_be_outer:
+            errors.append(
+                Issue(
+                    code="BOUNDARY_SIDE_MISMATCH",
+                    message=(
+                        "left_boundary and right_boundary must be named from the "
+                        "driver's direction of travel."
+                    ),
+                    field="track.direction",
+                )
+            )
+
+    if errors:
+        return GeometryOutcome(
+            validation=TrackValidationResult(valid=False, errors=errors, warnings=warnings),
+            prepared=None,
+        )
+
+    normalized_left = _normalized_orientation(left_raw, track.direction)
+    normalized_right = _normalized_orientation(right_raw, track.direction)
+    validation_count = min(
+        2_000,
+        max(256, sample_count, len(left_raw) * 2, len(right_raw) * 2),
+    )
+    left_dense = resample_closed(normalized_left, validation_count)
+    right_dense = _align_samples(
+        left_dense,
+        resample_closed(normalized_right, validation_count),
+    )
+    if _has_self_intersection(left_dense):
+        errors.append(
+            Issue(
+                code="SPLINE_SELF_INTERSECTION",
+                message="Periodic interpolation makes the left boundary cross itself.",
+                field="left_boundary",
+            )
+        )
+    if _has_self_intersection(right_dense):
+        errors.append(
+            Issue(
+                code="SPLINE_SELF_INTERSECTION",
+                message="Periodic interpolation makes the right boundary cross itself.",
+                field="right_boundary",
+            )
+        )
+    if _boundaries_intersect(left_dense, right_dense):
+        errors.append(
+            Issue(
+                code="SPLINE_BOUNDARIES_INTERSECT",
+                message="Periodic interpolation makes the track boundaries intersect.",
+            )
+        )
+    if errors:
+        return GeometryOutcome(
+            validation=TrackValidationResult(valid=False, errors=errors, warnings=warnings),
+            prepared=None,
+        )
+
+    left = resample_closed(normalized_left, sample_count)
+    right = resample_closed(normalized_right, sample_count)
+    right = _align_samples(left, right)
+    widths = np.linalg.norm(left - right, axis=1)
+    center = (left + right) * 0.5
+    center_length = _closed_length(center)
+
+    if float(np.min(widths)) <= 2 * safety_margin_m + 0.05:
+        errors.append(
+            Issue(
+                code="INSUFFICIENT_USABLE_WIDTH",
+                message="Safety margins leave no usable corridor at the narrowest station.",
+                field="safety_margin_m",
+            )
+        )
+    if center_length < 5.0:
+        errors.append(
+            Issue(code="TRACK_TOO_SHORT", message="Resampled centerline is shorter than 5 m.")
+        )
+    if float(np.max(widths)) > max(4 * float(np.median(widths)), 30.0):
+        warnings.append(
+            Issue(
+                code="WIDTH_VARIATION_HIGH",
+                message="Large width variation may mean the boundary start points are misaligned.",
+            )
+        )
+    tangent = np.roll(center, -1, axis=0) - np.roll(center, 1, axis=0)
+    toward_left = left - center
+    side_cross = tangent[:, 0] * toward_left[:, 1] - tangent[:, 1] * toward_left[:, 0]
+    if float(np.mean(side_cross > 0)) < 0.95:
+        errors.append(
+            Issue(
+                code="BOUNDARY_SIDE_INCONSISTENT",
+                message="Aligned left boundary is not consistently left of the travel direction.",
+                field="left_boundary",
+            )
+        )
+    if _has_self_intersection(center):
+        errors.append(
+            Issue(
+                code="CENTERLINE_SELF_INTERSECTION",
+                message=(
+                    "Paired boundaries produce a self-intersecting centerline; "
+                    "align their start points."
+                ),
+            )
+        )
+
+    metrics = TrackMetrics(
+        track_length_m=center_length,
+        min_width_m=float(np.min(widths)),
+        mean_width_m=float(np.mean(widths)),
+        max_width_m=float(np.max(widths)),
+        sample_count=sample_count,
+    )
+    validation = TrackValidationResult(
+        valid=not errors,
+        errors=errors,
+        warnings=warnings,
+        metrics=metrics,
+    )
+    prepared = None
+    if validation.valid:
+        prepared = PreparedTrack(
+            left=left, right=right, center=center, widths=widths, length_m=center_length
+        )
+    return GeometryOutcome(validation=validation, prepared=prepared)
+
+
+def _bending_terms(path: FloatArray) -> FloatArray:
+    """Discrete approximation of integral(curvature**2 ds) at every station."""
+
+    previous = np.roll(path, 1, axis=0)
+    following = np.roll(path, -1, axis=0)
+    incoming = path - previous
+    outgoing = following - path
+    chord = following - previous
+    incoming_length = np.linalg.norm(incoming, axis=1)
+    outgoing_length = np.linalg.norm(outgoing, axis=1)
+    denominator = incoming_length * outgoing_length * np.linalg.norm(chord, axis=1)
+    cross = incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0]
+    curvature = np.divide(
+        2.0 * cross,
+        denominator,
+        out=np.zeros_like(cross),
+        where=denominator > _EPS,
+    )
+    local_distance = 0.5 * (incoming_length + outgoing_length)
+    return cast(FloatArray, curvature**2 * local_distance)
+
+
+def _bending_objective(path: FloatArray) -> float:
+    return float(np.sum(_bending_terms(path)))
+
+
+def _fraction_gradient(path: FloatArray, corridor: FloatArray, epsilon: float = 1e-5) -> FloatArray:
+    """Central-difference objective gradient from the three locally affected terms."""
+
+    previous = np.roll(path, 1, axis=0)
+    previous_two = np.roll(path, 2, axis=0)
+    following = np.roll(path, -1, axis=0)
+    following_two = np.roll(path, -2, axis=0)
+    delta = epsilon * corridor
+
+    def terms(a: FloatArray, b: FloatArray, c: FloatArray) -> FloatArray:
+        incoming = b - a
+        outgoing = c - b
+        chord = c - a
+        incoming_length = np.linalg.norm(incoming, axis=1)
+        outgoing_length = np.linalg.norm(outgoing, axis=1)
+        denominator = incoming_length * outgoing_length * np.linalg.norm(chord, axis=1)
+        cross = incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0]
+        curvature = np.divide(
+            2.0 * cross,
+            denominator,
+            out=np.zeros_like(cross),
+            where=denominator > _EPS,
+        )
+        return cast(FloatArray, curvature**2 * 0.5 * (incoming_length + outgoing_length))
+
+    current_plus = terms(previous, path + delta, following)
+    current_minus = terms(previous, path - delta, following)
+    as_previous_plus = terms(path + delta, following, following_two)
+    as_previous_minus = terms(path - delta, following, following_two)
+    as_following_plus = terms(previous_two, previous, path + delta)
+    as_following_minus = terms(previous_two, previous, path - delta)
+    return (
+        current_plus
+        - current_minus
+        + as_previous_plus
+        - as_previous_minus
+        + as_following_plus
+        - as_following_minus
+    ) / (2 * epsilon)
+
+
+def minimum_bending_path(
+    track: PreparedTrack,
+    *,
+    safety_margin_m: float,
+    iterations: int,
+) -> tuple[FloatArray, BendingDiagnostics]:
+    """Minimize integrated squared curvature inside station-wise track bounds.
+
+    This lightweight projected-gradient method is deterministic and produces a
+    useful minimum-bending baseline without claiming a global minimum-time line.
+    Backtracking accepts only objective-decreasing steps.
+    """
+
+    corridor = track.left - track.right
+    lower = safety_margin_m / track.widths
+    upper = 1.0 - lower
+    fraction = np.full(len(track.center), 0.5, dtype=np.float64)
+    path = track.right + fraction[:, None] * corridor
+    objective = _bending_objective(path)
+    initial_objective = objective
+    converged = False
+    termination_reason: PathTerminationReason = "skipped" if iterations == 0 else "iteration_limit"
+    completed = 0
+    max_fraction_step = 0.0
+
+    for iteration in range(1, iterations + 1):
+        gradient = _fraction_gradient(path, corridor)
+        # First test the zero-frequency component explicitly. It efficiently
+        # captures the analytically correct move toward the outer radius on a
+        # circular corridor, while objective checking makes it safe elsewhere.
+        mean_gradient = float(np.mean(gradient))
+        global_accepted = False
+        if abs(mean_gradient) >= 1e-10:
+            global_step = -0.05 if mean_gradient > 0 else 0.05
+            global_fraction = np.clip(fraction + global_step, lower, upper)
+            global_path = track.right + global_fraction[:, None] * corridor
+            global_objective = _bending_objective(global_path)
+            if global_objective < objective - 1e-12:
+                max_fraction_step = max(
+                    max_fraction_step,
+                    float(np.max(np.abs(global_fraction - fraction))),
+                )
+                fraction = global_fraction
+                path = global_path
+                objective = global_objective
+                global_accepted = True
+                gradient = _fraction_gradient(path, corridor)
+        # The polyline representation produces high-frequency vertex noise in
+        # curvature derivatives. A compact periodic low-pass is a deterministic
+        # preconditioner and also favours driveable lateral-offset variation.
+        for _ in range(24):
+            gradient = 0.25 * np.roll(gradient, 1) + 0.5 * gradient + 0.25 * np.roll(gradient, -1)
+        maximum_gradient = float(np.max(np.abs(gradient)))
+        if maximum_gradient < 1e-10:
+            converged = True
+            termination_reason = "gradient_tolerance"
+            completed = iteration
+            break
+        # A raw gradient can stay non-zero at a constrained optimum. This
+        # projected step is the scale-independent KKT residual used to
+        # distinguish convergence at a corridor edge from a stalled line search.
+        projected_fraction = np.clip(
+            fraction - 0.08 * gradient / maximum_gradient,
+            lower,
+            upper,
+        )
+        projected_residual = float(np.max(np.abs(projected_fraction - fraction)))
+        step_size = 0.08 / maximum_gradient
+        accepted = False
+        candidate_fraction = fraction
+        candidate_path = path
+        candidate_objective = objective
+        for _ in range(16):
+            candidate_fraction = np.clip(fraction - step_size * gradient, lower, upper)
+            candidate_path = track.right + candidate_fraction[:, None] * corridor
+            candidate_objective = _bending_objective(candidate_path)
+            if candidate_objective <= objective + 1e-12:
+                accepted = True
+                break
+            step_size *= 0.5
+        if not accepted:
+            completed = iteration
+            if global_accepted:
+                continue
+            if projected_residual < 1e-5:
+                converged = True
+                termination_reason = "step_tolerance"
+            else:
+                termination_reason = "no_progress"
+            break
+        fraction_step = float(np.max(np.abs(candidate_fraction - fraction)))
+        max_fraction_step = max(max_fraction_step, fraction_step)
+        fraction = candidate_fraction
+        path = candidate_path
+        objective = candidate_objective
+        completed = iteration
+        if fraction_step < 1e-5 and projected_residual < 1e-5:
+            converged = True
+            termination_reason = "step_tolerance"
+            break
+
+    return path, BendingDiagnostics(
+        initial_objective=initial_objective,
+        final_objective=objective,
+        iterations=completed,
+        converged=converged,
+        termination_reason=termination_reason,
+        max_fraction_step=max_fraction_step,
+        min_corridor_fraction=float(np.min(fraction)),
+        max_corridor_fraction=float(np.max(fraction)),
+    )
+
+
+def path_channels(path: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Return station, segment length, heading, and signed discrete curvature."""
+
+    previous = np.roll(path, 1, axis=0)
+    following = np.roll(path, -1, axis=0)
+    incoming = path - previous
+    outgoing = following - path
+    chord = following - previous
+    incoming_length = np.linalg.norm(incoming, axis=1)
+    outgoing_length = np.linalg.norm(outgoing, axis=1)
+    chord_length = np.linalg.norm(chord, axis=1)
+    denominator = incoming_length * outgoing_length * chord_length
+    cross = incoming[:, 0] * outgoing[:, 1] - incoming[:, 1] * outgoing[:, 0]
+    curvature = np.divide(
+        2.0 * cross,
+        denominator,
+        out=np.zeros_like(cross),
+        where=denominator > _EPS,
+    )
+    segment_lengths = outgoing_length
+    station = np.concatenate((np.array([0.0]), np.cumsum(segment_lengths[:-1])))
+    heading = np.arctan2(chord[:, 1], chord[:, 0])
+    return station, segment_lengths, heading, curvature
