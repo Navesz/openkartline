@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import type { SimulationRequest } from '../domain/types'
 import { ScientificSimulationError, runSimulation, toApiRequest } from './api'
@@ -21,7 +22,9 @@ describe('engine API adapter', () => {
     )
     expect(body.kart.total_mass_kg).toBe(DEFAULT_KART.kartMassKg + DEFAULT_KART.driverMassKg)
     expect(body.kart.top_speed_mps).toBeCloseTo(DEFAULT_KART.topSpeedKph / 3.6)
-    expect(body.settings.safety_margin_m).toBe(0.5)
+    // The engine constrains the line's centre, so the margin it receives has to
+    // include half a kart on top of the driver's own buffer.
+    expect(body.settings.safety_margin_m).toBe(0.5 + KART_HALF_WIDTH_M)
     expect(body).not.toHaveProperty('centerline')
   })
 
@@ -30,6 +33,36 @@ describe('engine API adapter', () => {
     const result = await runSimulation(request, true)
     expect(result.source).toBe('browser')
     expect(result.samples).toHaveLength(80)
+  })
+
+  it('falls back to the browser solver when the local compute slots are busy', async () => {
+    // 429 is a capacity signal, not a rejected request: the deterministic
+    // browser solver exists precisely to absorb it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'Local solver is busy' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    const result = await runSimulation(request, true)
+    expect(result.source).toBe('browser')
+    expect(result.samples).toHaveLength(80)
+  })
+
+  it('derives the engine kart from the same envelope the browser solver uses', () => {
+    const envelope = kartEnvelope(DEFAULT_KART)
+    const { kart } = toApiRequest(request)
+    expect(kart.total_mass_kg).toBe(envelope.totalMassKg)
+    expect(kart.top_speed_mps).toBe(envelope.topSpeedMps)
+    expect(kart.max_accel_mps2).toBe(envelope.maxAccelMps2)
+    expect(kart.max_brake_mps2).toBe(envelope.maxBrakeMps2)
+    expect(kart.max_lateral_accel_mps2).toBe(envelope.maxLateralAccelMps2)
+    // The adapter used to clamp longitudinal grip at 5 m/s2 while the browser
+    // solver did not, so the two engines disagreed at the default kart.
+    expect(kart.max_accel_mps2).toBeGreaterThan(5)
   })
 
   it('does not hide HTTP or scientific failures behind the browser fallback', async () => {

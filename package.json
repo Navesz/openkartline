@@ -16,8 +16,9 @@
     "format:check": "pnpm --filter @openkartline/web format:check",
     "test": "pnpm --filter @openkartline/web test",
     "test:run": "pnpm --filter @openkartline/web test:run",
+    "test:coverage": "pnpm --filter @openkartline/web test:coverage",
     "test:e2e": "pnpm --filter @openkartline/web test:e2e",
     "typecheck": "pnpm --filter @openkartline/web typecheck",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:run && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build"
   }
 }

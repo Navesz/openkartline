@@ -1,4 +1,5 @@
 import { validateTrack } from './geometry'
+import { KART_WIDTH_M } from './kartModel'
 import type { KartInput, SimulationSettings, TrackInput, ValidationIssue } from './types'
 
 export const INPUT_LIMITS = {
@@ -145,8 +146,12 @@ export function validateSimulationInput(
     settings.safetyMarginM > limits.safetyMarginMaxM
   ) {
     issues.push(error(`A margem de segurança deve ficar entre 0 e ${limits.safetyMarginMaxM} m.`))
-  } else if (finite(track.widthM) && settings.safetyMarginM * 2 + 0.05 >= track.widthM) {
-    issues.push(error('A margem de segurança deixa a pista sem corredor utilizável.'))
+  } else if (finite(track.widthM) && KART_WIDTH_M + settings.safetyMarginM * 2 + 0.05 >= track.widthM) {
+    issues.push(
+      error(
+        `Com um kart de ${KART_WIDTH_M.toFixed(2)} m, essa margem deixa a pista sem corredor utilizável.`,
+      ),
+    )
   }
   return issues.filter(
     (issue, index, all) => all.findIndex((candidate) => candidate.message === issue.message) === index,

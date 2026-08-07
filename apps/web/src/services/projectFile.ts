@@ -43,8 +43,15 @@ export function downloadProject(project: OklProject): void {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || 'track'
   }.okl.json`
+  // Firefox ignores a click on a detached anchor, and revoking the object URL
+  // in the same tick can cancel a download that has not started reading yet.
+  link.style.display = 'none'
+  document.body.append(link)
   link.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => {
+    link.remove()
+    URL.revokeObjectURL(url)
+  }, 0)
 }
 
 function finite(value: unknown, label: string): number {

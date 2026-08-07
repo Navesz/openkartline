@@ -1,43 +1,24 @@
+import { stabiliseDriveModes } from './driveMode'
 import { coalesceSimulationEvents } from './events'
 import { curvatureAt, distance, normalAt, pathLength } from './geometry'
+import { brakeAccelMps2, driveAccelMps2, KART_HALF_WIDTH_M, kartEnvelope } from './kartModel'
 import { buildCanonicalTrackGeometry } from './trackGeometry'
-import type {
-  DriveMode,
-  KartInput,
-  LapSample,
-  SimulationEvent,
-  SimulationRequest,
-  SimulationResult,
-} from './types'
-
-const G = 9.80665
-const HP_TO_WATTS = 745.7
-const FRICTION_EXPONENT = 2
-
-function remainingGripFraction(lateralAcceleration: number, maximumLateral: number): number {
-  const lateralFraction = Math.min(1, Math.abs(lateralAcceleration) / maximumLateral)
-  return Math.max(0, 1 - lateralFraction ** FRICTION_EXPONENT) ** (1 / FRICTION_EXPONENT)
-}
+import type { KartInput, LapSample, SimulationEvent, SimulationRequest, SimulationResult } from './types'
 
 export function availableDriveAcceleration(
   speedMps: number,
   lateralAccelerationMps2: number,
   kart: KartInput,
 ): number {
-  const topSpeedMps = kart.topSpeedKph / 3.6
-  if (speedMps >= topSpeedMps) return 0
-  const totalMass = kart.kartMassKg + kart.driverMassKg
-  const powerLimited = (kart.powerHp * HP_TO_WATTS * 0.82) / (totalMass * Math.max(speedMps, 1))
-  const topSpeedTaper = Math.max(0, 1 - (speedMps / topSpeedMps) ** 4)
-  const driveEnvelope = powerLimited * topSpeedTaper
-  const maximumLongitudinal = kart.gripCoefficient * G * 0.52
-  const maximumLateral = kart.gripCoefficient * G
-  const tireLimited = maximumLongitudinal * remainingGripFraction(lateralAccelerationMps2, maximumLateral)
-  return Math.max(0, Math.min(driveEnvelope, tireLimited))
+  return driveAccelMps2(speedMps, lateralAccelerationMps2, kartEnvelope(kart))
 }
 
-export function availableBrakingAcceleration(lateralAccelerationMps2: number, kart: KartInput): number {
-  return kart.brakeDecelMps2 * remainingGripFraction(lateralAccelerationMps2, kart.gripCoefficient * G)
+export function availableBrakingAcceleration(
+  lateralAccelerationMps2: number,
+  kart: KartInput,
+  speedMps = 0,
+): number {
+  return brakeAccelMps2(speedMps, lateralAccelerationMps2, kartEnvelope(kart))
 }
 
 function smoothCircular(values: number[], passes = 3): number[] {
@@ -93,7 +74,8 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
   const { track, kart, settings } = request
   const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
   const center = canonical.center
-  const halfUsableWidth = Math.max(0.25, track.widthM / 2 - settings.safetyMarginM)
+  // The line is the kart's centre, so half a kart never fits outside the edge.
+  const halfUsableWidth = Math.max(0, track.widthM / 2 - KART_HALF_WIDTH_M - settings.safetyMarginM)
   const centerCurvature = center.map((_, index) => curvatureAt(center, index))
   const localPeak = centerCurvature.map((_, index) => {
     let peak = 0
@@ -105,7 +87,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
   const rawOffsets = centerCurvature.map((curvature, index) => {
     if (Math.abs(curvature) < 0.0015) return 0
     const apexRatio = Math.min(1, Math.abs(curvature) / Math.max(0.0015, localPeak[index]))
-    return Math.sign(curvature) * (apexRatio * 2 - 1) * halfUsableWidth * 0.62
+    return Math.sign(curvature) * (apexRatio * 2 - 1) * halfUsableWidth
   })
   const offsets = smoothCircular(rawOffsets, 6)
   const line = center.map((point, index) => {
@@ -113,8 +95,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     return { x: point.x + normal.x * offsets[index], y: point.y + normal.y * offsets[index] }
   })
   const curvature = line.map((_, index) => curvatureAt(line, index))
-  const topSpeed = kart.topSpeedKph / 3.6
-  const maximumLateral = kart.gripCoefficient * G
+  const { topSpeedMps: topSpeed, maxLateralAccelMps2: maximumLateral } = kartEnvelope(kart)
   const speeds = curvature.map((value) =>
     Math.min(topSpeed, Math.sqrt(maximumLateral / Math.max(0.0005, Math.abs(value)))),
   )
@@ -133,7 +114,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     for (let index = line.length - 1; index >= 0; index -= 1) {
       const next = (index + 1) % line.length
       const lateralAcceleration = speeds[next] ** 2 * Math.abs(curvature[next])
-      const brakingAvailable = availableBrakingAcceleration(lateralAcceleration, kart)
+      const brakingAvailable = availableBrakingAcceleration(lateralAcceleration, kart, speeds[next])
       speeds[index] = Math.min(
         speeds[index],
         Math.sqrt(speeds[next] ** 2 + 2 * brakingAvailable * segmentLengths[index]),
@@ -146,6 +127,12 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     const next = (index + 1) % line.length
     return (speeds[next] ** 2 - speed ** 2) / Math.max(0.1, 2 * segmentLengths[index])
   })
+  // Trapezoidal segment times, accumulated once so that the per-sample clock and
+  // the reported lap time cannot drift apart.
+  const segmentTimes = segmentLengths.map(
+    (length, index) => length / Math.max(0.01, (speeds[index] + speeds[(index + 1) % line.length]) / 2),
+  )
+  let elapsed = 0
   const samples: LapSample[] = line.map((position, index) => {
     const acceleration = longitudinalAcceleration[index]
     const driveAvailable = availableDriveAcceleration(
@@ -154,10 +141,13 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
       kart,
     )
     const next = (index + 1) % line.length
-    const brakingAvailable = availableBrakingAcceleration(speeds[next] ** 2 * Math.abs(curvature[next]), kart)
+    const brakingAvailable = availableBrakingAcceleration(
+      speeds[next] ** 2 * Math.abs(curvature[next]),
+      kart,
+      speeds[next],
+    )
     const throttle = acceleration > 0.08 ? Math.min(1, acceleration / Math.max(0.1, driveAvailable)) : 0
     const brake = acceleration < -0.08 ? Math.min(1, -acceleration / Math.max(0.1, brakingAvailable)) : 0
-    const mode: DriveMode = brake > 0.08 ? 'brake' : throttle > 0.08 ? 'throttle' : 'coast'
     const sample: LapSample = {
       index,
       position,
@@ -165,20 +155,25 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
       leftBoundary: canonical.left[index],
       rightBoundary: canonical.right[index],
       distanceM: cumulative,
+      elapsedS: elapsed,
       speedMps: speeds[index],
       throttle,
       brake,
       curvature: curvature[index],
-      mode,
+      mode: brake > 0.08 ? 'brake' : throttle > 0.08 ? 'throttle' : 'coast',
     }
     cumulative += segmentLengths[index]
+    elapsed += segmentTimes[index]
     return sample
   })
 
-  const lapTimeS = samples.reduce((sum, sample, index) => {
-    const next = samples[(index + 1) % samples.length]
-    return sum + segmentLengths[index] / Math.max(0.01, (sample.speedMps + next.speedMps) / 2)
-  }, 0)
+  // Classify each sample first, then drop bands too short to be a real input.
+  const stableModes = stabiliseDriveModes(samples.map((sample) => sample.mode))
+  stableModes.forEach((mode, index) => {
+    samples[index].mode = mode
+  })
+
+  const lapTimeS = segmentTimes.reduce((sum, time) => sum + time, 0)
   const warnings = [
     'Estimativa do motor físico MVP; valide as referências gradualmente na pista.',
     ...(track.widthM < 5 ? ['Pista estreita: a margem disponível para ajustar a trajetória é pequena.'] : []),
