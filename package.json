@@ -1,0 +1,23 @@
+{
+  "name": "openkartline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source kart racing line and lap planning toolkit",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @openkartline/web dev",
+    "build": "pnpm --filter @openkartline/web build",
+    "lint": "pnpm --filter @openkartline/web lint",
+    "format": "pnpm --filter @openkartline/web format",
+    "format:check": "pnpm --filter @openkartline/web format:check",
+    "test": "pnpm --filter @openkartline/web test",
+    "test:run": "pnpm --filter @openkartline/web test:run",
+    "test:e2e": "pnpm --filter @openkartline/web test:e2e",
+    "typecheck": "pnpm --filter @openkartline/web typecheck",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:run && pnpm build"
+  }
+}
