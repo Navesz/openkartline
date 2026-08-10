@@ -79,7 +79,14 @@ class KartV1(StrictModel):
     max_accel_mps2: Annotated[float, Field(gt=0, le=30, allow_inf_nan=False)]
     max_brake_mps2: Annotated[float, Field(gt=0, le=50, allow_inf_nan=False)]
     max_lateral_accel_mps2: Annotated[float, Field(gt=0, le=50, allow_inf_nan=False)]
-    drivetrain_efficiency: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] = 0.85
+    # Matches the browser solver's constant: a direct API client that omits the
+    # field must model the same kart the editor does.
+    drivetrain_efficiency: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] = 0.82
+    # Resistance parameters. Both are optional so that a client written against
+    # the original 1.0 contract keeps working unchanged; the defaults describe
+    # the same chassis class as the browser model (see docs/PHYSICS.md).
+    drag_area_m2: Annotated[float, Field(gt=0, le=5, allow_inf_nan=False)] = 0.8
+    rolling_resistance: Annotated[float, Field(ge=0, le=0.2, allow_inf_nan=False)] = 0.015
 
     @property
     def power_w(self) -> float:
