@@ -878,6 +878,14 @@ main {
   }
 }
 
+.preset-note,
+.track-attribution {
+  margin: -0.35rem 0 0.15rem;
+  color: #6f7d74;
+  font-size: 0.56rem;
+  line-height: 1.5;
+}
+
 .chart-card {
   background: var(--panel);
   padding: 1.05rem 1rem 0.85rem;

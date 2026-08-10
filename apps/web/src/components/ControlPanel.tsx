@@ -13,8 +13,9 @@ import {
   Weight,
   Zap,
 } from 'lucide-react'
-import type { Point } from '../domain/types'
-import type { KartInput, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
+import { KART_PRESETS, toKartInput } from '../domain/presets'
+import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
+import { INPUT_LIMITS } from '../domain/validation'
 
 interface NumberFieldProps {
   id: string
@@ -110,13 +111,26 @@ export function ControlPanel({
           </span>
           <span className="select-wrap">
             <select id="preset" defaultValue="technical" onChange={(event) => onPreset(event.target.value)}>
-              <option value="technical">Circuito Aurora</option>
-              <option value="oval">Oval de validação</option>
-              <option value="hairpin">Complexo Hairpin</option>
+              <optgroup label="Sintéticas">
+                <option value="technical">Circuito Aurora</option>
+                <option value="oval">Oval de validação</option>
+                <option value="hairpin">Complexo Hairpin</option>
+              </optgroup>
+              <optgroup label="Reais (OpenStreetMap)">
+                <option value="voltaRedonda">Kartódromo Int. de Volta Redonda</option>
+                <option value="adria">Adria Karting Raceway</option>
+                <option value="casteloBranco">Kartódromo de Castelo Branco</option>
+                <option value="baltar">Kartódromo de Baltar</option>
+              </optgroup>
             </select>
             <ChevronDown size={15} />
           </span>
         </label>
+        {track.attribution && (
+          <p className="track-attribution">
+            Traçado: {track.attribution}. Geometria mapeada, não levantamento topográfico.
+          </p>
+        )}
         <label className="field" htmlFor="track-name">
           <span className="field-label">Nome da pista</span>
           <input
@@ -243,6 +257,34 @@ export function ControlPanel({
             <h2>Modele seu conjunto</h2>
           </div>
         </div>
+        <label className="field" htmlFor="kart-preset">
+          <span className="field-label">
+            <Sparkles size={15} /> Categoria
+          </span>
+          <span className="select-wrap">
+            <select
+              id="kart-preset"
+              defaultValue=""
+              onChange={(event) => {
+                const preset = KART_PRESETS[event.target.value]
+                if (preset) onKart(toKartInput(preset))
+              }}
+            >
+              <option value="">Personalizado</option>
+              {Object.entries(KART_PRESETS).map(([key, preset]) => (
+                <option key={key} value={key}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={15} />
+          </span>
+        </label>
+        {/* Outside the label: inside it, this text joins the select's accessible
+            name and collides with the "Potência" field below. */}
+        <p className="preset-note">
+          Potências e pesos mínimos são publicados; aderência e frenagem são estimativas.
+        </p>
         <div className="two-columns">
           <NumberField
             id="power"
@@ -250,7 +292,7 @@ export function ControlPanel({
             value={kart.powerHp}
             unit="hp"
             min={1}
-            max={80}
+            max={INPUT_LIMITS.powerHpMax}
             step={0.5}
             icon={<Zap size={15} />}
             onChange={(powerHp) => onKart({ powerHp })}

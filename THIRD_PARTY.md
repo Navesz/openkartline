@@ -41,6 +41,31 @@ Every committed track, telemetry recording, photograph, map, logo, or derived da
 
 Do not assume that public availability, a screenshot, satellite imagery access, race participation, or personal GPS recording grants redistribution rights. Remove precise timestamps and personal identifiers from approved telemetry unless they are essential to a documented research purpose.
 
+## Committed data assets
+
+| Asset | Source | License | Obligation |
+|---|---|---|---|
+| `examples/tracks/volta-redonda.okl.json` | OSM way/712502411 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/adria-karting-raceway.okl.json` | OSM way/798432703 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/castelo-branco.okl.json` | OSM way/1011069080 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/baltar.okl.json` | OSM way/157249315 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/circuito-aurora.okl.json` | Synthetic, project-authored | Apache-2.0 | None beyond the repository license |
+
+The OpenStreetMap-derived circuits are a Derivative Database under ODbL 1.0 and
+must carry "© OpenStreetMap contributors" wherever they, or a database derived
+from them, are redistributed. That includes the published web bundle, which
+compiles their geometry in, so the editor displays the credit whenever one is
+loaded.
+
+Renaming a circuit does not remove the obligation: the license attaches to the
+geometry, not to the name, and dropping the name only defeats the attribution
+the license requires. A circuit that must not carry attribution has to be
+authored from scratch instead of derived.
+
+Per-file provenance records live in
+[examples/tracks/README.md](examples/tracks/README.md). Regenerate any of them
+with `scripts/import_osm_kart_track.py`, which records the way id it read.
+
 ## Papers and algorithms
 
 Ideas, equations, and published results should be cited in the relevant documentation and, where useful, [CITATION.cff](CITATION.cff). Do not copy source, figures, tables, or datasets merely because a paper is accessible. Reimplementations must be original, tested against public descriptions, and respect patents and license obligations.
