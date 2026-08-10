@@ -8,6 +8,12 @@ export interface TrackInput {
   direction: Direction
   centerline: Point[]
   widthM: number
+  /**
+   * Credit line required by the geometry's license, shown wherever the track
+   * is. Circuits derived from OpenStreetMap are ODbL, and publishing the bundle
+   * redistributes that data, so the attribution has to travel with it.
+   */
+  attribution?: string
 }
 
 export interface KartInput {

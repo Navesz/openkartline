@@ -13,7 +13,7 @@ export const INPUT_LIMITS = {
   sampleCountMax: 500,
   safetyMarginMaxM: 3,
   powerHpMin: 1,
-  powerHpMax: 80,
+  powerHpMax: 100,
   kartMassKgMin: 20,
   kartMassKgMax: 250,
   driverMassKgMin: 20,
@@ -21,7 +21,7 @@ export const INPUT_LIMITS = {
   topSpeedKphMin: 10,
   topSpeedKphMax: 180,
   brakeDecelMinMps2: 0.5,
-  brakeDecelMaxMps2: 15,
+  brakeDecelMaxMps2: 20,
   gripCoefficientMin: 0.2,
   gripCoefficientMax: 2,
 } as const
