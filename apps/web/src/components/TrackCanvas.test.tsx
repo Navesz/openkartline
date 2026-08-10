@@ -41,4 +41,40 @@ describe('TrackCanvas', () => {
     )
     expect(onPointsChange.mock.calls[0][0]).toHaveLength(PRESETS.oval.centerline.length + 1)
   })
+
+  it('draws with +y upwards, so a clockwise lap reads clockwise on screen', () => {
+    // Track coordinates are metric with +y north. SVG y grows downward, so
+    // drawing them straight in mirrored every circuit vertically and made the
+    // direction control read backwards. The flip is the fix; assert it stays.
+    render(
+      <TrackCanvas
+        track={PRESETS.oval}
+        result={null}
+        selectedSample={null}
+        tool="edit"
+        fitRequest={0}
+        playbackEnabled={false}
+        playbackFrame={null}
+        onPlaybackToggle={vi.fn()}
+        onToolChange={vi.fn()}
+        onPointsChange={vi.fn()}
+        onSelectedSample={vi.fn()}
+      />,
+    )
+    const svg = screen.getByRole('img')
+    const group = svg.querySelector('g[transform="scale(1, -1)"]')
+    expect(group).not.toBeNull()
+
+    // Every drawn control point sits inside that group, so the geometry really
+    // is flipped rather than a decorative wrapper.
+    const points = [...svg.querySelectorAll('.control-point')]
+    expect(points.length).toBe(PRESETS.oval.centerline.length)
+    expect(points.every((circle) => group!.contains(circle))).toBe(true)
+
+    // Screen y of the northernmost point is -worldTop, which has to land in the
+    // upper half of the visible window.
+    const [, viewBoxY, , viewBoxHeight] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+    const worldTop = Math.max(...PRESETS.oval.centerline.map((point) => point.y))
+    expect((-worldTop - viewBoxY) / viewBoxHeight).toBeLessThan(0.5)
+  })
 })
