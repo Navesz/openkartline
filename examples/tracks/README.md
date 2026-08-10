@@ -15,7 +15,7 @@ last centerline point does not repeat the first.
 
 ## Circuits derived from OpenStreetMap
 
-The two circuits below are derived from OpenStreetMap and are **not** covered by
+The four circuits below are derived from OpenStreetMap and are **not** covered by
 the repository's Apache-2.0 license. They are a Derivative Database under the
 [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/) and
 carry its attribution and share-alike obligations.
@@ -70,6 +70,41 @@ file uses the raceway way, which is the driving surface.
 | Travel direction | Derived from OSM node order. **Not verified** against the venue's actual racing direction. |
 | Track width | 8.0 m — **estimate**, not sourced. |
 | Privacy | Public infrastructure geometry only. No telemetry, imagery, or personal data. |
+
+### `castelo-branco.okl.json`
+
+| Field | Value |
+|---|---|
+| Source | OSM [way/1011069080](https://www.openstreetmap.org/way/1011069080), version 5 |
+| Extracted | 2026-08-10 via the Overpass API |
+| Source tags | `name=Kartódromo de Castelo Branco`, `highway=raceway`, `sport=karting`, `surface=asphalt` |
+| Local origin | lat 39.860198, lon -7.458922 |
+| Centerline length | 1192 m over 109 points |
+| Travel direction | Derived from OSM node order. **Not verified** against the venue's actual racing direction. |
+| Track width | 8.0 m — **estimate**, not sourced. |
+| Privacy | Public infrastructure geometry only. No telemetry, imagery, or personal data. |
+
+### `baltar.okl.json`
+
+| Field | Value |
+|---|---|
+| Source | OSM [way/157249315](https://www.openstreetmap.org/way/157249315), version 5 |
+| Extracted | 2026-08-10 via the Overpass API |
+| Source tags | `name=Pista do Kartódromo de Baltar`, `highway=raceway`, `sport=karting`, `surface=asphalt` |
+| Local origin | lat 41.187001, lon -8.395940 |
+| Centerline length | 1002 m over 92 points |
+| Travel direction | Derived from OSM node order. **Not verified** against the venue's actual racing direction. |
+| Track width | 8.0 m — **estimate**, not sourced. |
+| Privacy | Public infrastructure geometry only. No telemetry, imagery, or personal data. |
+
+### Circuits deliberately not imported
+
+Kartódromo Internacional Ayrton Senna is mapped as `leisure=sports_centre` — the
+site boundary, not the driving surface — and its kart circuit exists only as
+loose open ways interleaved with the neighbouring car circuit's segments.
+Stitching those into a closed loop would be guesswork, so it was left out.
+Prefer a way tagged `highway=raceway` with `sport=karting`: a facility polygon
+traces the fence, not the racing line.
 
 ### What these files are not
 

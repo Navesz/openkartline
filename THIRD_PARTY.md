@@ -47,6 +47,8 @@ Do not assume that public availability, a screenshot, satellite imagery access, 
 |---|---|---|---|
 | `examples/tracks/volta-redonda.okl.json` | OSM way/712502411 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
 | `examples/tracks/adria-karting-raceway.okl.json` | OSM way/798432703 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/castelo-branco.okl.json` | OSM way/1011069080 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
+| `examples/tracks/baltar.okl.json` | OSM way/157249315 | ODbL 1.0 | Attribution and share-alike; not Apache-2.0 |
 | `examples/tracks/circuito-aurora.okl.json` | Synthetic, project-authored | Apache-2.0 | None beyond the repository license |
 
 The OpenStreetMap-derived circuits are a Derivative Database under ODbL 1.0 and

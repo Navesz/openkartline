@@ -119,6 +119,8 @@ export function ControlPanel({
               <optgroup label="Reais (OpenStreetMap)">
                 <option value="voltaRedonda">Kartódromo Int. de Volta Redonda</option>
                 <option value="adria">Adria Karting Raceway</option>
+                <option value="casteloBranco">Kartódromo de Castelo Branco</option>
+                <option value="baltar">Kartódromo de Baltar</option>
               </optgroup>
             </select>
             <ChevronDown size={15} />
