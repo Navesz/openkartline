@@ -28,6 +28,12 @@ export interface KartInput {
 export interface SimulationSettings {
   safetyMarginM: number
   sampleCount: number
+  /**
+   * Iterations of the minimum-bending path optimizer, mirroring the engine's
+   * `path_smoothing_iterations` (default 20). Internal for now: the UI does not
+   * expose it, and it is not persisted in `.okl.json` projects.
+   */
+  pathSmoothingIterations?: number
 }
 
 export interface SimulationRequest {
@@ -50,6 +56,15 @@ export interface LapSample {
   brake: number
   curvature: number
   mode: DriveMode
+  /**
+   * Physics channels present when the producing engine computes them (the
+   * Python engine and the ported browser engine do). Optional so older
+   * heuristic-only results keep type-checking.
+   */
+  headingRad?: number
+  longitudinalAccelMps2?: number
+  lateralAccelMps2?: number
+  frictionUtilization?: number
 }
 
 export interface SimulationEvent {
