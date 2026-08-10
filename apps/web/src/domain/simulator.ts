@@ -2,6 +2,7 @@ import { stabiliseDriveModes } from './driveMode'
 import { coalesceSimulationEvents } from './events'
 import { curvatureAt, distance, normalAt, pathLength } from './geometry'
 import { brakeAccelMps2, driveAccelMps2, KART_HALF_WIDTH_M, kartEnvelope } from './kartModel'
+import { racingLineOffsets } from './racingLine'
 import { buildCanonicalTrackGeometry } from './trackGeometry'
 import type { KartInput, LapSample, SimulationEvent, SimulationRequest, SimulationResult } from './types'
 
@@ -19,20 +20,6 @@ export function availableBrakingAcceleration(
   speedMps = 0,
 ): number {
   return brakeAccelMps2(speedMps, lateralAccelerationMps2, kartEnvelope(kart))
-}
-
-function smoothCircular(values: number[], passes = 3): number[] {
-  let current = [...values]
-  for (let pass = 0; pass < passes; pass += 1) {
-    current = current.map(
-      (value, index) =>
-        (current[(index - 1 + current.length) % current.length] +
-          value * 2 +
-          current[(index + 1) % current.length]) /
-        4,
-    )
-  }
-  return current
 }
 
 function buildEvents(samples: LapSample[]): SimulationEvent[] {
@@ -76,20 +63,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
   const center = canonical.center
   // The line is the kart's centre, so half a kart never fits outside the edge.
   const halfUsableWidth = Math.max(0, track.widthM / 2 - KART_HALF_WIDTH_M - settings.safetyMarginM)
-  const centerCurvature = center.map((_, index) => curvatureAt(center, index))
-  const localPeak = centerCurvature.map((_, index) => {
-    let peak = 0
-    for (let offset = -8; offset <= 8; offset += 1) {
-      peak = Math.max(peak, Math.abs(centerCurvature[(index + offset + center.length) % center.length]))
-    }
-    return peak
-  })
-  const rawOffsets = centerCurvature.map((curvature, index) => {
-    if (Math.abs(curvature) < 0.0015) return 0
-    const apexRatio = Math.min(1, Math.abs(curvature) / Math.max(0.0015, localPeak[index]))
-    return Math.sign(curvature) * (apexRatio * 2 - 1) * halfUsableWidth
-  })
-  const offsets = smoothCircular(rawOffsets, 6)
+  const offsets = racingLineOffsets(center, halfUsableWidth)
   const line = center.map((point, index) => {
     const normal = normalAt(center, index)
     return { x: point.x + normal.x * offsets[index], y: point.y + normal.y * offsets[index] }
