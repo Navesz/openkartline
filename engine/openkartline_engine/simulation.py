@@ -159,7 +159,8 @@ def simulate(request: SimulationRequestV1) -> SimulationResultV1:
     assumptions = [
         "Flat, dry track with spatially uniform grip.",
         "Quasi-steady point-mass kart; transient yaw and load transfer are not modeled.",
-        "Power is represented by a simple traction/power envelope using the declared top speed.",
+        "Power, aerodynamic drag and rolling resistance are modelled; the declared "
+        "top speed acts as a hard cap rather than a tapered target.",
         "The path is a locally optimized minimum-bending baseline, not a global minimum-time line.",
     ]
     if not geometry.validation.valid or geometry.prepared is None:
