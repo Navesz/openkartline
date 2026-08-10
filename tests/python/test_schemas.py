@@ -60,3 +60,46 @@ def test_track_requires_distinct_points() -> None:
 
 def test_power_conversion(kart: KartV1) -> None:
     assert kart.power_w == pytest.approx(13 * 745.699872)
+
+
+def test_resistance_parameters_are_optional_and_default_to_the_browser_constants() -> None:
+    """A client written against the original 1.0 kart contract must keep working."""
+
+    legacy = KartV1.model_validate(
+        {
+            "name": "Legacy client kart",
+            "total_mass_kg": 175,
+            "power_hp": 13,
+            "top_speed_mps": 24,
+            "max_accel_mps2": 3,
+            "max_brake_mps2": 7,
+            "max_lateral_accel_mps2": 10,
+        }
+    )
+    assert legacy.schema_version == "1.0"
+    assert legacy.drag_area_m2 == 0.8
+    assert legacy.rolling_resistance == 0.015
+
+    explicit = legacy.model_copy(update={"drag_area_m2": 0.65, "rolling_resistance": 0.02})
+    assert explicit.drag_area_m2 == 0.65
+    assert explicit.rolling_resistance == 0.02
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"drag_area_m2": 0.0},
+        {"drag_area_m2": 6.0},
+        {"drag_area_m2": float("inf")},
+        {"rolling_resistance": -0.001},
+        {"rolling_resistance": 0.5},
+        {"rolling_resistance": float("nan")},
+        {"drag_area_M2": 0.8},
+    ],
+)
+def test_resistance_parameters_reject_unphysical_and_misspelled_values(
+    kart: KartV1, overrides: dict[str, object]
+) -> None:
+    payload = kart.model_dump() | overrides
+    with pytest.raises(ValidationError):
+        KartV1.model_validate(payload)
