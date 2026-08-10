@@ -102,7 +102,9 @@ export function TrackCanvas({
     if (!rect) return { x: 0, y: 0 }
     return {
       x: viewBox.x + ((clientX - rect.left) / rect.width) * viewBox.width,
-      y: viewBox.y + ((clientY - rect.top) / rect.height) * viewBox.height,
+      // Undo the render flip: the drawing group negates y, so moving the
+      // pointer down the screen decreases world y.
+      y: viewBox.y + viewBox.height - ((clientY - rect.top) / rect.height) * viewBox.height,
     }
   }
 
@@ -118,7 +120,7 @@ export function TrackCanvas({
       setViewBox((current) => {
         const cursor = {
           x: current.x + ((event.clientX - rect.left) / rect.width) * current.width,
-          y: current.y + ((event.clientY - rect.top) / rect.height) * current.height,
+          y: current.y + current.height - ((event.clientY - rect.top) / rect.height) * current.height,
         }
         const factor = event.deltaY > 0 ? 1.12 : 0.89
         const width = Math.min(600, Math.max(25, current.width * factor))
@@ -153,7 +155,7 @@ export function TrackCanvas({
       setViewBox({
         ...panOrigin.view,
         x: panOrigin.view.x - ((event.clientX - panOrigin.clientX) / rect.width) * panOrigin.view.width,
-        y: panOrigin.view.y - ((event.clientY - panOrigin.clientY) / rect.height) * panOrigin.view.height,
+        y: panOrigin.view.y + ((event.clientY - panOrigin.clientY) / rect.height) * panOrigin.view.height,
       })
     }
     if (dragPoint !== null) {
@@ -220,7 +222,7 @@ export function TrackCanvas({
       <svg
         ref={svgRef}
         className="track-svg"
-        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+        viewBox={`${viewBox.x} ${-(viewBox.y + viewBox.height)} ${viewBox.width} ${viewBox.height}`}
         role="img"
         aria-label={`Traçado ${track.name} com ${track.centerline.length} pontos de controle`}
         onPointerDown={onPointerDown}
@@ -247,140 +249,152 @@ export function TrackCanvas({
             </feMerge>
           </filter>
         </defs>
-        <rect
-          className="canvas-bg"
-          x={viewBox.x}
-          y={viewBox.y}
-          width={viewBox.width}
-          height={viewBox.height}
-          fill="url(#small-grid)"
-        />
-        <path d={roadPath} fill="#262e29" fillRule="evenodd" stroke="#526057" strokeWidth=".45" />
-        <path
-          d={pathOf(boundaries.left)}
-          fill="none"
-          stroke="#e9eee9"
-          strokeWidth=".45"
-          strokeDasharray="1.4 1.4"
-        />
-        <path
-          d={pathOf(boundaries.right)}
-          fill="none"
-          stroke="#e9eee9"
-          strokeWidth=".45"
-          strokeDasharray="1.4 1.4"
-        />
-        {!result && (
-          <path d={pathOf(display)} fill="none" stroke="#7b8b80" strokeWidth=".65" strokeDasharray="2 1.4" />
-        )}
-        {!!racingLine.length && (
-          <g filter="url(#line-glow)">
-            {racingLine.map((run, index) => (
-              <polyline
-                key={`${run.mode}-${index}`}
-                points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
-                fill="none"
-                stroke={MODE_COLORS[run.mode]}
-                strokeWidth="1.45"
-                strokeLinecap="butt"
+        <g transform="scale(1, -1)">
+          <rect
+            className="canvas-bg"
+            x={viewBox.x}
+            y={viewBox.y}
+            width={viewBox.width}
+            height={viewBox.height}
+            fill="url(#small-grid)"
+          />
+          <path d={roadPath} fill="#262e29" fillRule="evenodd" stroke="#526057" strokeWidth=".45" />
+          <path
+            d={pathOf(boundaries.left)}
+            fill="none"
+            stroke="#e9eee9"
+            strokeWidth=".45"
+            strokeDasharray="1.4 1.4"
+          />
+          <path
+            d={pathOf(boundaries.right)}
+            fill="none"
+            stroke="#e9eee9"
+            strokeWidth=".45"
+            strokeDasharray="1.4 1.4"
+          />
+          {!result && (
+            <path
+              d={pathOf(display)}
+              fill="none"
+              stroke="#7b8b80"
+              strokeWidth=".65"
+              strokeDasharray="2 1.4"
+            />
+          )}
+          {!!racingLine.length && (
+            <g filter="url(#line-glow)">
+              {racingLine.map((run, index) => (
+                <polyline
+                  key={`${run.mode}-${index}`}
+                  points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
+                  fill="none"
+                  stroke={MODE_COLORS[run.mode]}
+                  strokeWidth="1.45"
+                  strokeLinecap="butt"
+                  strokeLinejoin="round"
+                />
+              ))}
+            </g>
+          )}
+          {startLeft && startRight && (
+            <g aria-label="Linha de largada">
+              <line
+                x1={startLeft.x}
+                y1={startLeft.y}
+                x2={startRight.x}
+                y2={startRight.y}
+                stroke="#fff"
+                strokeWidth="1.5"
+              />
+              <line
+                x1={startLeft.x}
+                y1={startLeft.y}
+                x2={startRight.x}
+                y2={startRight.y}
+                stroke="#121713"
+                strokeWidth=".45"
+                strokeDasharray="1 1"
+              />
+            </g>
+          )}
+          {result?.events.slice(0, 10).map((event, index) => {
+            const sample = result.samples[event.sampleIndex]
+            if (!sample) return null
+            return (
+              <g
+                key={`${event.kind}-${event.sampleIndex}`}
+                className="event-marker"
+                onClick={() => onSelectedSample(event.sampleIndex)}
+              >
+                <circle
+                  cx={sample.position.x}
+                  cy={sample.position.y}
+                  r="2.2"
+                  fill={event.kind === 'brake' ? '#ff5c4d' : event.kind === 'apex' ? '#61dafb' : '#6ee7a8'}
+                  stroke="#101512"
+                  strokeWidth=".7"
+                />
+                <text
+                  transform={`translate(${sample.position.x} ${-sample.position.y}) scale(1, -1)`}
+                  y={0.85}
+                  textAnchor="middle"
+                >
+                  {index + 1}
+                </text>
+              </g>
+            )
+          })}
+          {playbackFrame && (
+            <g
+              className={`playback-kart ${playbackFrame.mode}`}
+              transform={`translate(${playbackFrame.position.x} ${playbackFrame.position.y}) rotate(${(playbackFrame.headingRad * 180) / Math.PI})`}
+              pointerEvents="none"
+              aria-hidden="true"
+            >
+              <circle r="3.8" className="kart-halo" fill={MODE_COLORS[playbackFrame.mode]} />
+              <path
+                d="M 2.9 0 L -2 1.9 L -1.1 0 L -2 -1.9 Z"
+                fill={MODE_COLORS[playbackFrame.mode]}
+                stroke="#0d120f"
+                strokeWidth=".38"
                 strokeLinejoin="round"
               />
+            </g>
+          )}
+          {!playbackEnabled && selectedSample !== null && result?.samples[selectedSample] && (
+            <g className="selected-kart" pointerEvents="none">
+              <circle
+                cx={result.samples[selectedSample].position.x}
+                cy={result.samples[selectedSample].position.y}
+                r="3.4"
+              />
+              <circle
+                cx={result.samples[selectedSample].position.x}
+                cy={result.samples[selectedSample].position.y}
+                r="1.25"
+              />
+            </g>
+          )}
+          {tool === 'edit' &&
+            track.centerline.map((point, index) => (
+              <g key={index}>
+                <circle
+                  className="control-hit"
+                  cx={point.x}
+                  cy={point.y}
+                  r="3.2"
+                  onPointerDown={(event) => {
+                    event.stopPropagation()
+                    event.currentTarget.setPointerCapture(event.pointerId)
+                    onPointsChange([...track.centerline], true)
+                    setDragPoint(index)
+                  }}
+                />
+                <circle className="control-point" cx={point.x} cy={point.y} r="1.25" />
+              </g>
             ))}
-          </g>
-        )}
-        {startLeft && startRight && (
-          <g aria-label="Linha de largada">
-            <line
-              x1={startLeft.x}
-              y1={startLeft.y}
-              x2={startRight.x}
-              y2={startRight.y}
-              stroke="#fff"
-              strokeWidth="1.5"
-            />
-            <line
-              x1={startLeft.x}
-              y1={startLeft.y}
-              x2={startRight.x}
-              y2={startRight.y}
-              stroke="#121713"
-              strokeWidth=".45"
-              strokeDasharray="1 1"
-            />
-          </g>
-        )}
-        {result?.events.slice(0, 10).map((event, index) => {
-          const sample = result.samples[event.sampleIndex]
-          if (!sample) return null
-          return (
-            <g
-              key={`${event.kind}-${event.sampleIndex}`}
-              className="event-marker"
-              onClick={() => onSelectedSample(event.sampleIndex)}
-            >
-              <circle
-                cx={sample.position.x}
-                cy={sample.position.y}
-                r="2.2"
-                fill={event.kind === 'brake' ? '#ff5c4d' : event.kind === 'apex' ? '#61dafb' : '#6ee7a8'}
-                stroke="#101512"
-                strokeWidth=".7"
-              />
-              <text x={sample.position.x} y={sample.position.y + 0.85} textAnchor="middle">
-                {index + 1}
-              </text>
-            </g>
-          )
-        })}
-        {playbackFrame && (
-          <g
-            className={`playback-kart ${playbackFrame.mode}`}
-            transform={`translate(${playbackFrame.position.x} ${playbackFrame.position.y}) rotate(${(playbackFrame.headingRad * 180) / Math.PI})`}
-            pointerEvents="none"
-            aria-hidden="true"
-          >
-            <circle r="3.8" className="kart-halo" fill={MODE_COLORS[playbackFrame.mode]} />
-            <path
-              d="M 2.9 0 L -2 1.9 L -1.1 0 L -2 -1.9 Z"
-              fill={MODE_COLORS[playbackFrame.mode]}
-              stroke="#0d120f"
-              strokeWidth=".38"
-              strokeLinejoin="round"
-            />
-          </g>
-        )}
-        {!playbackEnabled && selectedSample !== null && result?.samples[selectedSample] && (
-          <g className="selected-kart" pointerEvents="none">
-            <circle
-              cx={result.samples[selectedSample].position.x}
-              cy={result.samples[selectedSample].position.y}
-              r="3.4"
-            />
-            <circle
-              cx={result.samples[selectedSample].position.x}
-              cy={result.samples[selectedSample].position.y}
-              r="1.25"
-            />
-          </g>
-        )}
-        {tool === 'edit' &&
-          track.centerline.map((point, index) => (
-            <g key={index}>
-              <circle
-                className="control-hit"
-                cx={point.x}
-                cy={point.y}
-                r="3.2"
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                  onPointsChange([...track.centerline], true)
-                  setDragPoint(index)
-                }}
-              />
-              <circle className="control-point" cx={point.x} cy={point.y} r="1.25" />
-            </g>
-          ))}
+        </g>
       </svg>
       <div className="canvas-legend" aria-label="Legenda">
         <span>
