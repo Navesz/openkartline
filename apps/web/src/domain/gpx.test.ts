@@ -31,8 +31,8 @@ describe('parseGpx', () => {
     expect(points[0]).toEqual({ lat: -22.52, lon: -47.39 })
   })
 
-  it('rejects non-XML content', () => {
-    expect(() => parseGpx('not xml at all <<<')).toThrow(/XML/)
+  it('rejects content without GPX track points', () => {
+    expect(() => parseGpx('not xml at all <<<')).toThrow(/trkpt/)
   })
 
   it('rejects files with too few usable points', () => {

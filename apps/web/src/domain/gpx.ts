@@ -21,14 +21,26 @@ interface LatLon {
   lon: number
 }
 
-/** Track points from a GPX document: every `trkpt`, in document order. */
+/**
+ * Track points from a GPX document: every `trkpt`, in document order.
+ *
+ * Attribute scan only — no DOMParser. GPX uploads are untrusted, and we only
+ * need `lat`/`lon` on `<trkpt>`; feeding the whole file into a parser would
+ * reinterpret user text as markup for no benefit.
+ */
 export function parseGpx(text: string): LatLon[] {
-  const document_ = new DOMParser().parseFromString(text, 'application/xml')
-  if (document_.querySelector('parsererror')) throw new Error('O arquivo GPX não é XML válido.')
-  const points = [...document_.querySelectorAll('trkpt')].map((node) => ({
-    lat: Number(node.getAttribute('lat')),
-    lon: Number(node.getAttribute('lon')),
-  }))
+  if (!/<gpx\b/i.test(text) || !/<trkpt\b/i.test(text))
+    throw new Error('O arquivo GPX não contém pontos de trajeto (<trkpt>).')
+  const points: LatLon[] = []
+  const tagPattern = /<trkpt\b([^>]*)>/gi
+  const latPattern = /\blat\s*=\s*["']([^"']+)["']/i
+  const lonPattern = /\blon\s*=\s*["']([^"']+)["']/i
+  for (const match of text.matchAll(tagPattern)) {
+    const attrs = match[1] ?? ''
+    const lat = Number(attrs.match(latPattern)?.[1])
+    const lon = Number(attrs.match(lonPattern)?.[1])
+    points.push({ lat, lon })
+  }
   return validatedLatLon(points, 'GPX')
 }
 
