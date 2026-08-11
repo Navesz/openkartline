@@ -9,6 +9,22 @@ describe('central simulation validation', () => {
     expect(validateSimulationInput(PRESETS.technical, DEFAULT_KART, settings)).toEqual([])
   })
 
+  it('blocks simulation while a background image is uncalibrated', () => {
+    const background = { imageDataUrl: 'data:image/jpeg;base64,/9j/', imageWidthPx: 640, imageHeightPx: 480 }
+    const uncalibrated = validateSimulationInput({ ...PRESETS.oval, background }, DEFAULT_KART, settings)
+    expect(uncalibrated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 'error', message: expect.stringContaining('Calibrar') }),
+      ]),
+    )
+    const calibrated = validateSimulationInput(
+      { ...PRESETS.oval, background: { ...background, scaleMPerPx: 0.4 } },
+      DEFAULT_KART,
+      settings,
+    )
+    expect(calibrated).toEqual([])
+  })
+
   it('rejects fractional samples, unusable margins, non-finite values, and schema bounds', () => {
     const issues = validateSimulationInput(
       { ...PRESETS.oval, widthM: 1 },

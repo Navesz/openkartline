@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronLeft,
@@ -6,6 +6,8 @@ import {
   CircleGauge,
   Flag,
   Gauge,
+  Image as ImageIcon,
+  MapPin,
   Ruler,
   Sparkles,
   Trash2,
@@ -75,6 +77,9 @@ interface ControlPanelProps {
   onPreset: (key: string) => void
   onPointChange: (index: number, point: Point) => void
   onPointRemove: (index: number) => void
+  onImageFile: (file: File) => void
+  onRemoveImage: () => void
+  onGpsFile: (file: File) => void
 }
 
 export function ControlPanel({
@@ -88,8 +93,13 @@ export function ControlPanel({
   onPreset,
   onPointChange,
   onPointRemove,
+  onImageFile,
+  onRemoveImage,
+  onGpsFile,
 }: ControlPanelProps) {
   const [pointIndex, setPointIndex] = useState(0)
+  const imageInput = useRef<HTMLInputElement>(null)
+  const gpsInput = useRef<HTMLInputElement>(null)
   useEffect(() => {
     setPointIndex((current) => Math.max(0, Math.min(track.centerline.length - 1, current)))
   }, [track.centerline.length])
@@ -169,7 +179,58 @@ export function ControlPanel({
         </div>
         <div className="track-meta">
           <span>{track.centerline.length} pontos</span>
-          <span>coordenadas em metros</span>
+          <span>
+            {track.background && track.background.scaleMPerPx === undefined
+              ? 'imagem sem escala — calibre antes de simular'
+              : 'coordenadas em metros'}
+          </span>
+        </div>
+        <div className="import-tools">
+          <span className="field-label">Traçar a partir da pista real</span>
+          <div className="import-tools-row">
+            <button type="button" onClick={() => imageInput.current?.click()}>
+              <ImageIcon size={15} /> Imagem da pista
+            </button>
+            <button type="button" onClick={() => gpsInput.current?.click()}>
+              <MapPin size={15} /> GPS (GPX/CSV)
+            </button>
+          </div>
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/png,image/jpeg"
+            className="visually-hidden"
+            aria-label="Importar imagem da pista"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) onImageFile(file)
+            }}
+          />
+          <input
+            ref={gpsInput}
+            type="file"
+            accept=".gpx,.csv,application/gpx+xml,text/csv"
+            className="visually-hidden"
+            aria-label="Importar trajeto GPS"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) onGpsFile(file)
+            }}
+          />
+          {track.background && (
+            <p className="background-status">
+              Imagem {track.background.imageWidthPx}×{track.background.imageHeightPx} px
+              {track.background.scaleMPerPx
+                ? ` · escala ${track.background.scaleMPerPx.toFixed(3)} m/px`
+                : ' · sem escala (use a ferramenta Calibrar no mapa)'}
+              {' · '}
+              <button type="button" className="link-button" onClick={onRemoveImage}>
+                remover
+              </button>
+            </p>
+          )}
         </div>
         {selectedPoint && (
           <details className="point-editor">

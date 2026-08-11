@@ -3,6 +3,19 @@ export type Point = { x: number; y: number }
 export type DriveMode = 'brake' | 'coast' | 'throttle'
 export type Direction = 'clockwise' | 'counterclockwise'
 
+/**
+ * Reference image under the editor (satellite shot or photo of the real
+ * track). `scaleMPerPx` is set by the two-click calibration tool; while it is
+ * absent the editor treats the world as uncalibrated pixels and blocks
+ * simulation, because a lap time computed over pixel units would be nonsense.
+ */
+export interface TrackBackground {
+  imageDataUrl: string
+  imageWidthPx: number
+  imageHeightPx: number
+  scaleMPerPx?: number
+}
+
 export interface TrackInput {
   name: string
   direction: Direction
@@ -14,6 +27,7 @@ export interface TrackInput {
    * redistributes that data, so the attribution has to travel with it.
    */
   attribution?: string
+  background?: TrackBackground
 }
 
 export interface KartInput {
@@ -86,7 +100,7 @@ export interface SimulationResult {
 }
 
 export interface OklProject {
-  schema_version: '0.1.0'
+  schema_version: '0.1.0' | '0.2.0'
   project: {
     name: string
     created_at: string
@@ -97,6 +111,19 @@ export interface OklProject {
     direction: Direction
     width_m: number
     raw_centerline: [number, number][]
+    /**
+     * Editor background image, 0.2.0+. `image_data_url` may be omitted when the
+     * picture alone would push the project past its size budget; geometry and
+     * calibration survive and the user re-attaches the image after reopening.
+     */
+    background?: {
+      image_data_url?: string
+      image_width_px: number
+      image_height_px: number
+      scale_m_per_px?: number
+      origin_x_px?: number
+      origin_y_px?: number
+    }
   }
   kart: {
     model: 'point_mass_v1'

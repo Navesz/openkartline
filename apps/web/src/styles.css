@@ -363,6 +363,38 @@ main {
   font: 0.57rem var(--mono);
   text-transform: uppercase;
 }
+.import-tools {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-soft);
+  display: grid;
+  gap: 0.55rem;
+}
+.import-tools-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+.import-tools-row button {
+  justify-content: center;
+  font-size: 0.62rem;
+}
+.background-status {
+  margin: 0;
+  color: #7d8d84;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+.link-button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .point-editor {
   margin-top: 0.8rem;
   padding-top: 0.7rem;
@@ -564,6 +596,56 @@ main {
   color: #718078;
   font: 0.58rem var(--mono);
   pointer-events: none;
+}
+.calibration-overlay {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 3.2rem;
+  transform: translateX(-50%);
+  width: min(22rem, calc(100% - 1.6rem));
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(12, 17, 14, 0.94);
+  border: 1px solid #2d3831;
+  border-radius: 6px;
+  color: #d5ddd7;
+  font-size: 0.72rem;
+}
+.calibration-overlay label {
+  display: grid;
+  gap: 0.4rem;
+}
+.calibration-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.calibration-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+.calibration-input-row .unit {
+  color: #7d8d84;
+  font: 0.62rem var(--mono);
+}
+.calibration-actions {
+  display: flex;
+  gap: 0.45rem;
+}
+.calibration-actions .ghost {
+  background: transparent;
+  border-color: #2d3831;
+}
+.calibration-error {
+  margin: 0;
+  color: var(--red);
+}
+.calibration-note {
+  margin: 0;
+  color: #7d8d84;
+  font-size: 0.6rem;
 }
 .canvas-legend {
   position: absolute;

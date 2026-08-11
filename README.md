@@ -21,15 +21,16 @@ This is an engineering and learning tool, not a safety system. Its output is an 
 ## What works today
 
 - Edit a closed 2D centerline, add or drag points, pan, zoom, fit, and undo/redo.
-- Set track width and direction and start from three synthetic circuits.
+- Import a satellite/photo background and calibrate its scale with two clicks, or import a GPX/CSV GPS lap as a centerline.
+- Set track width and direction and start from synthetic circuits or OpenStreetMap examples.
 - Describe kart power, mass, top speed, lateral grip, and braking capability.
 - Calculate a deterministic minimum-bending path and cyclic point-mass speed profile.
 - Inspect a color-coded line, synchronized distance charts, metrics, and driving references.
-- Save and reopen portable `.okl.json` projects.
+- Save and reopen portable `.okl.json` projects (schema 0.2.0, with optional background image).
 - Run entirely in the browser with a TypeScript port of the engine (parity-tested against Python fixtures) or connect to the local FastAPI engine.
 - Receive explicit assumptions, geometry errors, solver state, model version, and diagnostics.
 
-The current solver is a constrained baseline, **not** a globally optimal minimum-time trajectory. Independent boundaries, image/GPS import, telemetry calibration, joint path/control optimization, and native installers are roadmap work.
+The current solver is a constrained baseline, **not** a globally optimal minimum-time trajectory. Independent left/right boundaries, telemetry calibration, joint path/control optimization, and native installers are roadmap work.
 
 ## Quick start
 

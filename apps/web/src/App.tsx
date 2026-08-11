@@ -17,10 +17,12 @@ import { LapCharts } from './components/LapCharts'
 import { PlaybackBar } from './components/PlaybackBar'
 import { ResultsPanel } from './components/ResultsPanel'
 import { TrackCanvas, type EditorTool } from './components/TrackCanvas'
+import { parseGpsFile } from './domain/gpx'
 import { frameAtElapsed, wrapElapsed, type PlaybackRate } from './domain/playback'
 import { clonePoints, DEFAULT_KART, PRESETS } from './domain/presets'
 import { clampSelectedSample } from './domain/selection'
 import { simulateInBrowser } from './domain/simulator'
+import { downscaleTrackImage, readImageFile, scaleFromCalibration } from './domain/trackImage'
 import type { KartInput, SimulationResult, SimulationSettings, TrackInput } from './domain/types'
 import { INPUT_LIMITS, validateSimulationInput } from './domain/validation'
 import { useHistory } from './hooks/useHistory'
@@ -125,6 +127,7 @@ export default function App() {
       } else if (event.key.toLowerCase() === 'v') setTool('edit')
       else if (event.key.toLowerCase() === 'a') setTool('add')
       else if (event.key.toLowerCase() === 'h') setTool('pan')
+      else if (event.key.toLowerCase() === 'c' && trackHistory.value.background) setTool('calibrate')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -188,8 +191,9 @@ export default function App() {
       setMessage('Corrija os campos destacados antes de salvar o projeto.')
       return
     }
-    downloadProject(toProject(trackHistory.value, kart, settings))
-    setMessage('Projeto .okl.json salvo no seu dispositivo.')
+    const built = toProject(trackHistory.value, kart, settings)
+    downloadProject(built.project)
+    setMessage(['Projeto .okl.json salvo no seu dispositivo.', ...built.warnings].join(' '))
     setStatus('success')
   }
 
@@ -211,10 +215,84 @@ export default function App() {
       setSelectedSample(null)
       setDirty(true)
       setStatus('success')
-      setMessage(`${file.name} importado com sucesso.`)
+      setMessage(
+        imported.track.background && imported.track.background.scaleMPerPx === undefined
+          ? `${file.name} importado. Calibre a escala da imagem (ferramenta Calibrar) antes de simular.`
+          : `${file.name} importado com sucesso.`,
+      )
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : 'Arquivo inválido.')
+    }
+  }
+
+  const importBackgroundImage = async (file: File) => {
+    try {
+      const image = await readImageFile(file)
+      const background = downscaleTrackImage(image)
+      trackHistory.set((current) => ({ ...current, background }))
+      setFitRequest((value) => value + 1)
+      setDirty(true)
+      setStatus('success')
+      setMessage('Imagem adicionada. Use a ferramenta Calibrar para definir a escala antes de simular.')
+      setTool('calibrate')
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : 'Não foi possível importar a imagem.')
+    }
+  }
+
+  const removeBackgroundImage = () => {
+    trackHistory.set((current) => {
+      const next = { ...current }
+      delete next.background
+      return next
+    })
+    setDirty(true)
+    if (tool === 'calibrate') setTool('edit')
+    setMessage('Imagem de fundo removida.')
+  }
+
+  const applyCalibration = (pixelDistance: number, realMeters: number) => {
+    const newScale = scaleFromCalibration(pixelDistance, realMeters)
+    trackHistory.set((current) => {
+      if (!current.background) return current
+      const oldScale = current.background.scaleMPerPx
+      // First calibration converts a trace drawn in pixels to metres;
+      // recalibration just corrects the factor already applied.
+      const factor = oldScale ? newScale / oldScale : newScale
+      return {
+        ...current,
+        centerline: current.centerline.map((point) => ({ x: point.x * factor, y: point.y * factor })),
+        widthM: current.widthM * factor,
+        background: { ...current.background, scaleMPerPx: newScale },
+      }
+    })
+    setDirty(true)
+    setFitRequest((value) => value + 1)
+    setTool('edit')
+    setStatus('success')
+    setMessage(`Escala aplicada: ${newScale.toFixed(3)} m/px. Ajuste os pontos e simule.`)
+  }
+
+  const importGpsFile = async (file: File) => {
+    try {
+      const imported = parseGpsFile(file.name, await file.text())
+      trackHistory.set((current) => ({
+        ...current,
+        centerline: imported.centerline,
+        direction: imported.direction,
+      }))
+      setFitRequest((value) => value + 1)
+      setSelectedSample(null)
+      setDirty(true)
+      setStatus('success')
+      setMessage(
+        `GPS importado: ${imported.pointCountRaw} pontos → ${imported.centerline.length} de controle, ${(imported.lengthM / 1000).toFixed(2)} km. Revise a largura da pista.`,
+      )
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : 'Não foi possível importar o GPS.')
     }
   }
 
@@ -322,6 +400,9 @@ export default function App() {
               }))
               setDirty(true)
             }}
+            onImageFile={importBackgroundImage}
+            onRemoveImage={removeBackgroundImage}
+            onGpsFile={(file) => void importGpsFile(file)}
           />
           <div className="visual-workspace">
             <TrackCanvas
@@ -347,6 +428,7 @@ export default function App() {
                 setDirty(true)
               }}
               onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}
+              onCalibrate={applyCalibration}
             />
             <div className={`run-bar ${status}`} role="status" aria-live="polite">
               <span className="run-message">

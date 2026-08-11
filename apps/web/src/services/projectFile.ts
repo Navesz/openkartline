@@ -1,33 +1,65 @@
+import { fitsProjectBudget, isImageDataUrl } from '../domain/trackImage'
 import type { KartInput, OklProject, SimulationSettings, TrackInput } from '../domain/types'
 import { INPUT_LIMITS, validateSimulationInput, validationErrorMessage } from '../domain/validation'
 
-export function toProject(track: TrackInput, kart: KartInput, settings: SimulationSettings): OklProject {
+export const PROJECT_SCHEMA_VERSION = '0.2.0' as const
+
+export interface ProjectBuild {
+  project: OklProject
+  warnings: string[]
+}
+
+export function toProject(track: TrackInput, kart: KartInput, settings: SimulationSettings): ProjectBuild {
   const now = new Date().toISOString()
+  const warnings: string[] = []
+  let background: OklProject['track']['background']
+  if (track.background) {
+    // The picture is editor chrome, not geometry: when it alone would blow the
+    // project budget, persist the calibration and let the user re-attach the
+    // image after reopening instead of refusing to save the lap.
+    const persistImage = fitsProjectBudget(track.background.imageDataUrl)
+    if (!persistImage)
+      warnings.push(
+        'A imagem de fundo era grande demais para o arquivo; a geometria e a calibração foram salvas.',
+      )
+    background = {
+      ...(persistImage ? { image_data_url: track.background.imageDataUrl } : {}),
+      image_width_px: track.background.imageWidthPx,
+      image_height_px: track.background.imageHeightPx,
+      ...(typeof track.background.scaleMPerPx === 'number'
+        ? { scale_m_per_px: track.background.scaleMPerPx }
+        : {}),
+    }
+  }
   return {
-    schema_version: '0.1.0',
-    project: { name: track.name, created_at: now, updated_at: now },
-    track: {
-      coordinate_system: 'local_cartesian_m',
-      direction: track.direction,
-      width_m: track.widthM,
-      raw_centerline: track.centerline.map((point) => [point.x, point.y]),
-    },
-    kart: {
-      model: 'point_mass_v1',
-      total_mass_kg: kart.kartMassKg + kart.driverMassKg,
-      parameters: {
-        power_hp: kart.powerHp,
-        kart_mass_kg: kart.kartMassKg,
-        driver_mass_kg: kart.driverMassKg,
-        top_speed_kph: kart.topSpeedKph,
-        grip_coefficient: kart.gripCoefficient,
-        brake_decel_mps2: kart.brakeDecelMps2,
+    warnings,
+    project: {
+      schema_version: PROJECT_SCHEMA_VERSION,
+      project: { name: track.name, created_at: now, updated_at: now },
+      track: {
+        coordinate_system: 'local_cartesian_m',
+        direction: track.direction,
+        width_m: track.widthM,
+        raw_centerline: track.centerline.map((point) => [point.x, point.y]),
+        ...(background ? { background } : {}),
       },
-    },
-    simulation: {
-      solver: 'speed_profile_v1',
-      settings: { sample_count: settings.sampleCount },
-      safety_margin_m: settings.safetyMarginM,
+      kart: {
+        model: 'point_mass_v1',
+        total_mass_kg: kart.kartMassKg + kart.driverMassKg,
+        parameters: {
+          power_hp: kart.powerHp,
+          kart_mass_kg: kart.kartMassKg,
+          driver_mass_kg: kart.driverMassKg,
+          top_speed_kph: kart.topSpeedKph,
+          grip_coefficient: kart.gripCoefficient,
+          brake_decel_mps2: kart.brakeDecelMps2,
+        },
+      },
+      simulation: {
+        solver: 'speed_profile_v1',
+        settings: { sample_count: settings.sampleCount },
+        safety_margin_m: settings.safetyMarginM,
+      },
     },
   }
 }
@@ -60,6 +92,34 @@ function finite(value: unknown, label: string): number {
   return value
 }
 
+/**
+ * Read the optional editor background. A background without `image_data_url`
+ * (saved over budget) degrades to nothing: dimensions alone cannot render
+ * anything, and the calibration is only meaningful alongside the picture it
+ * was measured on.
+ */
+function parseBackground(background: OklProject['track']['background']): Pick<TrackInput, 'background'> {
+  if (background === undefined) return {}
+  if (typeof background !== 'object' || background === null)
+    throw new Error('O plano de fundo do projeto está mal formado.')
+  if (!isImageDataUrl(background.image_data_url)) return {}
+  const widthPx = finite(background.image_width_px, 'Largura da imagem')
+  const heightPx = finite(background.image_height_px, 'Altura da imagem')
+  if (widthPx < 8 || widthPx > 4096 || heightPx < 8 || heightPx > 4096)
+    throw new Error('As dimensões da imagem de fundo são inválidas.')
+  const scale = background.scale_m_per_px
+  if (scale !== undefined && (!(scale > 0) || scale > 10))
+    throw new Error('A escala da imagem de fundo é inválida.')
+  return {
+    background: {
+      imageDataUrl: background.image_data_url,
+      imageWidthPx: widthPx,
+      imageHeightPx: heightPx,
+      ...(typeof scale === 'number' ? { scaleMPerPx: scale } : {}),
+    },
+  }
+}
+
 export function parseProject(text: string): {
   track: TrackInput
   kart: KartInput
@@ -75,7 +135,7 @@ export function parseProject(text: string): {
     throw new Error('O arquivo não contém JSON válido.')
   }
   const project = input as Partial<OklProject>
-  if (project.schema_version !== '0.1.0')
+  if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
     throw new Error(`Versão de projeto não suportada: ${project.schema_version ?? 'ausente'}.`)
   if (
     !project.project ||
@@ -112,6 +172,7 @@ export function parseProject(text: string): {
         if (!Array.isArray(pair) || pair.length !== 2) throw new Error(`Ponto ${index + 1} inválido.`)
         return { x: finite(pair[0], `Ponto ${index + 1} x`), y: finite(pair[1], `Ponto ${index + 1} y`) }
       }),
+      ...parseBackground(project.track.background),
     },
     kart: {
       powerHp: finite(p.power_hp, 'Potência'),

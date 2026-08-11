@@ -7,13 +7,13 @@ OpenKartLine has two deliberately separate contract families:
 
 Do not send a project file directly to `/v1/simulations`; the web adapter validates it and derives an API request.
 
-## Project format 0.1.0
+## Project format 0.2.0
 
-The current schema is [okl-project-0.1.0.schema.json](../packages/schemas/okl-project-0.1.0.schema.json), with a redistributable example at [circuito-aurora.okl.json](../examples/tracks/circuito-aurora.okl.json). TypeScript representation and runtime checks live beside the web reader/writer.
+The current schema is [okl-project-0.2.0.schema.json](../packages/schemas/okl-project-0.2.0.schema.json), with a redistributable example at [circuito-aurora.okl.json](../examples/tracks/circuito-aurora.okl.json). TypeScript representation and runtime checks live beside the web reader/writer. The previous [0.1.0 schema](../packages/schemas/okl-project-0.1.0.schema.json) remains valid for reading: the web importer accepts both versions and the writer always emits `0.2.0`.
 
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "project": {
     "name": "Synthetic oval",
     "created_at": "2026-08-06T00:00:00.000Z",
@@ -23,7 +23,13 @@ The current schema is [okl-project-0.1.0.schema.json](../packages/schemas/okl-pr
     "coordinate_system": "local_cartesian_m",
     "direction": "clockwise",
     "width_m": 8.0,
-    "raw_centerline": [[0.0, 0.0], [20.0, 0.0], [20.0, 10.0], [0.0, 10.0]]
+    "raw_centerline": [[0.0, 0.0], [20.0, 0.0], [20.0, 10.0], [0.0, 10.0]],
+    "background": {
+      "image_data_url": "data:image/jpeg;base64,...",
+      "image_width_px": 1280,
+      "image_height_px": 720,
+      "scale_m_per_px": 0.42
+    }
   },
   "kart": {
     "model": "point_mass_v1",
@@ -45,9 +51,11 @@ The current schema is [okl-project-0.1.0.schema.json](../packages/schemas/okl-pr
 }
 ```
 
-The centerline contains distinct points and closes implicitly. `width_m` is the uniform total usable width. Project timestamps describe the file record; they do not affect simulation. The reader rejects unsupported versions, excessive file/point sizes, non-finite or out-of-range values, and unsafe solver settings.
+The centerline contains distinct points and closes implicitly. `width_m` is the uniform total usable width. `track.background` is optional editor chrome: a re-encoded JPEG/PNG data URL plus its pixel size and the metres-per-pixel scale set by the two-click calibration tool. Simulation is blocked while a background is present without `scale_m_per_px`, because pixel units would produce a plausible but wrong lap time. When the embedded image alone would push the project past the 1 MiB budget, the writer omits `image_data_url`, keeps the geometry and calibration, and surfaces a warning.
 
-`0.1.0` is an alpha contract. Readers reject incompatible versions with an actionable message. Unknown-field preservation and automated migrations are future work and must land before any stable-format promise.
+Project timestamps describe the file record; they do not affect simulation. The reader rejects unsupported versions, excessive file/point sizes, non-finite or out-of-range values, and unsafe solver settings.
+
+`0.2.0` is an alpha contract. Readers reject incompatible versions with an actionable message. Unknown-field preservation and automated migrations are future work and must land before any stable-format promise.
 
 ## API contract 1.0
 

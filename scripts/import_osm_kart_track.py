@@ -35,7 +35,7 @@ from typing import Any
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 EARTH_RADIUS_M = 6378137.0
 USER_AGENT = "openkartline-osm-import/0.1 (+https://openkartline.dev)"
-# The 0.1.0 schema allows 4..500 centerline points; examples stay well inside that so the
+# The 0.2.0 schema allows 4..500 centerline points; examples stay well inside that so the
 # committed geometry keeps corner shape without becoming an unreadable node dump.
 MIN_POINTS = 30
 MAX_POINTS = 120
@@ -121,7 +121,7 @@ def resample_closed(points: list[Point], count: int) -> list[Point]:
     """Resample a closed polygon to `count` points at equal arc-length spacing.
 
     The first output point is the first input point and the ring is not repeated, which
-    is what the 0.1.0 project schema expects from `raw_centerline`.
+    is what the 0.2.0 project schema expects from `raw_centerline`.
     """
     ring = [*points, points[0]]
     cumulative = [0.0]
@@ -230,7 +230,7 @@ def main() -> int:
     direction = orientation if args.direction == "from-node-order" else args.direction
 
     project = {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "project": {
             "name": args.name,
             "created_at": args.timestamp,
