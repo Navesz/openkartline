@@ -9,13 +9,13 @@ The alpha uses the smallest stack that can deliver a credible vertical slice. Pa
 | Web UI | React 19 + TypeScript + Vite | Familiar contributor workflow, typed state, fast static build | Domain geometry stays outside components. |
 | 2D editor | Native SVG + pointer/keyboard events | Crisp vector rendering, accessible DOM, no canvas dependency | Benchmark before supporting very dense imported tracks. |
 | Charts | Project-owned SVG | Synchronizes small alpha result arrays without another runtime dependency | Add a chart library only after measured interaction/performance need. |
-| Browser mode | TypeScript point-mass fallback | Makes the static demo and offline exploration useful | Clearly labeled and less authoritative than the Python engine. |
+| Browser mode | TypeScript port of the engine | Makes the static demo and offline exploration useful | Held to roundoff-level parity with the Python engine by committed fixtures. |
 | Local API | FastAPI + Pydantic | Strict contracts, useful validation errors, generated OpenAPI | Synchronous solver is bounded and loopback-oriented. |
 | Scientific core | Python + NumPy | Transparent vector math, easy analytic tests, cross-platform wheels | More advanced optimization remains optional. |
 | Python tools | uv + Ruff + mypy + pytest | Locked environment, formatting, strict types, coverage | CI pins the uv action and binary version. |
 | Web tools | pnpm + ESLint + Prettier + Vitest + Playwright | One lockfile and unit/browser gates | Avoid duplicate workspace tooling. |
 | Storage | Versioned `.okl.json` files | Portable, inspectable, private by default | No accounts, database, or hidden server state. |
-| Public demo | GitHub Pages | Free static distribution from the same reviewed source | Uses browser fallback; scientific API is not hosted. |
+| Public demo | GitHub Pages | Free static distribution from the same reviewed source | Runs the ported TypeScript engine; scientific API is not hosted. |
 
 ## Decisions that removed unnecessary risk
 
