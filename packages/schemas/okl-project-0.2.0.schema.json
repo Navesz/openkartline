@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openkartline.dev/schemas/okl-project-0.2.0.schema.json",
+  "title": "OpenKartLine project 0.2.0",
+  "description": "Portable local project for the OpenKartLine runnable alpha, with an optional calibrated background image for the editor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "track", "kart", "simulation"],
+  "properties": {
+    "schema_version": { "const": "0.2.0" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "created_at", "updated_at"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 70 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coordinate_system", "direction", "width_m", "raw_centerline"],
+      "properties": {
+        "coordinate_system": { "const": "local_cartesian_m" },
+        "direction": { "enum": ["clockwise", "counterclockwise"] },
+        "width_m": { "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "raw_centerline": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/point" }
+        },
+        "background": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image_width_px", "image_height_px"],
+          "properties": {
+            "image_data_url": {
+              "type": "string",
+              "maxLength": 700000,
+              "pattern": "^data:image/(jpeg|png);base64,"
+            },
+            "image_width_px": { "type": "integer", "minimum": 8, "maximum": 4096 },
+            "image_height_px": { "type": "integer", "minimum": 8, "maximum": 4096 },
+            "scale_m_per_px": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10
+            },
+            "origin_x_px": { "type": "number", "default": 0 },
+            "origin_y_px": { "type": "number", "default": 0 }
+          }
+        }
+      }
+    },
+    "kart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "total_mass_kg", "parameters"],
+      "properties": {
+        "model": { "const": "point_mass_v1" },
+        "total_mass_kg": { "type": "number", "minimum": 40, "maximum": 500 },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "power_hp",
+            "kart_mass_kg",
+            "driver_mass_kg",
+            "top_speed_kph",
+            "grip_coefficient",
+            "brake_decel_mps2"
+          ],
+          "properties": {
+            "power_hp": { "type": "number", "minimum": 1, "maximum": 80 },
+            "kart_mass_kg": { "type": "number", "minimum": 20, "maximum": 250 },
+            "driver_mass_kg": { "type": "number", "minimum": 20, "maximum": 180 },
+            "top_speed_kph": { "type": "number", "minimum": 10, "maximum": 180 },
+            "grip_coefficient": { "type": "number", "minimum": 0.2, "maximum": 2 },
+            "brake_decel_mps2": { "type": "number", "minimum": 0.5, "maximum": 15 }
+          }
+        }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solver", "settings", "safety_margin_m"],
+      "properties": {
+        "solver": { "const": "speed_profile_v1" },
+        "settings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sample_count"],
+          "properties": {
+            "sample_count": { "type": "integer", "minimum": 64, "maximum": 500 }
+          }
+        },
+        "safety_margin_m": { "type": "number", "minimum": 0, "maximum": 3 }
+      }
+    }
+  },
+  "$defs": {
+    "coordinate": { "type": "number", "minimum": -100000, "maximum": 100000 },
+    "point": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/coordinate" },
+        { "$ref": "#/$defs/coordinate" }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

@@ -79,6 +79,14 @@ export function validateSimulationInput(
     issues.push(...validateTrack(track.centerline, track.widthM))
   }
 
+  // An uncalibrated background means the drawing is still in pixel units; a
+  // lap time computed over pixels would look plausible and be entirely wrong.
+  if (track.background && track.background.scaleMPerPx === undefined) {
+    issues.push(
+      error('A imagem de fundo ainda não tem escala: use a ferramenta Calibrar no mapa antes de simular.'),
+    )
+  }
+
   if (
     !finite(kart.kartMassKg) ||
     kart.kartMassKg < limits.kartMassKgMin ||

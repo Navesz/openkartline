@@ -19,6 +19,7 @@ describe('TrackCanvas', () => {
         onToolChange={vi.fn()}
         onPointsChange={onPointsChange}
         onSelectedSample={vi.fn()}
+        onCalibrate={vi.fn()}
       />,
     )
     const svg = screen.getByRole('img')
@@ -59,6 +60,7 @@ describe('TrackCanvas', () => {
         onToolChange={vi.fn()}
         onPointsChange={vi.fn()}
         onSelectedSample={vi.fn()}
+        onCalibrate={vi.fn()}
       />,
     )
     const svg = screen.getByRole('img')
