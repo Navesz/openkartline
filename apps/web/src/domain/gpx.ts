@@ -142,10 +142,15 @@ export function simplifyClosedTrack(points: Point[], toleranceM: number): Point[
  */
 export function gpsToTrack(points: LatLon[]): GpsTrack {
   const metric = latLonToMetric(points)
-  const deduped = metric.filter(
-    (point, index) =>
-      index === 0 || Math.hypot(point.x - metric[index - 1].x, point.y - metric[index - 1].y) > 0.25,
-  )
+  // Walk against the last KEPT point, not the immediate predecessor. Comparing
+  // with the predecessor drops every point of a uniformly dense trace, because
+  // each one is individually within the threshold of the one before it, and the
+  // whole lap collapses to a single point.
+  const deduped: Point[] = []
+  for (const point of metric) {
+    const last = deduped[deduped.length - 1]
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) > 0.25) deduped.push(point)
+  }
   if (
     deduped.length > 1 &&
     Math.hypot(deduped[0].x - deduped[deduped.length - 1].x, deduped[0].y - deduped[deduped.length - 1].y) < 5

@@ -121,6 +121,23 @@ describe('gpsToTrack', () => {
     expect(['clockwise', 'counterclockwise']).toContain(track.direction)
   })
 
+  it('survives a trace denser than the deduplication threshold', () => {
+    // A 1 km lap logged at 0.1 m spacing. Comparing each point with its
+    // immediate predecessor instead of the last kept one dropped all of them,
+    // and the import failed with "0 m - too short for a track".
+    const dense = Array.from({ length: 10_000 }, (_, index) => {
+      const angle = (2 * Math.PI * index) / 10_000
+      return {
+        lat: -22.5 + 0.001432 * Math.sin(angle),
+        lon: -44.08 + (0.001432 * Math.cos(angle)) / Math.cos((-22.5 * Math.PI) / 180),
+      }
+    })
+    const track = gpsToTrack(dense)
+    expect(track.lengthM).toBeGreaterThan(900)
+    expect(track.lengthM).toBeLessThan(1100)
+    expect(track.centerline.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('rejects traces that are too short for a kart track', () => {
     const tiny = Array.from({ length: 10 }, (_, i) => ({
       lat: -22.52 + i * 1e-6,
