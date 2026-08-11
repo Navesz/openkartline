@@ -12,6 +12,8 @@
 
 [Leia em português](README.pt-BR.md) · [Try the web demo](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribute](CONTRIBUTING.md)
 
+![OpenKartLine demo: draw a track, calculate, and watch the racing line, speed profile, and lap time](docs/assets/openkartline-demo.gif)
+
 OpenKartLine turns a metric track shape and kart characteristics into an explainable lap estimate: a baseline racing line, speed profile, estimated lap time, and braking, apex, and acceleration references. The runnable alpha works in a browser without an account; when the local Python engine is available, the same interface automatically uses its stricter geometry and point-mass simulation.
 
 This is an engineering and learning tool, not a safety system. Its output is an unvalidated planning estimate and must be checked progressively in a controlled environment.
@@ -24,7 +26,7 @@ This is an engineering and learning tool, not a safety system. Its output is an 
 - Calculate a deterministic minimum-bending path and cyclic point-mass speed profile.
 - Inspect a color-coded line, synchronized distance charts, metrics, and driving references.
 - Save and reopen portable `.okl.json` projects.
-- Run entirely in the browser with a simplified fallback or connect to the local FastAPI engine.
+- Run entirely in the browser with a TypeScript port of the engine (parity-tested against Python fixtures) or connect to the local FastAPI engine.
 - Receive explicit assumptions, geometry errors, solver state, model version, and diagnostics.
 
 The current solver is a constrained baseline, **not** a globally optimal minimum-time trajectory. Independent boundaries, image/GPS import, telemetry calibration, joint path/control optimization, and native installers are roadmap work.

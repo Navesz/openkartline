@@ -9,24 +9,24 @@ OpenKartLine currently provides a **runnable MVP preview**: a first vertical sli
 | Capability | Delivered now | Planned or incomplete |
 |---|---|---|
 | Track editing | Interactive 2D centerline editing, width, pan/zoom, undo/redo, and a synthetic starting circuit | Independent left/right boundary authoring, scale calibration, imagery and geographic import, full geometry diagnostics |
-| Simulation | Deterministic point-mass speed profile in the Python engine plus an offline browser fallback | Validated minimum-curvature optimization, joint minimum-time control, advanced kart dynamics |
+| Simulation | Deterministic point-mass speed profile and minimum-bending line in the Python engine, plus a parity-tested TypeScript port for the browser | Validated minimum-curvature optimization, joint minimum-time control, advanced kart dynamics |
 | Guidance | Line colored by brake/coast/throttle, lap metrics, markers, synchronized inspection, and explicit warnings | Confidence/sensitivity analysis, richer marker derivation, telemetry comparison |
 | Files and API | Versioned preview project model, local import/export, validation/simulation API, structured solver states | Stable schema commitment, migrations, durable job supervisor, large attachments |
 | Quality and operations | Local test/lint/build commands, cross-platform CI definitions, security/dependency/docs checks, release and community policies | First hosted CI matrix result, published validation report, signed release artifacts and installers |
 
 Current milestone state:
 
-- **M0 — Partial:** the runnable, locked foundation and strict API contracts exist; hosted matrix evidence and complete shared-schema generation/migration automation remain before closure.
-- **M1 — Partial:** the preview editor uses a centerline plus uniform width; the complete two-boundary workflow and imports remain open.
-- **M2 — Partial:** a useful deterministic speed-profile prototype exists; the minimum-curvature and full acceptance suite remain open.
-- **M3 — Partial:** the preview communicates line, controls, markers, and metrics; synchronized analysis and confidence behavior remain open.
+- **M0 — Done:** locked foundation, strict API contracts, analytic fixtures, and a hosted three-platform CI matrix are all in place and green.
+- **M1 — Partial:** the editor ships a centerline-plus-width workflow with a hand-rolled SVG transform (the React Konva prototype was decided against); the two-boundary workflow and imagery/GPS imports remain open.
+- **M2 — Done:** the minimum-bending baseline and point-mass speed profile ship in the Python engine and in a parity-tested TypeScript port for the browser; the OSQP QP variant was deliberately replaced by the in-repo projected-gradient optimizer (see #10).
+- **M3 — Partial:** the viewer communicates line, controls, markers, metrics, and synchronized playback; turn-in/full-throttle markers, confidence states, and CSV/image export remain open.
 - **M4–M6 — Planned:** advanced optimization, telemetry calibration, and public distribution have not been delivered.
 
 Roadmap issues remain open until their exit criteria are demonstrated. The changelog and tagged releases, not this plan alone, are the record of shipped behavior.
 
 ## M0 — Reproducible foundation
 
-**Status:** Partial; runnable in source, with hosted matrix and shared-schema automation still required.
+**Status:** Done; the hosted three-platform CI matrix, schema round-trips, and analytic fixtures all pass on `main`.
 
 Goal: a contributor can clone the repository and reproduce the same tests on Windows, macOS, and Linux.
 
@@ -62,7 +62,7 @@ Exit criteria:
 
 ## M2 — Geometry and speed-profile MVP
 
-**Status:** Partial in the runnable preview.
+**Status:** Done; the minimum-bending line and iterative speed profile ship in both engines, with the browser port held to roundoff-level parity by committed fixtures. The shortest-path baseline exists implicitly as the zero-margin corridor edge, and the planned OSQP minimum-curvature QP was replaced by the in-repo projected-gradient optimizer.
 
 Goal: produce the first useful and independently testable lap plan.
 
