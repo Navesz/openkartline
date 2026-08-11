@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { prepareTrackGeometry } from './engine/prepareTrack'
+import { KART_HALF_WIDTH_M } from './kartModel'
 import { DEFAULT_KART, PRESETS } from './presets'
 import { simulateInBrowser } from './simulator'
 import { buildCanonicalTrackGeometry, matchCenterlineIndices } from './trackGeometry'
@@ -15,7 +17,16 @@ describe('canonical track geometry', () => {
     const canonical = buildCanonicalTrackGeometry(request.track, request.settings.sampleCount)
     const fallback = simulateInBrowser(request)
     const api = toApiRequest(request)
-    expect(fallback.samples.map((sample) => sample.center)).toEqual(canonical.center)
+    // The browser engine prepares the very corridor the adapter would send, so
+    // both solve identical geometry; its samples expose that prepared corridor.
+    const engineMargin = request.settings.safetyMarginM + KART_HALF_WIDTH_M
+    const prepared = prepareTrackGeometry(
+      api.track.left_boundary.map((point) => ({ x: point.x_m, y: point.y_m })),
+      api.track.right_boundary.map((point) => ({ x: point.x_m, y: point.y_m })),
+      request.track.direction,
+      { sampleCount: request.settings.sampleCount, safetyMarginM: engineMargin },
+    )
+    expect(fallback.samples.map((sample) => sample.center)).toEqual(prepared.center)
     expect(api.track.left_boundary[17]).toEqual({
       x_m: canonical.left[17].x,
       y_m: canonical.left[17].y,

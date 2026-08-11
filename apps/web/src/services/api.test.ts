@@ -113,6 +113,10 @@ describe('engine API adapter', () => {
         speed_mps: 10,
         throttle: 0.5,
         brake: 0,
+        heading_rad: 0.25,
+        longitudinal_accel_mps2: 1.5,
+        lateral_accel_mps2: 1.0,
+        friction_utilization: 0.42,
       })),
       markers: [{ kind: 'acceleration_start', sample_index: 1, s_m: 25, speed_mps: 10 }],
       assumptions: [],
@@ -131,5 +135,14 @@ describe('engine API adapter', () => {
     expect(result.source).toBe('api')
     expect(result.solver).toBe('engine-0.1.0')
     expect(result.events[0]).toEqual(expect.objectContaining({ kind: 'throttle', sampleIndex: 1 }))
+    // The extended physics channels ride along when the engine provides them.
+    expect(result.samples[2]).toEqual(
+      expect.objectContaining({
+        headingRad: 0.25,
+        longitudinalAccelMps2: 1.5,
+        lateralAccelMps2: 1.0,
+        frictionUtilization: 0.42,
+      }),
+    )
   })
 })

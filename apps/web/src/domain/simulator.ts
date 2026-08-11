@@ -1,7 +1,17 @@
-import { stabiliseDriveModes } from './driveMode'
 import { coalesceSimulationEvents } from './events'
+import { stabiliseDriveModes } from './driveMode'
 import { curvatureAt, distance, normalAt, pathLength } from './geometry'
-import { brakeAccelMps2, driveAccelMps2, KART_HALF_WIDTH_M, kartEnvelope } from './kartModel'
+import {
+  brakeAccelMps2,
+  driveAccelMps2,
+  FRICTION_EXPONENT,
+  KART_HALF_WIDTH_M,
+  kartEnvelope,
+} from './kartModel'
+import { buildDrivingMarkers } from './engine/markers'
+import { minimumBendingPath } from './engine/minimumBending'
+import { pathChannels, prepareTrackGeometry } from './engine/prepareTrack'
+import { solveSpeedProfile } from './engine/speedProfile'
 import { racingLineOffsets } from './racingLine'
 import { buildCanonicalTrackGeometry } from './trackGeometry'
 import type { KartInput, LapSample, SimulationEvent, SimulationRequest, SimulationResult } from './types'
@@ -20,6 +30,118 @@ export function availableBrakingAcceleration(
   speedMps = 0,
 ): number {
   return brakeAccelMps2(speedMps, lateralAccelerationMps2, kartEnvelope(kart))
+}
+
+const modeOf = (brake: number, throttle: number): LapSample['mode'] =>
+  brake > 0.08 ? 'brake' : throttle > 0.08 ? 'throttle' : 'coast'
+
+/** Default iterations of the minimum-bending optimizer, matching the engine schema. */
+const DEFAULT_PATH_SMOOTHING_ITERATIONS = 20
+
+/**
+ * Map the engine's driving markers onto the UI's event kinds and Portuguese
+ * labels — the same mapping `fromApiResult` applies to API results.
+ */
+function eventsFromMarkers(
+  markers: ReturnType<typeof buildDrivingMarkers>,
+  sampleCount: number,
+): SimulationEvent[] {
+  return coalesceSimulationEvents(
+    markers
+      .filter((marker) => marker.kind !== 'brake_end')
+      .map((marker) => ({
+        kind:
+          marker.kind === 'brake_start'
+            ? ('brake' as const)
+            : marker.kind === 'apex'
+              ? ('apex' as const)
+              : ('throttle' as const),
+        sampleIndex: marker.sampleIndex,
+        label:
+          marker.kind === 'brake_start'
+            ? `Frear em ${marker.sM.toFixed(0)} m`
+            : marker.kind === 'apex'
+              ? `Ápice · ${(marker.speedMps * 3.6).toFixed(0)} km/h`
+              : `Acelerar em ${marker.sM.toFixed(0)} m`,
+      })),
+    sampleCount,
+  )
+}
+
+/**
+ * Browser pipeline equivalent to the Python engine: the same corridor
+ * preparation, the same minimum-bending line optimizer, and the same iterative
+ * speed-profile solver, ported module by module under `domain/engine/`.
+ *
+ * The input corridor is exactly the one `toApiRequest` would send to the local
+ * API, so the demo and the engine solve identical geometry; the parity gate in
+ * `engine/engineParity.test.ts` holds the two implementations together.
+ */
+function simulateWithMinimumBending(request: SimulationRequest): SimulationResult {
+  const { track, kart, settings } = request
+  const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
+  // The engine constrains the line's centre, so the margin it receives has to
+  // include half a kart on top of the driver's own buffer — as in toApiRequest.
+  const engineSafetyMarginM = settings.safetyMarginM + KART_HALF_WIDTH_M
+  const prepared = prepareTrackGeometry(canonical.left, canonical.right, track.direction, {
+    sampleCount: settings.sampleCount,
+    safetyMarginM: engineSafetyMarginM,
+  })
+  const { path, diagnostics } = minimumBendingPath(prepared, {
+    safetyMarginM: engineSafetyMarginM,
+    iterations: settings.pathSmoothingIterations ?? DEFAULT_PATH_SMOOTHING_ITERATIONS,
+  })
+  const { station, segmentLengths, heading, curvature } = pathChannels(path)
+  const profile = solveSpeedProfile(curvature, segmentLengths, kartEnvelope(kart), {
+    frictionExponent: FRICTION_EXPONENT,
+  })
+
+  const samples: LapSample[] = path.map((position, index) => ({
+    index,
+    position,
+    center: prepared.center[index],
+    leftBoundary: prepared.left[index],
+    rightBoundary: prepared.right[index],
+    distanceM: station[index],
+    elapsedS: profile.elapsed[index],
+    speedMps: profile.speed[index],
+    throttle: profile.throttle[index],
+    brake: profile.brake[index],
+    curvature: curvature[index],
+    mode: modeOf(profile.brake[index], profile.throttle[index]),
+    headingRad: heading[index],
+    longitudinalAccelMps2: profile.longitudinalAccel[index],
+    lateralAccelMps2: profile.lateralAccel[index],
+    frictionUtilization: profile.frictionUtilization[index],
+  }))
+  const stableModes = stabiliseDriveModes(samples.map((sample) => sample.mode))
+  stableModes.forEach((mode, index) => {
+    samples[index].mode = mode
+  })
+
+  const warnings = [
+    'Estimativa do motor físico MVP; valide as referências gradualmente na pista.',
+    ...(track.widthM < 5 ? ['Pista estreita: a margem disponível para ajustar a trajetória é pequena.'] : []),
+    ...(diagnostics.converged
+      ? []
+      : [
+          'A trajetória não atingiu o critério de convergência; a linha retornada é factível, mas não é reportada como convergida.',
+        ]),
+  ]
+  return {
+    source: 'browser',
+    solver: 'browser-minimum-bending-v1',
+    lapTimeS: profile.lapTimeS,
+    trackLengthM: segmentLengths.reduce((sum, length) => sum + length, 0),
+    maxSpeedMps: Math.max(...profile.speed),
+    minSpeedMps: Math.min(...profile.speed),
+    samples,
+    events: eventsFromMarkers(
+      buildDrivingMarkers(station, path, curvature, profile, prepared.lengthM),
+      samples.length,
+    ),
+    warnings,
+  }
 }
 
 function buildEvents(samples: LapSample[]): SimulationEvent[] {
@@ -57,7 +179,12 @@ function buildEvents(samples: LapSample[]): SimulationEvent[] {
   return coalesceSimulationEvents(events, samples.length)
 }
 
-export function simulateInBrowser(request: SimulationRequest): SimulationResult {
+/**
+ * Original anchor-heuristic browser solver, kept as the defensive fallback: if
+ * the ported engine ever rejects a corridor the editor itself accepted, the
+ * demo still answers with a driveable baseline instead of an error screen.
+ */
+function simulateWithAnchorHeuristic(request: SimulationRequest): SimulationResult {
   const { track, kart, settings } = request
   const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
   const center = canonical.center
@@ -69,7 +196,8 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     return { x: point.x + normal.x * offsets[index], y: point.y + normal.y * offsets[index] }
   })
   const curvature = line.map((_, index) => curvatureAt(line, index))
-  const { topSpeedMps: topSpeed, maxLateralAccelMps2: maximumLateral } = kartEnvelope(kart)
+  const envelope = kartEnvelope(kart)
+  const { topSpeedMps: topSpeed, maxLateralAccelMps2: maximumLateral } = envelope
   const speeds = curvature.map((value) =>
     Math.min(topSpeed, Math.sqrt(maximumLateral / Math.max(0.0005, Math.abs(value)))),
   )
@@ -79,7 +207,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     for (let index = 0; index < line.length; index += 1) {
       const next = (index + 1) % line.length
       const lateralAcceleration = speeds[index] ** 2 * Math.abs(curvature[index])
-      const acceleration = availableDriveAcceleration(speeds[index], lateralAcceleration, kart)
+      const acceleration = driveAccelMps2(speeds[index], lateralAcceleration, envelope)
       speeds[next] = Math.min(
         speeds[next],
         Math.sqrt(speeds[index] ** 2 + 2 * acceleration * segmentLengths[index]),
@@ -88,7 +216,7 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     for (let index = line.length - 1; index >= 0; index -= 1) {
       const next = (index + 1) % line.length
       const lateralAcceleration = speeds[next] ** 2 * Math.abs(curvature[next])
-      const brakingAvailable = availableBrakingAcceleration(lateralAcceleration, kart, speeds[next])
+      const brakingAvailable = brakeAccelMps2(speeds[next], lateralAcceleration, envelope)
       speeds[index] = Math.min(
         speeds[index],
         Math.sqrt(speeds[next] ** 2 + 2 * brakingAvailable * segmentLengths[index]),
@@ -109,16 +237,16 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
   let elapsed = 0
   const samples: LapSample[] = line.map((position, index) => {
     const acceleration = longitudinalAcceleration[index]
-    const driveAvailable = availableDriveAcceleration(
+    const driveAvailable = driveAccelMps2(
       speeds[index],
       speeds[index] ** 2 * Math.abs(curvature[index]),
-      kart,
+      envelope,
     )
     const next = (index + 1) % line.length
-    const brakingAvailable = availableBrakingAcceleration(
-      speeds[next] ** 2 * Math.abs(curvature[next]),
-      kart,
+    const brakingAvailable = brakeAccelMps2(
       speeds[next],
+      speeds[next] ** 2 * Math.abs(curvature[next]),
+      envelope,
     )
     const throttle = acceleration > 0.08 ? Math.min(1, acceleration / Math.max(0.1, driveAvailable)) : 0
     const brake = acceleration < -0.08 ? Math.min(1, -acceleration / Math.max(0.1, brakingAvailable)) : 0
@@ -162,5 +290,16 @@ export function simulateInBrowser(request: SimulationRequest): SimulationResult 
     samples,
     events: buildEvents(samples),
     warnings,
+  }
+}
+
+export function simulateInBrowser(request: SimulationRequest): SimulationResult {
+  try {
+    return simulateWithMinimumBending(request)
+  } catch (error) {
+    // The ported engine mirrors the API's strictness; the demo must still
+    // answer when an edge case slips past client-side validation.
+    console.warn('Minimum-bending engine unavailable, using anchor heuristic:', error)
+    return simulateWithAnchorHeuristic(request)
   }
 }

@@ -95,6 +95,10 @@ interface ApiSample {
   elapsed_time_s: number
   throttle: number
   brake: number
+  heading_rad?: number
+  longitudinal_accel_mps2?: number
+  lateral_accel_mps2?: number
+  friction_utilization?: number
 }
 interface ApiResult {
   engine_version: string
@@ -220,6 +224,16 @@ export function fromApiResult(result: ApiResult, request: SimulationRequest): Si
             : curvatureAt(canonical.center, station),
           mode:
             brake > 0.08 ? ('brake' as const) : throttle > 0.08 ? ('throttle' as const) : ('coast' as const),
+          ...(typeof sample.heading_rad === 'number' ? { headingRad: sample.heading_rad } : {}),
+          ...(typeof sample.longitudinal_accel_mps2 === 'number'
+            ? { longitudinalAccelMps2: sample.longitudinal_accel_mps2 }
+            : {}),
+          ...(typeof sample.lateral_accel_mps2 === 'number'
+            ? { lateralAccelMps2: sample.lateral_accel_mps2 }
+            : {}),
+          ...(typeof sample.friction_utilization === 'number'
+            ? { frictionUtilization: sample.friction_utilization }
+            : {}),
         }
       }),
     ),

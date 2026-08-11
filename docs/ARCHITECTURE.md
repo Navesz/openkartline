@@ -19,7 +19,7 @@ flowchart TB
       Editor["SVG track editor"]
       Form["Kart + solver inputs"]
       Adapter["Versioned API adapter"]
-      BrowserSolver["Simplified browser fallback"]
+      BrowserSolver["Ported browser engine (TS)"]
       Viewer["Line + charts + references"]
       Project[".okl.json reader/writer"]
     end
@@ -47,7 +47,7 @@ flowchart TB
     Project <--> Form
 ```
 
-The Vite development server proxies `/api` to a loopback-only FastAPI service. The endpoint runs a bounded synchronous MVP calculation. The static GitHub Pages demo cannot host Python, so it explicitly uses the less rigorous browser fallback.
+The Vite development server proxies `/api` to a loopback-only FastAPI service. The endpoint runs a bounded synchronous MVP calculation. The static GitHub Pages demo cannot host Python, so it runs a TypeScript port of the engine (`apps/web/src/domain/engine/`): the same corridor preparation, minimum-bending optimizer, and iterative speed solver, held to roundoff-level parity with the Python engine by the committed fixture gate (`engineParity.test.ts` + `scripts/export_parity_fixtures.py`). The original anchor heuristic survives only as a defensive fallback so the demo never breaks.
 
 ### Current HTTP contract
 
@@ -116,7 +116,7 @@ That future API would add job submission, progress, timeout, cancellation, resta
 
 ## Deployment modes
 
-- **Static demo:** GitHub Pages plus browser fallback; no Python engine.
+- **Static demo:** GitHub Pages plus the ported TypeScript engine; no Python engine.
 - **Developer/local:** Vite plus loopback FastAPI; current complete alpha workflow.
 - **Future local release:** one launcher serving the built UI and supervised solver process.
 - **Future container/desktop:** evaluated only after the physics MVP and cross-platform packaging tests.
