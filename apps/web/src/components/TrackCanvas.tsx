@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clapperboard, Crosshair, Hand, LocateFixed, MousePointer2, Plus, Trash2 } from 'lucide-react'
+import { Clapperboard, Crosshair, Hand, LocateFixed, MousePointer2, Plus, Ruler, Trash2 } from 'lucide-react'
 import { insertPointNearestSegment } from '../domain/editorGeometry'
 import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
+import { scaleFromCalibration } from '../domain/trackImage'
 import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 
-export type EditorTool = 'edit' | 'add' | 'pan'
+export type EditorTool = 'edit' | 'add' | 'pan' | 'calibrate'
 
 interface TrackCanvasProps {
   track: TrackInput
@@ -20,6 +21,8 @@ interface TrackCanvasProps {
   onToolChange: (tool: EditorTool) => void
   onPointsChange: (points: Point[], checkpoint?: boolean) => void
   onSelectedSample: (index: number | null) => void
+  /** Confirmed calibration: pixel length of the marked segment and its real length. */
+  onCalibrate: (pixelDistance: number, realMeters: number) => void
 }
 
 interface ViewBox {
@@ -83,19 +86,52 @@ export function TrackCanvas({
   onToolChange,
   onPointsChange,
   onSelectedSample,
+  onCalibrate,
 }: TrackCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const latestPoints = useRef(track.centerline)
   latestPoints.current = track.centerline
-  const [viewBox, setViewBox] = useState(() => fitPoints(track.centerline))
+  const background = track.background
+  const imageScale = background?.scaleMPerPx ?? 1
+  // World frame of the background image: origin at (0, 0), metres per pixel.
+  const imageWidthM = background ? background.imageWidthPx * imageScale : null
+  const imageHeightM = background ? background.imageHeightPx * imageScale : null
+  const imageCorners = (width: number, height: number): Point[] => [
+    { x: 0, y: 0 },
+    { x: width, y: 0 },
+    { x: width, y: height },
+    { x: 0, y: height },
+  ]
+  const [viewBox, setViewBox] = useState(() =>
+    fitPoints(
+      imageWidthM !== null && imageHeightM !== null
+        ? [...track.centerline, ...imageCorners(imageWidthM, imageHeightM)]
+        : track.centerline,
+    ),
+  )
   const [dragPoint, setDragPoint] = useState<number | null>(null)
   const [panOrigin, setPanOrigin] = useState<{ clientX: number; clientY: number; view: ViewBox } | null>(null)
+  const [calibrationStart, setCalibrationStart] = useState<Point | null>(null)
+  const [calibrationEnd, setCalibrationEnd] = useState<Point | null>(null)
+  const [calibrationMeters, setCalibrationMeters] = useState('100')
+  const [calibrationError, setCalibrationError] = useState<string | null>(null)
   const canonical = useMemo(() => buildCanonicalTrackGeometry(track, 180), [track])
   const display = canonical.center
   const boundaries = { left: canonical.left, right: canonical.right }
   const racingLine = useMemo(() => (result ? racingLineRuns(result.samples) : []), [result])
 
-  useEffect(() => setViewBox(fitPoints(latestPoints.current)), [fitRequest])
+  const fitAll = () =>
+    setViewBox(
+      fitPoints(
+        imageWidthM !== null && imageHeightM !== null
+          ? [...latestPoints.current, ...imageCorners(imageWidthM, imageHeightM)]
+          : latestPoints.current,
+      ),
+    )
+
+  // App bumps `fitRequest` whenever the track or background changes; the
+  // image dimensions are listed so a late-arriving background also re-fits.
+  useEffect(fitAll, [fitRequest, imageWidthM, imageHeightM])
 
   const clientToWorld = (clientX: number, clientY: number): Point => {
     const rect = svgRef.current?.getBoundingClientRect()
@@ -140,6 +176,18 @@ export function TrackCanvas({
       setPanOrigin({ clientX: event.clientX, clientY: event.clientY, view: viewBox })
       return
     }
+    if (tool === 'calibrate' && background) {
+      const point = clientToWorld(event.clientX, event.clientY)
+      if (!calibrationStart || calibrationEnd) {
+        setCalibrationStart(point)
+        setCalibrationEnd(null)
+        setCalibrationError(null)
+      } else {
+        setCalibrationEnd(point)
+        setCalibrationError(null)
+      }
+      return
+    }
     if (
       tool === 'add' &&
       track.centerline.length < INPUT_LIMITS.controlPointsMax &&
@@ -147,6 +195,31 @@ export function TrackCanvas({
     ) {
       onPointsChange(insertPointNearestSegment(track.centerline, clientToWorld(event.clientX, event.clientY)))
     }
+  }
+
+  const confirmCalibration = () => {
+    if (!calibrationStart || !calibrationEnd) return
+    try {
+      const pixelDistance = Math.hypot(
+        calibrationEnd.x - calibrationStart.x,
+        calibrationEnd.y - calibrationStart.y,
+      )
+      const realMeters = Number(calibrationMeters.replace(',', '.'))
+      // Validates here so the App only ever receives a sane scale.
+      scaleFromCalibration(pixelDistance, realMeters)
+      onCalibrate(pixelDistance, realMeters)
+      setCalibrationStart(null)
+      setCalibrationEnd(null)
+      setCalibrationError(null)
+    } catch (error) {
+      setCalibrationError(error instanceof Error ? error.message : 'Calibração inválida.')
+    }
+  }
+
+  const cancelCalibration = () => {
+    setCalibrationStart(null)
+    setCalibrationEnd(null)
+    setCalibrationError(null)
   }
 
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -166,7 +239,13 @@ export function TrackCanvas({
   }
 
   const surfaceCursor =
-    tool === 'pan' ? (panOrigin ? 'grabbing' : 'grab') : tool === 'add' ? 'crosshair' : 'default'
+    tool === 'pan'
+      ? panOrigin
+        ? 'grabbing'
+        : 'grab'
+      : tool === 'add' || tool === 'calibrate'
+        ? 'crosshair'
+        : 'default'
   const roadPath = `${pathOf(boundaries.left)} ${pathOf([...boundaries.right].reverse())}`
   const startLeft = result?.samples[0]?.leftBoundary ?? boundaries.left[0]
   const startRight = result?.samples[0]?.rightBoundary ?? boundaries.right[0]
@@ -196,8 +275,20 @@ export function TrackCanvas({
         >
           <Hand size={16} /> Mover
         </button>
+        {background && (
+          <button
+            className={tool === 'calibrate' ? 'active' : ''}
+            onClick={() => {
+              cancelCalibration()
+              onToolChange('calibrate')
+            }}
+            title="Calibrar escala da imagem (C)"
+          >
+            <Ruler size={16} /> Calibrar
+          </button>
+        )}
         <span className="toolbar-separator" />
-        <button onClick={() => setViewBox(fitPoints(track.centerline))} title="Enquadrar pista">
+        <button onClick={fitAll} title="Enquadrar pista">
           <LocateFixed size={16} />
           <span className="desktop-only"> Enquadrar</span>
         </button>
@@ -217,7 +308,11 @@ export function TrackCanvas({
           ? 'Arraste os pontos para ajustar o traçado'
           : tool === 'add'
             ? 'Clique no fundo para adicionar pontos'
-            : 'Arraste para mover · role para ampliar'}
+            : tool === 'calibrate'
+              ? background?.scaleMPerPx
+                ? `Escala atual: ${background.scaleMPerPx.toFixed(3)} m/px · marque dois pontos para recalibrar`
+                : 'Marque dois pontos de distância conhecida (ex.: a reta de largada)'
+              : 'Arraste para mover · role para ampliar'}
       </div>
       <svg
         ref={svgRef}
@@ -258,6 +353,21 @@ export function TrackCanvas({
             height={viewBox.height}
             fill="url(#small-grid)"
           />
+          {background && imageWidthM !== null && imageHeightM !== null && (
+            // The group flips y for the whole scene, so the image needs its own
+            // counter-flip or the photo would render mirrored upside-down.
+            <image
+              href={background.imageDataUrl}
+              x={0}
+              y={0}
+              width={imageWidthM}
+              height={imageHeightM}
+              transform={`translate(0 ${imageHeightM}) scale(1 -1)`}
+              opacity={0.85}
+              preserveAspectRatio="none"
+              pointerEvents="none"
+            />
+          )}
           <path d={roadPath} fill="#262e29" fillRule="evenodd" stroke="#526057" strokeWidth=".45" />
           <path
             d={pathOf(boundaries.left)}
@@ -376,6 +486,39 @@ export function TrackCanvas({
               />
             </g>
           )}
+          {calibrationStart && (
+            <g className="calibration-segment" pointerEvents="none">
+              {calibrationEnd && (
+                <line
+                  x1={calibrationStart.x}
+                  y1={calibrationStart.y}
+                  x2={calibrationEnd.x}
+                  y2={calibrationEnd.y}
+                  stroke="#61dafb"
+                  strokeWidth=".6"
+                  strokeDasharray="1.6 1"
+                />
+              )}
+              <circle
+                cx={calibrationStart.x}
+                cy={calibrationStart.y}
+                r="2"
+                fill="#61dafb"
+                stroke="#101512"
+                strokeWidth=".6"
+              />
+              {calibrationEnd && (
+                <circle
+                  cx={calibrationEnd.x}
+                  cy={calibrationEnd.y}
+                  r="2"
+                  fill="#61dafb"
+                  stroke="#101512"
+                  strokeWidth=".6"
+                />
+              )}
+            </g>
+          )}
           {tool === 'edit' &&
             track.centerline.map((point, index) => (
               <g key={index}>
@@ -396,6 +539,37 @@ export function TrackCanvas({
             ))}
         </g>
       </svg>
+      {tool === 'calibrate' && calibrationStart && calibrationEnd && (
+        <div className="calibration-overlay">
+          <label htmlFor="calibration-distance">
+            Distância real entre os pontos marcados
+            <span className="calibration-input-row">
+              <input
+                id="calibration-distance"
+                type="number"
+                min={1}
+                max={2000}
+                step={1}
+                value={calibrationMeters}
+                onChange={(event) => setCalibrationMeters(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') confirmCalibration()
+                  if (event.key === 'Escape') cancelCalibration()
+                }}
+              />
+              <span className="unit">m</span>
+            </span>
+          </label>
+          {calibrationError && <p className="calibration-error">{calibrationError}</p>}
+          <div className="calibration-actions">
+            <button onClick={confirmCalibration}>Aplicar escala</button>
+            <button className="ghost" onClick={cancelCalibration}>
+              Cancelar
+            </button>
+          </div>
+          <p className="calibration-note">O traçado sobre a imagem será convertido de pixels para metros.</p>
+        </div>
+      )}
       <div className="canvas-legend" aria-label="Legenda">
         <span>
           <i className="dot brake" />

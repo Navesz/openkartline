@@ -8,7 +8,7 @@ OpenKartLine currently provides a **runnable MVP preview**: a first vertical sli
 
 | Capability | Delivered now | Planned or incomplete |
 |---|---|---|
-| Track editing | Interactive 2D centerline editing, width, pan/zoom, undo/redo, and a synthetic starting circuit | Independent left/right boundary authoring, scale calibration, imagery and geographic import, full geometry diagnostics |
+| Track editing | Interactive 2D centerline editing, width, pan/zoom, undo/redo, background-image import with scale calibration, and GPX/CSV GPS import | Independent left/right boundary authoring and full geometry diagnostics |
 | Simulation | Deterministic point-mass speed profile and minimum-bending line in the Python engine, plus a parity-tested TypeScript port for the browser | Validated minimum-curvature optimization, joint minimum-time control, advanced kart dynamics |
 | Guidance | Line colored by brake/coast/throttle, lap metrics, markers, synchronized inspection, and explicit warnings | Confidence/sensitivity analysis, richer marker derivation, telemetry comparison |
 | Files and API | Versioned preview project model, local import/export, validation/simulation API, structured solver states | Stable schema commitment, migrations, durable job supervisor, large attachments |
@@ -17,7 +17,7 @@ OpenKartLine currently provides a **runnable MVP preview**: a first vertical sli
 Current milestone state:
 
 - **M0 — Done:** locked foundation, strict API contracts, analytic fixtures, and a hosted three-platform CI matrix are all in place and green.
-- **M1 — Partial:** the editor ships a centerline-plus-width workflow with a hand-rolled SVG transform (the React Konva prototype was decided against); the two-boundary workflow and imagery/GPS imports remain open.
+- **M1 — Partial:** the editor ships a centerline-plus-width workflow with a hand-rolled SVG transform, background-image import with two-click scale calibration, and GPX/CSV GPS import; the independent left/right boundary authoring workflow remains open.
 - **M2 — Done:** the minimum-bending baseline and point-mass speed profile ship in the Python engine and in a parity-tested TypeScript port for the browser; the OSQP QP variant was deliberately replaced by the in-repo projected-gradient optimizer (see #10).
 - **M3 — Partial:** the viewer communicates line, controls, markers, metrics, and synchronized playback; turn-in/full-throttle markers, confidence states, and CSV/image export remain open.
 - **M4–M6 — Planned:** advanced optimization, telemetry calibration, and public distribution have not been delivered.
@@ -45,7 +45,7 @@ Exit criteria:
 
 ## M1 — Track editor alpha
 
-**Status:** Partial in the runnable preview.
+**Status:** Partial; image import with scale calibration and GPX/CSV GPS import ship in the browser. Independent left/right boundary authoring remains open.
 
 Goal: author and validate a metric 2D track without editing files manually.
 

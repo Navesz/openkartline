@@ -21,15 +21,16 @@ Este é um projeto de engenharia e aprendizado, não um sistema de segurança. O
 ## O que já funciona
 
 - Editar uma linha central 2D fechada, adicionar ou arrastar pontos, mover, ampliar, enquadrar e desfazer/refazer.
-- Definir largura e sentido da pista ou começar com três circuitos sintéticos.
+- Importar uma imagem de satélite/foto e calibrar a escala com dois cliques, ou importar uma volta GPS (GPX/CSV) como linha central.
+- Definir largura e sentido da pista ou começar com circuitos sintéticos e exemplos do OpenStreetMap.
 - Informar potência, massa, velocidade máxima, aderência lateral e capacidade de frenagem.
 - Calcular uma linha determinística de mínima flexão e um perfil cíclico de velocidade point-mass.
 - Ver linha colorida, gráficos por distância, métricas e referências práticas sincronizadas.
-- Salvar e reabrir projetos portáteis `.okl.json`.
+- Salvar e reabrir projetos portáteis `.okl.json` (schema 0.2.0, com imagem de fundo opcional).
 - Rodar somente no navegador com um port TypeScript do motor (testado à paridade contra fixtures do Python) ou conectar o motor FastAPI local.
 - Receber hipóteses, erros de geometria, estado do solver, versão do modelo e diagnósticos explícitos.
 
-O solver atual é uma linha-base restrita, **não** uma trajetória de tempo mínimo global. Bordas independentes, importação de imagem/GPS, calibração por telemetria, otimização conjunta de caminho/controle e instaladores nativos estão no roadmap.
+O solver atual é uma linha-base restrita, **não** uma trajetória de tempo mínimo global. Bordas esquerda/direita independentes, calibração por telemetria, otimização conjunta de caminho/controle e instaladores nativos estão no roadmap.
 
 ## Início rápido
 
