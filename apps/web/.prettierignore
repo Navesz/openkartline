@@ -3,3 +3,6 @@ coverage
 playwright-report
 test-results
 pnpm-lock.yaml
+# Recorded raw captures; only the assembled GIF is committed.
+scripts/frames/
+../../docs/assets/demo-frames/

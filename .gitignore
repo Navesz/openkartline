@@ -37,3 +37,6 @@ telemetry/
 .env
 .env.*
 !.env.example
+
+# Raw demo captures (only the assembled GIF is committed)
+docs/assets/demo-frames/

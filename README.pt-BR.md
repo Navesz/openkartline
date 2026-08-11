@@ -12,6 +12,8 @@
 
 [Read in English](README.md) · [Testar a demo web](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribuir](CONTRIBUTING.md)
 
+![Demo do OpenKartLine: desenhe a pista, calcule e veja a linha de corrida, o perfil de velocidade e o tempo de volta](docs/assets/openkartline-demo.gif)
+
 O OpenKartLine transforma o formato métrico de uma pista e as características do kart em uma estimativa explicável de volta: linha-base, perfil de velocidade, tempo estimado e referências de frenagem, ápice e retomada. O alpha já funciona no navegador sem conta; quando o motor Python local está disponível, a mesma interface passa automaticamente a usar sua geometria e simulação point-mass mais rigorosas.
 
 Este é um projeto de engenharia e aprendizado, não um sistema de segurança. O resultado atual é uma estimativa de planejamento ainda sem validação em pista e deve ser conferido progressivamente em ambiente controlado.
@@ -24,7 +26,7 @@ Este é um projeto de engenharia e aprendizado, não um sistema de segurança. O
 - Calcular uma linha determinística de mínima flexão e um perfil cíclico de velocidade point-mass.
 - Ver linha colorida, gráficos por distância, métricas e referências práticas sincronizadas.
 - Salvar e reabrir projetos portáteis `.okl.json`.
-- Rodar somente no navegador com um modelo simplificado ou conectar o motor FastAPI local.
+- Rodar somente no navegador com um port TypeScript do motor (testado à paridade contra fixtures do Python) ou conectar o motor FastAPI local.
 - Receber hipóteses, erros de geometria, estado do solver, versão do modelo e diagnósticos explícitos.
 
 O solver atual é uma linha-base restrita, **não** uma trajetória de tempo mínimo global. Bordas independentes, importação de imagem/GPS, calibração por telemetria, otimização conjunta de caminho/controle e instaladores nativos estão no roadmap.
