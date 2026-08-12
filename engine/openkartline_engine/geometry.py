@@ -296,7 +296,7 @@ def _align_samples(reference: FloatArray, candidate: FloatArray) -> FloatArray:
         spectrum = np.conjugate(np.fft.fft(reference[:, axis])) * np.fft.fft(candidate[:, axis])
         correlation += np.fft.ifft(spectrum).real
     offset = int(np.argmax(correlation))
-    return cast(FloatArray, np.roll(candidate, -offset, axis=0))
+    return np.roll(candidate, -offset, axis=0)
 
 
 def prepare_track(
