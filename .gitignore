@@ -40,3 +40,6 @@ telemetry/
 
 # Raw demo captures (only the assembled GIF is committed)
 docs/assets/demo-frames/
+
+# Private launch notes and post drafts
+LAUNCH.md

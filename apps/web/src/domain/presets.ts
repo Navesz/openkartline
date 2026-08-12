@@ -1,3 +1,4 @@
+import type { MessageKey } from '../i18n/messages'
 import type { KartInput, Point, TrackInput } from './types'
 
 export const DEFAULT_KART: KartInput = {
@@ -11,7 +12,7 @@ export const DEFAULT_KART: KartInput = {
 
 export const PRESETS: Record<string, TrackInput> = {
   technical: {
-    name: 'Circuito Aurora',
+    name: 'Aurora Circuit',
     direction: 'clockwise',
     widthM: 8,
     centerline: [
@@ -31,7 +32,7 @@ export const PRESETS: Record<string, TrackInput> = {
     ],
   },
   oval: {
-    name: 'Oval de validação',
+    name: 'Validation Oval',
     direction: 'clockwise',
     widthM: 9,
     centerline: [
@@ -48,7 +49,7 @@ export const PRESETS: Record<string, TrackInput> = {
     ],
   },
   hairpin: {
-    name: 'Complexo Hairpin',
+    name: 'Hairpin Complex',
     direction: 'counterclockwise',
     widthM: 7,
     centerline: [
@@ -510,14 +511,14 @@ export const PRESETS: Record<string, TrackInput> = {
  * treats them as authoritative. See docs/PHYSICS.md.
  */
 export interface KartPreset extends KartInput {
-  label: string
-  note: string
+  labelKey: MessageKey
+  noteKey: MessageKey
 }
 
 export const KART_PRESETS: Record<string, KartPreset> = {
   rentalIndoor: {
-    label: 'Rental indoor (elétrico)',
-    note: 'Chassi pesado de bateria, pouca aderência, freio traseiro.',
+    labelKey: 'presets.rentalIndoor.label',
+    noteKey: 'presets.rentalIndoor.note',
     powerHp: 15,
     kartMassKg: 186,
     driverMassKg: 75,
@@ -526,8 +527,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 6,
   },
   rentalOutdoor: {
-    label: 'Rental outdoor (390 cc)',
-    note: 'Kart de aluguel a gasolina, pneu duro de longa duração.',
+    labelKey: 'presets.rentalOutdoor.label',
+    noteKey: 'presets.rentalOutdoor.note',
     powerHp: 12,
     kartMassKg: 159,
     driverMassKg: 75,
@@ -536,8 +537,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 7,
   },
   cadete: {
-    label: 'Cadete',
-    note: 'Categoria de base; 105 kg mínimos de kart mais piloto.',
+    labelKey: 'presets.cadete.label',
+    noteKey: 'presets.cadete.note',
     powerHp: 9.5,
     kartMassKg: 65,
     driverMassKg: 40,
@@ -546,8 +547,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 9,
   },
   junior: {
-    label: 'Júnior',
-    note: '23 hp de catálogo; 145 kg mínimos de kart mais piloto.',
+    labelKey: 'presets.junior.label',
+    noteKey: 'presets.junior.note',
     powerHp: 23,
     kartMassKg: 85,
     driverMassKg: 60,
@@ -556,8 +557,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 10,
   },
   senior: {
-    label: 'Sênior monomarcha',
-    note: 'Teto das categorias sem câmbio; 30 hp confirmados por dois fabricantes.',
+    labelKey: 'presets.senior.label',
+    noteKey: 'presets.senior.note',
     powerHp: 30,
     kartMassKg: 85,
     driverMassKg: 77,
@@ -566,8 +567,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 11,
   },
   shifter: {
-    label: 'Shifter KZ (câmbio)',
-    note: 'Seis marchas e freio dianteiro. Potência é consenso de mercado, sem fonte primária.',
+    labelKey: 'presets.shifter.label',
+    noteKey: 'presets.shifter.note',
     powerHp: 50,
     kartMassKg: 95,
     driverMassKg: 85,
@@ -576,8 +577,8 @@ export const KART_PRESETS: Record<string, KartPreset> = {
     brakeDecelMps2: 15,
   },
   superkart: {
-    label: 'Superkart 250',
-    note: 'Só corre em autódromo; 218 kg mínimos e carenagem. Extremo da faixa.',
+    labelKey: 'presets.superkart.label',
+    noteKey: 'presets.superkart.note',
     powerHp: 95,
     kartMassKg: 133,
     driverMassKg: 85,
@@ -589,9 +590,9 @@ export const KART_PRESETS: Record<string, KartPreset> = {
 
 /** Strip the presentation fields, leaving only what the solver models. */
 export function toKartInput(preset: KartPreset): KartInput {
-  const { label, note, ...values } = preset
-  void label
-  void note
+  const { labelKey, noteKey, ...values } = preset
+  void labelKey
+  void noteKey
   return values
 }
 

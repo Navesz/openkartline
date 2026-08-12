@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { distance } from './geometry'
 import { DEFAULT_KART, PRESETS } from './presets'
 import { availableBrakingAcceleration, availableDriveAcceleration, simulateInBrowser } from './simulator'
+
+const t: Translate = (key, params) => translate('en', key, params)
 
 describe('browser simulator', () => {
   it('returns a finite deterministic closed-lap solution', () => {
@@ -10,8 +14,8 @@ describe('browser simulator', () => {
       kart: DEFAULT_KART,
       settings: { safetyMarginM: 0.5, sampleCount: 160 },
     }
-    const first = simulateInBrowser(request)
-    const second = simulateInBrowser(request)
+    const first = simulateInBrowser(request, t)
+    const second = simulateInBrowser(request, t)
     expect(first.samples).toHaveLength(160)
     expect(first.lapTimeS).toBeGreaterThan(5)
     expect(first.lapTimeS).toBe(second.lapTimeS)
@@ -28,8 +32,8 @@ describe('browser simulator', () => {
       kart: DEFAULT_KART,
       settings: { safetyMarginM: 0.5, sampleCount: 160 },
     }
-    const normal = simulateInBrowser(base)
-    const grippy = simulateInBrowser({ ...base, kart: { ...DEFAULT_KART, gripCoefficient: 1.5 } })
+    const normal = simulateInBrowser(base, t)
+    const grippy = simulateInBrowser({ ...base, kart: { ...DEFAULT_KART, gripCoefficient: 1.5 } }, t)
     expect(grippy.lapTimeS).toBeLessThan(normal.lapTimeS)
   })
 
@@ -43,11 +47,14 @@ describe('browser simulator', () => {
   })
 
   it('keeps every speed transition inside the combined grip envelope', () => {
-    const result = simulateInBrowser({
-      track: PRESETS.hairpin,
-      kart: DEFAULT_KART,
-      settings: { safetyMarginM: 0.5, sampleCount: 200 },
-    })
+    const result = simulateInBrowser(
+      {
+        track: PRESETS.hairpin,
+        kart: DEFAULT_KART,
+        settings: { safetyMarginM: 0.5, sampleCount: 200 },
+      },
+      t,
+    )
     result.samples.forEach((sample, index) => {
       const next = result.samples[(index + 1) % result.samples.length]
       const segmentLength = distance(sample.position, next.position)

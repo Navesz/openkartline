@@ -1,3 +1,4 @@
+import type { Translate } from '../i18n/context'
 import type { TrackBackground } from './types'
 
 export const TRACK_IMAGE_LIMITS = {
@@ -36,14 +37,14 @@ export function fitsProjectBudget(dataUrl: string): boolean {
   return dataUrlBytes(dataUrl) <= TRACK_IMAGE_LIMITS.targetBytes
 }
 
-export function readImageFile(file: File): Promise<HTMLImageElement> {
+export function readImageFile(file: File, t: Translate): Promise<HTMLImageElement> {
   if (file.size > TRACK_IMAGE_LIMITS.uploadBytes) {
     return Promise.reject(
-      new Error(`A imagem excede o limite de ${TRACK_IMAGE_LIMITS.uploadBytes / 1024 / 1024} MB.`),
+      new Error(t('imports.imageTooLarge', { limit: TRACK_IMAGE_LIMITS.uploadBytes / 1024 / 1024 })),
     )
   }
   if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-    return Promise.reject(new Error('Use uma imagem PNG ou JPEG da pista.'))
+    return Promise.reject(new Error(t('imports.imageWrongFormat')))
   }
   return new Promise((resolvePromise, rejectPromise) => {
     const url = URL.createObjectURL(file)
@@ -54,7 +55,7 @@ export function readImageFile(file: File): Promise<HTMLImageElement> {
     }
     image.onerror = () => {
       URL.revokeObjectURL(url)
-      rejectPromise(new Error('Não foi possível ler a imagem selecionada.'))
+      rejectPromise(new Error(t('imports.imageReadFailed')))
     }
     image.src = url
   })
@@ -65,7 +66,7 @@ export function readImageFile(file: File): Promise<HTMLImageElement> {
  * legible, not print quality, so quality steps down until the payload fits the
  * project budget (or the floor where a trace is still readable).
  */
-export function downscaleTrackImage(image: HTMLImageElement): TrackBackground {
+export function downscaleTrackImage(image: HTMLImageElement, t: Translate): TrackBackground {
   const scale = Math.min(
     1,
     TRACK_IMAGE_LIMITS.maxDimensionPx / Math.max(image.naturalWidth, image.naturalHeight),
@@ -75,7 +76,7 @@ export function downscaleTrackImage(image: HTMLImageElement): TrackBackground {
 
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  if (!context) throw new Error('Este navegador não consegue processar imagens.')
+  if (!context) throw new Error(t('imports.imageCanvasUnsupported'))
 
   let dataUrl = ''
   for (const quality of [0.82, 0.72, 0.62, 0.52]) {
@@ -97,16 +98,14 @@ export function downscaleTrackImage(image: HTMLImageElement): TrackBackground {
  * runs in pixel units until the user calibrates, so world distance IS pixel
  * distance at that moment.
  */
-export function scaleFromCalibration(pixelDistance: number, realMeters: number): number {
+export function scaleFromCalibration(pixelDistance: number, realMeters: number, t: Translate): number {
   if (!Number.isFinite(realMeters) || realMeters <= 0)
-    throw new Error('Informe uma distância real maior que zero.')
+    throw new Error(t('imports.calibrationDistanceRequired'))
   if (!Number.isFinite(pixelDistance) || pixelDistance < 3)
-    throw new Error('Marque dois pontos mais afastados na imagem.')
+    throw new Error(t('imports.calibrationPointsTooClose'))
   const scale = realMeters / pixelDistance
   if (scale < TRACK_IMAGE_LIMITS.scaleMPerPxMin || scale > TRACK_IMAGE_LIMITS.scaleMPerPxMax) {
-    throw new Error(
-      `A escala resultante (${scale.toFixed(4)} m/px) está fora do esperado para uma pista de kart.`,
-    )
+    throw new Error(t('imports.calibrationScaleImplausible', { scale: scale.toFixed(4) }))
   }
   return scale
 }

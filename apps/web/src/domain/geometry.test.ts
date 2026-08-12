@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { pathLength, resampleClosed, validateTrack } from './geometry'
+
+const t: Translate = (key, params) => translate('en', key, params)
 
 const square = [
   { x: 0, y: 0 },
@@ -17,7 +21,7 @@ describe('track geometry', () => {
   })
 
   it('finds invalid and self-intersecting centerlines', () => {
-    expect(validateTrack(square, 8)).toEqual([])
+    expect(validateTrack(square, 8, t)).toEqual([])
     expect(
       validateTrack(
         [
@@ -27,10 +31,11 @@ describe('track geometry', () => {
           { x: 20, y: 0 },
         ],
         8,
+        t,
       ),
     ).toEqual(expect.arrayContaining([expect.objectContaining({ level: 'error' })]))
-    expect(validateTrack(square, 0)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('largura') })]),
+    expect(validateTrack(square, 0, t)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('Width') })]),
     )
   })
 })

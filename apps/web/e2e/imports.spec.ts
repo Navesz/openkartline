@@ -26,34 +26,34 @@ const GPX_LAP = `<?xml version="1.0"?>
 test('imports a background image, calibrates, and simulates', async ({ page }) => {
   await page.route('**/api/**', (route) => route.abort())
   await page.goto('./')
-  await expect(page.getByRole('heading', { name: 'Planeje uma volta melhor.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Plan a faster lap.' })).toBeVisible()
 
-  await page.getByLabel('Importar imagem da pista').setInputFiles({
+  await page.getByLabel('Import track image').setInputFiles({
     name: 'track.png',
     mimeType: 'image/png',
     buffer: TRACK_PNG,
   })
-  await expect(page.getByText(/Imagem adicionada/i)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Calibrar' })).toBeVisible()
+  await expect(page.getByText(/Image added/i)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Calibrate' })).toBeVisible()
   // Simulation is blocked until the image has a scale.
-  await expect(page.getByRole('button', { name: /Simular|Recalcular/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /Simulate|Recalculate/ })).toBeDisabled()
 
-  const svg = page.getByRole('img', { name: /Traçado/ })
+  const svg = page.getByRole('img', { name: /layout/ })
   const box = await svg.boundingBox()
   expect(box).toBeTruthy()
-  await page.getByRole('button', { name: 'Calibrar' }).click()
+  await page.getByRole('button', { name: 'Calibrate' }).click()
   await page.mouse.click(box!.x + box!.width * 0.25, box!.y + box!.height * 0.5)
   await page.mouse.click(box!.x + box!.width * 0.75, box!.y + box!.height * 0.5)
-  await expect(page.getByLabel('Distância real entre os pontos marcados')).toBeVisible()
-  await page.getByLabel('Distância real entre os pontos marcados').fill('100')
-  await page.getByRole('button', { name: 'Aplicar escala' }).click()
-  await expect(page.getByText(/Escala aplicada/i)).toBeVisible()
+  await expect(page.getByLabel('Real distance between the marked points')).toBeVisible()
+  await page.getByLabel('Real distance between the marked points').fill('100')
+  await page.getByRole('button', { name: 'Apply scale' }).click()
+  await expect(page.getByText(/Scale applied/i)).toBeVisible()
 
-  await page.getByRole('button', { name: /Recalcular|Simular/ }).click()
-  await expect(page.getByText('VOLTA ESTIMADA')).toBeVisible()
+  await page.getByRole('button', { name: /Recalculate|Simulate/ }).click()
+  await expect(page.getByText('ESTIMATED LAP')).toBeVisible()
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Salvar' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
   const download = await downloadPromise
   const path = await download.path()
   expect(path).toBeTruthy()
@@ -69,13 +69,13 @@ test('imports a background image, calibrates, and simulates', async ({ page }) =
 test('imports a GPX lap as a editable centerline', async ({ page }) => {
   await page.route('**/api/**', (route) => route.abort())
   await page.goto('./')
-  await page.getByLabel('Importar trajeto GPS').setInputFiles({
+  await page.getByLabel('Import GPS track').setInputFiles({
     name: 'lap.gpx',
     mimeType: 'application/gpx+xml',
     buffer: Buffer.from(GPX_LAP, 'utf-8'),
   })
-  await expect(page.getByText(/GPS importado/i)).toBeVisible()
-  await page.getByRole('button', { name: /Recalcular|Simular/ }).click()
-  await expect(page.getByText('VOLTA ESTIMADA')).toBeVisible()
-  await expect(page.getByText(/Referência calculada localmente/i)).toBeVisible()
+  await expect(page.getByText(/GPS imported/i)).toBeVisible()
+  await page.getByRole('button', { name: /Recalculate|Simulate/ }).click()
+  await expect(page.getByText('ESTIMATED LAP')).toBeVisible()
+  await expect(page.getByText(/computed locally/i)).toBeVisible()
 })

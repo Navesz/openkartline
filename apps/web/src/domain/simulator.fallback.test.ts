@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { DEFAULT_KART, PRESETS } from './presets'
 
 // Force the ported engine to fail so the defensive fallback is exercised end
@@ -11,14 +13,19 @@ vi.mock('./engine/minimumBending', () => ({
 
 import { simulateInBrowser } from './simulator'
 
+const t: Translate = (key, params) => translate('en', key, params)
+
 describe('simulateInBrowser defensive fallback', () => {
   it('answers with the anchor heuristic when the ported engine throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = simulateInBrowser({
-      track: PRESETS.oval,
-      kart: DEFAULT_KART,
-      settings: { safetyMarginM: 0.5, sampleCount: 120 },
-    })
+    const result = simulateInBrowser(
+      {
+        track: PRESETS.oval,
+        kart: DEFAULT_KART,
+        settings: { safetyMarginM: 0.5, sampleCount: 120 },
+      },
+      t,
+    )
     expect(result.solver).toBe('browser-point-mass-v1')
     expect(result.samples).toHaveLength(120)
     expect(result.lapTimeS).toBeGreaterThan(5)
