@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clapperboard, Crosshair, Hand, LocateFixed, MousePointer2, Plus, Ruler, Trash2 } from 'lucide-react'
 import { insertPointNearestSegment } from '../domain/editorGeometry'
+import { useI18n } from '../i18n/context'
 import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
 import { scaleFromCalibration } from '../domain/trackImage'
@@ -88,6 +89,7 @@ export function TrackCanvas({
   onSelectedSample,
   onCalibrate,
 }: TrackCanvasProps) {
+  const { t } = useI18n()
   const svgRef = useRef<SVGSVGElement>(null)
   const latestPoints = useRef(track.centerline)
   latestPoints.current = track.centerline
@@ -206,13 +208,13 @@ export function TrackCanvas({
       )
       const realMeters = Number(calibrationMeters.replace(',', '.'))
       // Validates here so the App only ever receives a sane scale.
-      scaleFromCalibration(pixelDistance, realMeters)
+      scaleFromCalibration(pixelDistance, realMeters, t)
       onCalibrate(pixelDistance, realMeters)
       setCalibrationStart(null)
       setCalibrationEnd(null)
       setCalibrationError(null)
     } catch (error) {
-      setCalibrationError(error instanceof Error ? error.message : 'Calibração inválida.')
+      setCalibrationError(error instanceof Error ? error.message : t('canvas.calibrationInvalid'))
     }
   }
 
@@ -251,29 +253,29 @@ export function TrackCanvas({
   const startRight = result?.samples[0]?.rightBoundary ?? boundaries.right[0]
 
   return (
-    <section className="track-stage" id="workspace" aria-label="Editor visual da pista">
-      <div className="canvas-toolbar" role="toolbar" aria-label="Ferramentas do editor">
+    <section className="track-stage" id="workspace" aria-label={t('canvas.sectionLabel')}>
+      <div className="canvas-toolbar" role="toolbar" aria-label={t('canvas.toolbarLabel')}>
         <button
           className={tool === 'edit' ? 'active' : ''}
           onClick={() => onToolChange('edit')}
-          title="Editar pontos (V)"
+          title={t('canvas.toolEditTitle')}
         >
-          <MousePointer2 size={16} /> Editar
+          <MousePointer2 size={16} /> {t('canvas.toolEdit')}
         </button>
         <button
           className={tool === 'add' ? 'active' : ''}
           onClick={() => onToolChange('add')}
           disabled={track.centerline.length >= INPUT_LIMITS.controlPointsMax}
-          title="Adicionar ponto (A)"
+          title={t('canvas.toolAddTitle')}
         >
-          <Plus size={16} /> Ponto
+          <Plus size={16} /> {t('canvas.toolAdd')}
         </button>
         <button
           className={tool === 'pan' ? 'active' : ''}
           onClick={() => onToolChange('pan')}
-          title="Mover visualização (H)"
+          title={t('canvas.toolPanTitle')}
         >
-          <Hand size={16} /> Mover
+          <Hand size={16} /> {t('canvas.toolPan')}
         </button>
         {background && (
           <button
@@ -282,44 +284,44 @@ export function TrackCanvas({
               cancelCalibration()
               onToolChange('calibrate')
             }}
-            title="Calibrar escala da imagem (C)"
+            title={t('canvas.toolCalibrateTitle')}
           >
-            <Ruler size={16} /> Calibrar
+            <Ruler size={16} /> {t('canvas.toolCalibrate')}
           </button>
         )}
         <span className="toolbar-separator" />
-        <button onClick={fitAll} title="Enquadrar pista">
+        <button onClick={fitAll} title={t('canvas.fitTitle')}>
           <LocateFixed size={16} />
-          <span className="desktop-only"> Enquadrar</span>
+          <span className="desktop-only"> {t('canvas.fit')}</span>
         </button>
         <button
           className={playbackEnabled ? 'active' : ''}
           onClick={onPlaybackToggle}
           disabled={!result}
           aria-pressed={playbackEnabled}
-          title="Animar a volta"
+          title={t('canvas.playTitle')}
         >
           <Clapperboard size={16} />
-          <span className="desktop-only"> Animar</span>
+          <span className="desktop-only"> {t('canvas.play')}</span>
         </button>
       </div>
       <div className="canvas-hint">
         {tool === 'edit'
-          ? 'Arraste os pontos para ajustar o traçado'
+          ? t('canvas.hintEdit')
           : tool === 'add'
-            ? 'Clique no fundo para adicionar pontos'
+            ? t('canvas.hintAdd')
             : tool === 'calibrate'
               ? background?.scaleMPerPx
-                ? `Escala atual: ${background.scaleMPerPx.toFixed(3)} m/px · marque dois pontos para recalibrar`
-                : 'Marque dois pontos de distância conhecida (ex.: a reta de largada)'
-              : 'Arraste para mover · role para ampliar'}
+                ? t('canvas.hintCalibrateScale', { scale: background.scaleMPerPx.toFixed(3) })
+                : t('canvas.hintCalibrateStart')
+              : t('canvas.hintPan')}
       </div>
       <svg
         ref={svgRef}
         className="track-svg"
         viewBox={`${viewBox.x} ${-(viewBox.y + viewBox.height)} ${viewBox.width} ${viewBox.height}`}
         role="img"
-        aria-label={`Traçado ${track.name} com ${track.centerline.length} pontos de controle`}
+        aria-label={t('canvas.trackAria', { name: track.name, count: track.centerline.length })}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => {
@@ -408,7 +410,7 @@ export function TrackCanvas({
             </g>
           )}
           {startLeft && startRight && (
-            <g aria-label="Linha de largada">
+            <g aria-label={t('canvas.startLine')}>
               <line
                 x1={startLeft.x}
                 y1={startLeft.y}
@@ -542,7 +544,7 @@ export function TrackCanvas({
       {tool === 'calibrate' && calibrationStart && calibrationEnd && (
         <div className="calibration-overlay">
           <label htmlFor="calibration-distance">
-            Distância real entre os pontos marcados
+            {t('canvas.calibrationLabel')}
             <span className="calibration-input-row">
               <input
                 id="calibration-distance"
@@ -562,26 +564,26 @@ export function TrackCanvas({
           </label>
           {calibrationError && <p className="calibration-error">{calibrationError}</p>}
           <div className="calibration-actions">
-            <button onClick={confirmCalibration}>Aplicar escala</button>
+            <button onClick={confirmCalibration}>{t('canvas.calibrationApply')}</button>
             <button className="ghost" onClick={cancelCalibration}>
-              Cancelar
+              {t('canvas.calibrationCancel')}
             </button>
           </div>
-          <p className="calibration-note">O traçado sobre a imagem será convertido de pixels para metros.</p>
+          <p className="calibration-note">{t('canvas.calibrationNote')}</p>
         </div>
       )}
-      <div className="canvas-legend" aria-label="Legenda">
+      <div className="canvas-legend" aria-label={t('canvas.legendLabel')}>
         <span>
           <i className="dot brake" />
-          Freio
+          {t('canvas.legendBrake')}
         </span>
         <span>
           <i className="dot coast" />
-          Transição
+          {t('canvas.legendCoast')}
         </span>
         <span>
           <i className="dot throttle" />
-          Acelerador
+          {t('canvas.legendThrottle')}
         </span>
       </div>
       {tool === 'edit' && (
@@ -589,9 +591,9 @@ export function TrackCanvas({
           className="delete-last"
           disabled={track.centerline.length <= 4}
           onClick={() => onPointsChange(track.centerline.slice(0, -1))}
-          title="Remover último ponto"
+          title={t('canvas.removeLastTitle')}
         >
-          <Trash2 size={15} /> Remover último
+          <Trash2 size={15} /> {t('canvas.removeLast')}
         </button>
       )}
       <div className="north">

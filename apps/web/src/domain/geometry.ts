@@ -1,3 +1,4 @@
+import type { Translate } from '../i18n/context'
 import type { Point, ValidationIssue } from './types'
 
 const EPSILON = 1e-8
@@ -21,17 +22,16 @@ function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
   return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d)
 }
 
-export function validateTrack(points: Point[], widthM: number): ValidationIssue[] {
+export function validateTrack(points: Point[], widthM: number, t: Translate): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  if (points.length < 4)
-    issues.push({ level: 'error', message: 'Adicione pelo menos 4 pontos para fechar a pista.' })
+  if (points.length < 4) issues.push({ level: 'error', message: t('validation.minPoints') })
   if (!Number.isFinite(widthM) || widthM <= 0)
-    issues.push({ level: 'error', message: 'A largura deve ser maior que zero.' })
+    issues.push({ level: 'error', message: t('validation.widthPositive') })
   if (points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
-    issues.push({ level: 'error', message: 'A pista contém coordenadas inválidas.' })
+    issues.push({ level: 'error', message: t('validation.invalidCoordinates') })
   }
   if (points.length >= 4 && Math.abs(signedArea(points)) < 10) {
-    issues.push({ level: 'error', message: 'O traçado não forma uma área útil.' })
+    issues.push({ level: 'error', message: t('validation.noUsableArea') })
   }
   for (let i = 0; i < points.length; i += 1) {
     const a = points[i]
@@ -39,7 +39,7 @@ export function validateTrack(points: Point[], widthM: number): ValidationIssue[
     if (distance(a, b) < 1) {
       issues.push({
         level: 'warning',
-        message: `Os pontos ${i + 1} e ${((i + 1) % points.length) + 1} estão muito próximos.`,
+        message: t('validation.pointsTooClose', { a: i + 1, b: ((i + 1) % points.length) + 1 }),
       })
       break
     }
@@ -48,7 +48,7 @@ export function validateTrack(points: Point[], widthM: number): ValidationIssue[
       const c = points[j]
       const d = points[(j + 1) % points.length]
       if (segmentsIntersect(a, b, c, d)) {
-        issues.push({ level: 'error', message: 'A linha central cruza a si mesma.' })
+        issues.push({ level: 'error', message: t('validation.selfIntersecting') })
         return issues
       }
     }

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { prepareTrackGeometry } from './engine/prepareTrack'
 import { KART_HALF_WIDTH_M } from './kartModel'
 import { DEFAULT_KART, PRESETS } from './presets'
@@ -6,6 +8,8 @@ import { simulateInBrowser } from './simulator'
 import { buildCanonicalTrackGeometry, matchCenterlineIndices } from './trackGeometry'
 import type { SimulationRequest } from './types'
 import { toApiRequest } from '../services/api'
+
+const t: Translate = (key, params) => translate('en', key, params)
 
 describe('canonical track geometry', () => {
   it('feeds identical smooth center and boundaries to the fallback and API adapter', () => {
@@ -15,7 +19,7 @@ describe('canonical track geometry', () => {
       settings: { safetyMarginM: 0.5, sampleCount: 80 },
     }
     const canonical = buildCanonicalTrackGeometry(request.track, request.settings.sampleCount)
-    const fallback = simulateInBrowser(request)
+    const fallback = simulateInBrowser(request, t)
     const api = toApiRequest(request)
     // The browser engine prepares the very corridor the adapter would send, so
     // both solve identical geometry; its samples expose that prepared corridor.

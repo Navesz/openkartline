@@ -10,6 +10,7 @@ import {
 import { simulateInBrowser } from '../domain/simulator'
 import { buildCanonicalTrackGeometry, matchCenterlineIndices } from '../domain/trackGeometry'
 import type { LapSample, SimulationRequest, SimulationResult } from '../domain/types'
+import type { Translate } from '../i18n/context'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 const REQUEST_TIMEOUT_MS = 4_000
@@ -50,8 +51,9 @@ export async function checkApiHealth(): Promise<boolean> {
 export async function runSimulation(
   request: SimulationRequest,
   preferApi: boolean,
+  t: Translate,
 ): Promise<SimulationResult> {
-  if (!preferApi) return simulateInBrowser(request)
+  if (!preferApi) return simulateInBrowser(request, t)
 
   const body = JSON.stringify(toApiRequest(request))
   let response: Response
@@ -62,14 +64,14 @@ export async function runSimulation(
       body,
     })
   } catch (error) {
-    if (isAvailabilityFailure(error)) return simulateInBrowser(request)
+    if (isAvailabilityFailure(error)) return simulateInBrowser(request, t)
     throw error
   }
   if (!response.ok) {
     // 429 means the bounded local compute slots are busy, not that the request
     // is wrong. The deterministic browser solver is the intended relief valve,
     // so use it instead of surfacing a transient capacity error.
-    if (response.status === 429) return simulateInBrowser(request)
+    if (response.status === 429) return simulateInBrowser(request, t)
     let detail = ''
     try {
       const payload = (await response.json()) as { detail?: unknown }
@@ -77,9 +79,9 @@ export async function runSimulation(
     } catch {
       // The HTTP status remains the authoritative error when the body is not JSON.
     }
-    throw new ScientificSimulationError(detail || `O motor físico MVP respondeu com HTTP ${response.status}.`)
+    throw new ScientificSimulationError(detail || t('app.engineHttpError', { status: response.status }))
   }
-  return fromApiResult((await response.json()) as ApiResult, request)
+  return fromApiResult((await response.json()) as ApiResult, request, t)
 }
 
 interface ApiPoint {
@@ -154,11 +156,15 @@ export function toApiRequest(request: SimulationRequest) {
   }
 }
 
-export function fromApiResult(result: ApiResult, request: SimulationRequest): SimulationResult {
+export function fromApiResult(
+  result: ApiResult,
+  request: SimulationRequest,
+  t: Translate,
+): SimulationResult {
   if (result.status.state !== 'success' || !result.summary || !result.samples.length) {
     const reasons = result.validation.errors.map((issue) => issue.message).join(' ')
     throw new ScientificSimulationError(
-      reasons || result.status.message || 'O motor físico MVP não concluiu a simulação.',
+      reasons || result.status.message || t('app.engineIncomplete'),
     )
   }
   const canonical = buildCanonicalTrackGeometry(request.track, result.samples.length)
@@ -179,10 +185,10 @@ export function fromApiResult(result: ApiResult, request: SimulationRequest): Si
         sampleIndex: marker.sample_index,
         label:
           marker.kind === 'brake_start'
-            ? `Frear em ${marker.s_m.toFixed(0)} m`
+            ? t('project.eventBrake', { distance: marker.s_m.toFixed(0) })
             : marker.kind === 'apex'
-              ? `Ápice · ${(marker.speed_mps * 3.6).toFixed(0)} km/h`
-              : `Acelerar em ${marker.s_m.toFixed(0)} m`,
+              ? t('project.eventApex', { speed: (marker.speed_mps * 3.6).toFixed(0) })
+              : t('project.eventThrottle', { distance: marker.s_m.toFixed(0) }),
       })),
     result.samples.length,
   )

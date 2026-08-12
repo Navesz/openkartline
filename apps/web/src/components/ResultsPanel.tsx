@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowRight, CircleGauge, Clock3, Gauge, Route } from 'lucide-react'
 import type { SimulationResult } from '../domain/types'
+import { useI18n } from '../i18n/context'
 
 interface ResultsPanelProps {
   result: SimulationResult | null
@@ -13,69 +14,75 @@ function formatLapTime(seconds: number): string {
   return `${minutes}:${(seconds - minutes * 60).toFixed(2).padStart(5, '0')}`
 }
 
-const eventLabel = { brake: 'FRENAGEM', apex: 'ÁPICE', throttle: 'RETOMADA' }
+const eventLabelKey = {
+  brake: 'results.eventBrake',
+  apex: 'results.eventApex',
+  throttle: 'results.eventThrottle',
+} as const
 
 export function ResultsPanel({ result, dirty, selectedSample, onSelect }: ResultsPanelProps) {
+  const { t } = useI18n()
+
   if (!result)
     return (
-      <aside className="results-panel empty-results" aria-label="Resultados">
+      <aside className="results-panel empty-results" aria-label={t('results.ariaEmpty')}>
         <div className="empty-orbit">
           <CircleGauge size={28} />
         </div>
-        <h2>Sua referência aparecerá aqui</h2>
-        <p>Ajuste a pista e o kart, depois execute a simulação.</p>
+        <h2>{t('results.emptyTitle')}</h2>
+        <p>{t('results.emptyBody')}</p>
       </aside>
     )
 
   const selected = selectedSample === null ? null : result.samples[selectedSample]
   const visibleEvents = result.events.slice(0, 10)
   return (
-    <aside className="results-panel" aria-label="Resultados da simulação">
+    <aside className="results-panel" aria-label={t('results.ariaLabel')}>
       <div className="result-title">
         <div>
-          <span className="eyebrow">03 · PLANO DE VOLTA</span>
-          <h2>{dirty ? 'Referência anterior' : 'Linha de referência'}</h2>
+          <span className="eyebrow">{t('results.stepLabel')}</span>
+          <h2>{dirty ? t('results.titleStale') : t('results.titleCurrent')}</h2>
         </div>
         <span className={`source-badge ${result.source}`}>
-          {result.source === 'api' ? 'Motor físico MVP' : 'Fallback local'}
+          {result.source === 'api' ? t('results.sourceApi') : t('results.sourceFallback')}
         </span>
       </div>
-      {dirty && <div className="stale-note">Parâmetros alterados. Simule novamente para atualizar.</div>}
+      {dirty && <div className="stale-note">{t('results.staleNote')}</div>}
       <div className="hero-time">
-        <span>VOLTA ESTIMADA</span>
+        <span>{t('results.estimatedLap')}</span>
         <strong>{formatLapTime(result.lapTimeS)}</strong>
-        <small>modelo {result.solver}</small>
+        <small>{t('results.solverLabel', { solver: result.solver })}</small>
       </div>
       <div className="metric-grid">
         <div>
           <Route size={16} />
-          <span>Extensão</span>
+          <span>{t('results.trackLength')}</span>
           <strong>{result.trackLengthM.toFixed(0)} m</strong>
         </div>
         <div>
           <Gauge size={16} />
-          <span>Máxima</span>
+          <span>{t('results.maxSpeed')}</span>
           <strong>{(result.maxSpeedMps * 3.6).toFixed(0)} km/h</strong>
         </div>
         <div>
           <Clock3 size={16} />
-          <span>Mínima</span>
+          <span>{t('results.minSpeed')}</span>
           <strong>{(result.minSpeedMps * 3.6).toFixed(0)} km/h</strong>
         </div>
       </div>
       {selected && (
         <div className="selected-readout">
-          <span>PONTO {selected.index + 1}</span>
+          <span>{t('results.pointLabel', { index: selected.index + 1 })}</span>
           <strong>{(selected.speedMps * 3.6).toFixed(0)} km/h</strong>
-          <small>{selected.distanceM.toFixed(0)} m após a largada</small>
+          <small>{t('results.distanceAfterStart', { distance: selected.distanceM.toFixed(0) })}</small>
         </div>
       )}
       <div className="events-heading">
-        <h3>Referências principais</h3>
-        <span aria-label={`${visibleEvents.length} de ${result.events.length} referências exibidas`}>
+        <h3>{t('results.keyReferences')}</h3>
+        <span aria-label={t('results.eventsShownAria', { shown: visibleEvents.length, total: result.events.length })}>
           {visibleEvents.length === result.events.length
             ? visibleEvents.length
-            : `${visibleEvents.length} de ${result.events.length}`}
+            : t('results.eventsShown', { shown: visibleEvents.length, total: result.events.length })}
         </span>
       </div>
       <ol className="event-list">
@@ -89,9 +96,9 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
               >
                 <span className={`event-index ${event.kind}`}>{index + 1}</span>
                 <span>
-                  <small>{eventLabel[event.kind]}</small>
+                  <small>{t(eventLabelKey[event.kind])}</small>
                   <strong>{event.label}</strong>
-                  <em>{sample?.distanceM.toFixed(0)} m da largada</em>
+                  <em>{t('results.distanceFromStart', { distance: sample?.distanceM.toFixed(0) ?? '' })}</em>
                 </span>
                 <ArrowRight size={15} />
               </button>
@@ -102,8 +109,10 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
       {!!result.warnings.length && (
         <details className="warnings">
           <summary>
-            <AlertTriangle size={15} /> {result.warnings.length} premissa
-            {result.warnings.length > 1 ? 's' : ''} da análise
+            <AlertTriangle size={15} />{' '}
+            {result.warnings.length > 1
+              ? t('results.assumptionsPlural', { n: result.warnings.length })
+              : t('results.assumptionsSingular', { n: result.warnings.length })}
           </summary>
           {result.warnings.map((warning, index) => (
             <p key={index}>{warning}</p>

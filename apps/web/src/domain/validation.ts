@@ -1,5 +1,6 @@
 import { validateTrack } from './geometry'
 import { KART_WIDTH_M } from './kartModel'
+import type { Translate } from '../i18n/context'
 import type { KartInput, SimulationSettings, TrackInput, ValidationIssue } from './types'
 
 export const INPUT_LIMITS = {
@@ -38,19 +39,22 @@ export function validateSimulationInput(
   track: TrackInput,
   kart: KartInput,
   settings: SimulationSettings,
+  t: Translate,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const limits = INPUT_LIMITS
 
   if (!track.name.trim() || track.name.trim().length > limits.projectNameMax) {
-    issues.push(error(`O nome da pista deve ter entre 1 e ${limits.projectNameMax} caracteres.`))
+    issues.push(error(t('validation.trackName', { max: limits.projectNameMax })))
   }
   if (
     track.centerline.length < limits.controlPointsMin ||
     track.centerline.length > limits.controlPointsMax
   ) {
     issues.push(
-      error(`Use entre ${limits.controlPointsMin} e ${limits.controlPointsMax} pontos de controle.`),
+      error(
+        t('validation.controlPoints', { min: limits.controlPointsMin, max: limits.controlPointsMax }),
+      ),
     )
   }
   const invalidCoordinate = track.centerline.findIndex(
@@ -63,12 +67,15 @@ export function validateSimulationInput(
   if (invalidCoordinate >= 0) {
     issues.push(
       error(
-        `O ponto ${invalidCoordinate + 1} precisa ter coordenadas finitas de até ${limits.coordinateAbsM.toLocaleString('pt-BR')} m.`,
+        t('validation.invalidCoordinate', {
+          index: invalidCoordinate + 1,
+          max: limits.coordinateAbsM,
+        }),
       ),
     )
   }
   if (!finite(track.widthM) || track.widthM <= 0 || track.widthM > limits.trackWidthMaxM) {
-    issues.push(error(`A largura deve ser maior que zero e no máximo ${limits.trackWidthMaxM} m.`))
+    issues.push(error(t('validation.width', { max: limits.trackWidthMaxM })))
   }
   if (
     track.centerline.length >= limits.controlPointsMin &&
@@ -76,15 +83,13 @@ export function validateSimulationInput(
     invalidCoordinate < 0 &&
     finite(track.widthM)
   ) {
-    issues.push(...validateTrack(track.centerline, track.widthM))
+    issues.push(...validateTrack(track.centerline, track.widthM, t))
   }
 
   // An uncalibrated background means the drawing is still in pixel units; a
   // lap time computed over pixels would look plausible and be entirely wrong.
   if (track.background && track.background.scaleMPerPx === undefined) {
-    issues.push(
-      error('A imagem de fundo ainda não tem escala: use a ferramenta Calibrar no mapa antes de simular.'),
-    )
+    issues.push(error(t('validation.backgroundUncalibrated')))
   }
 
   if (
@@ -93,7 +98,7 @@ export function validateSimulationInput(
     kart.kartMassKg > limits.kartMassKgMax
   ) {
     issues.push(
-      error(`A massa do kart deve ficar entre ${limits.kartMassKgMin} e ${limits.kartMassKgMax} kg.`),
+      error(t('validation.kartMass', { min: limits.kartMassKgMin, max: limits.kartMassKgMax })),
     )
   }
   if (
@@ -102,11 +107,11 @@ export function validateSimulationInput(
     kart.driverMassKg > limits.driverMassKgMax
   ) {
     issues.push(
-      error(`A massa do piloto deve ficar entre ${limits.driverMassKgMin} e ${limits.driverMassKgMax} kg.`),
+      error(t('validation.driverMass', { min: limits.driverMassKgMin, max: limits.driverMassKgMax })),
     )
   }
   if (!finite(kart.powerHp) || kart.powerHp < limits.powerHpMin || kart.powerHp > limits.powerHpMax) {
-    issues.push(error(`A potência deve ficar entre ${limits.powerHpMin} e ${limits.powerHpMax} hp.`))
+    issues.push(error(t('validation.power', { min: limits.powerHpMin, max: limits.powerHpMax })))
   }
   if (
     !finite(kart.topSpeedKph) ||
@@ -114,7 +119,7 @@ export function validateSimulationInput(
     kart.topSpeedKph > limits.topSpeedKphMax
   ) {
     issues.push(
-      error(`A velocidade máxima deve ficar entre ${limits.topSpeedKphMin} e ${limits.topSpeedKphMax} km/h.`),
+      error(t('validation.topSpeed', { min: limits.topSpeedKphMin, max: limits.topSpeedKphMax })),
     )
   }
   if (
@@ -123,7 +128,9 @@ export function validateSimulationInput(
     kart.gripCoefficient > limits.gripCoefficientMax
   ) {
     issues.push(
-      error(`A aderência deve ficar entre ${limits.gripCoefficientMin} e ${limits.gripCoefficientMax}.`),
+      error(
+        t('validation.grip', { min: limits.gripCoefficientMin, max: limits.gripCoefficientMax }),
+      ),
     )
   }
   if (
@@ -132,7 +139,9 @@ export function validateSimulationInput(
     kart.brakeDecelMps2 > limits.brakeDecelMaxMps2
   ) {
     issues.push(
-      error(`A frenagem deve ficar entre ${limits.brakeDecelMinMps2} e ${limits.brakeDecelMaxMps2} m/s².`),
+      error(
+        t('validation.braking', { min: limits.brakeDecelMinMps2, max: limits.brakeDecelMaxMps2 }),
+      ),
     )
   }
 
@@ -144,7 +153,7 @@ export function validateSimulationInput(
   ) {
     issues.push(
       error(
-        `A quantidade de amostras deve ser um inteiro entre ${limits.sampleCountMin} e ${limits.sampleCountMax}.`,
+        t('validation.sampleCount', { min: limits.sampleCountMin, max: limits.sampleCountMax }),
       ),
     )
   }
@@ -153,13 +162,9 @@ export function validateSimulationInput(
     settings.safetyMarginM < 0 ||
     settings.safetyMarginM > limits.safetyMarginMaxM
   ) {
-    issues.push(error(`A margem de segurança deve ficar entre 0 e ${limits.safetyMarginMaxM} m.`))
+    issues.push(error(t('validation.safetyMargin', { max: limits.safetyMarginMaxM })))
   } else if (finite(track.widthM) && KART_WIDTH_M + settings.safetyMarginM * 2 + 0.05 >= track.widthM) {
-    issues.push(
-      error(
-        `Com um kart de ${KART_WIDTH_M.toFixed(2)} m, essa margem deixa a pista sem corredor utilizável.`,
-      ),
-    )
+    issues.push(error(t('validation.noUsableCorridor', { kartWidth: KART_WIDTH_M.toFixed(2) })))
   }
   return issues.filter(
     (issue, index, all) => all.findIndex((candidate) => candidate.message === issue.message) === index,
