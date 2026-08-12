@@ -3,7 +3,6 @@ import {
   Check,
   CloudOff,
   Download,
-  Github,
   LoaderCircle,
   Play,
   Redo2,
@@ -13,6 +12,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { ControlPanel } from './components/ControlPanel'
+import { GithubIcon } from './components/GithubIcon'
 import { LapCharts } from './components/LapCharts'
 import { PlaybackBar } from './components/PlaybackBar'
 import { ResultsPanel } from './components/ResultsPanel'
@@ -349,7 +349,7 @@ export default function App() {
             rel="noreferrer"
             aria-label="Abrir OpenKartLine no GitHub"
           >
-            <Github size={18} />
+            <GithubIcon size={18} />
             <span className="desktop-only">GitHub</span>
           </a>
         </nav>
