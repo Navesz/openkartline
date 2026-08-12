@@ -1,6 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # The uv ecosystem regenerates uv.lock alongside pyproject.toml; the pip
+  # ecosystem does not, which left every Python bump failing `uv sync --locked`.
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: monthly
@@ -16,6 +18,11 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # TypeScript majors are held back until typescript-eslint declares support;
+    # otherwise the grouped dev PR fails lint on "does not support TS <version>".
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       javascript-runtime:
         dependency-type: production
