@@ -32,6 +32,22 @@ Este é um projeto de engenharia e aprendizado, não um sistema de segurança. O
 
 O solver atual é uma linha-base restrita, **não** uma trajetória de tempo mínimo global. Bordas esquerda/direita independentes, calibração por telemetria, otimização conjunta de caminho/controle e instaladores nativos estão no roadmap.
 
+## Como se compara
+
+Simulação de tempo de volta é um campo bem servido, e para boa parte dele existem ferramentas melhores que esta. O posicionamento honesto:
+
+| Projeto | Força | Onde ganha do OpenKartLine |
+|---|---|---|
+| [TUMFTM/global_racetrajectory_optimization](https://github.com/TUMFTM/global_racetrajectory_optimization) | Otimização de traçado por curvatura mínima e tempo mínimo, usado em corrida autônoma real | Na otimização em si, com folga. Formulações de tempo mínimo de verdade, tratamento de pista mais rico e pesquisa publicada por trás |
+| [fastest-lap](https://github.com/juanmanzanero/fastest-lap) | Simulador de dinâmica veicular com solvers de volta ótima | Fidelidade do modelo de veículo: suspensão, aerodinâmica e transferência de carga, que um modelo point-mass não tem |
+| [OpenLAP](https://github.com/mc12027/OpenLAP-Lap-Time-Simulator) | Simulador de tempo de volta em MATLAB, bem documentado | Profundidade do modelo de veículo e do material didático, se você já tem MATLAB |
+
+Os três miram carros de corrida de tamanho real e esperam que você monte um ambiente Python, C++ ou MATLAB antes de ver qualquer resultado.
+
+O OpenKartLine difere no escopo e na entrega. O escopo é kart e modelo point-mass, um problema deliberadamente menor. A entrega é um editor métrico interativo mais um solver que roda sem instalação e sem conta, em que os números do navegador batem com os do Python porque o port em TypeScript é testado à paridade contra fixtures commitadas, no limite do arredondamento. Importe uma imagem de satélite ou uma volta em GPX, arraste os pontos e leia as referências de frenagem na linha.
+
+Se você quer o melhor traçado possível para um carro de corrida, use o primeiro da lista. Se você quer raciocinar sobre uma volta de kart no navegador e ler o código que produziu o número, este aqui é para você.
+
 ## Início rápido
 
 Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.13 e [uv](https://docs.astral.sh/uv/).
@@ -56,7 +72,7 @@ Em outro terminal, execute a aplicação web:
 pnpm dev
 ```
 
-Abra `http://localhost:5173`. O cabeçalho mostra **Motor conectado** quando usa a API Python e **Modo local** quando usa o fallback determinístico do navegador. A documentação interativa da API fica em `http://127.0.0.1:8000/docs`.
+Abra `http://localhost:5173`. O cabeçalho mostra **Motor MVP conectado** quando usa a API Python e **Modo local** quando usa o fallback determinístico do navegador. A interface abre em inglês por padrão; use o controle EN/PT no cabeçalho para mudar para português. A documentação interativa da API fica em `http://127.0.0.1:8000/docs`.
 
 Para executar a verificação local completa:
 

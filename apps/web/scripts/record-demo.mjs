@@ -25,26 +25,26 @@ const capture = async (holdMs = 0) => {
 
 try {
   await page.goto(BASE_URL, { waitUntil: 'networkidle' })
-  await page.getByRole('heading', { name: 'Planeje uma volta melhor.' }).waitFor()
+  await page.getByRole('heading', { name: 'Plan a faster lap.' }).waitFor()
   // The app computes the racing line on load: hold on the solved default track.
   await capture(900)
   await capture(900)
 
   // Switch to a real OSM circuit for the "draw the track" beat.
-  await page.getByLabel('Começar com um exemplo').selectOption('voltaRedonda')
+  await page.getByLabel('Start from an example').selectOption('voltaRedonda')
   await capture(700)
-  await page.getByRole('button', { name: 'Recalcular volta' }).click()
-  await page.getByText('VOLTA ESTIMADA').waitFor()
+  await page.getByRole('button', { name: 'Recalculate lap' }).click()
+  await page.getByText('ESTIMATED LAP').waitFor()
   await capture(500)
   await capture(1200)
 
   // Playback beat: the kart marker circulating with brake/throttle colouring.
-  // The button's accessible name is "Animar" (the title attribute is not a name).
-  await page.getByRole('button', { name: 'Animar' }).click()
+  // The button's accessible name is "Animate" (the title attribute is not a name).
+  await page.getByRole('button', { name: 'Animate' }).click()
   for (let beat = 0; beat < 8; beat += 1) {
     await capture(650)
   }
-  await page.getByRole('button', { name: 'Animar' }).click()
+  await page.getByRole('button', { name: 'Animate' }).click()
   await capture(400)
 } finally {
   await browser.close()
