@@ -32,6 +32,22 @@ This is an engineering and learning tool, not a safety system. Its output is an 
 
 The current solver is a constrained baseline, **not** a globally optimal minimum-time trajectory. Independent left/right boundaries, telemetry calibration, joint path/control optimization, and native installers are roadmap work.
 
+## How it compares
+
+Lap-time simulation is a well-served field, and for most of it there are better tools than this one. The honest positioning:
+
+| Project | Strength | Where it beats OpenKartLine |
+|---|---|---|
+| [TUMFTM/global_racetrajectory_optimization](https://github.com/TUMFTM/global_racetrajectory_optimization) | Minimum-curvature and minimum-time raceline optimization, used in real autonomous racing | The optimization itself, by a wide margin. Genuine minimum-time formulations, richer track handling, published research behind it |
+| [fastest-lap](https://github.com/juanmanzanero/fastest-lap) | Vehicle dynamics simulator with optimal-lap-time solvers | Vehicle model fidelity: suspension, aerodynamics, and load transfer, none of which a point-mass model has |
+| [OpenLAP](https://github.com/mc12027/OpenLAP-Lap-Time-Simulator) | Well-documented MATLAB lap-time simulator with detailed vehicle modelling | Depth of the vehicle model and its teaching material, if you already have MATLAB |
+
+Those three target full-size race cars and expect you to bring a Python, C++, or MATLAB setup before you see a result.
+
+OpenKartLine differs in scope and in delivery. The scope is karts and a point-mass model, which is a deliberately smaller problem. The delivery is an interactive metric track editor plus a solver that runs with no install and no account, where the browser numbers match the Python numbers because the TypeScript port is parity-tested against committed Python fixtures to roundoff. Import a satellite image or a GPX lap, drag the points, and read braking references off the line.
+
+If you want the best possible racing line for a race car, use the first one on that list. If you want to reason about a kart lap in your browser and read the code that produced the number, this is aimed at you.
+
 ## Quick start
 
 Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.13, and [uv](https://docs.astral.sh/uv/).
@@ -56,7 +72,7 @@ Run the web application in another:
 pnpm dev
 ```
 
-Open `http://localhost:5173`. The header says **Motor conectado** when the Python API is in use and **Modo local** when the deterministic browser fallback is active. API documentation is available at `http://127.0.0.1:8000/docs`.
+Open `http://localhost:5173`. The header says **MVP engine connected** when the Python API is in use and **Local mode** when the deterministic browser fallback is active. The interface is in English by default and switches to Portuguese from the EN/PT control in the header. API documentation is available at `http://127.0.0.1:8000/docs`.
 
 Run the complete local verification:
 
