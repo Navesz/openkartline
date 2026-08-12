@@ -11,6 +11,7 @@ import {
   Undo2,
   Upload,
 } from 'lucide-react'
+import { BrandMark } from './components/BrandMark'
 import { ControlPanel } from './components/ControlPanel'
 import { GithubIcon } from './components/GithubIcon'
 import { LapCharts } from './components/LapCharts'
@@ -26,6 +27,8 @@ import { downscaleTrackImage, readImageFile, scaleFromCalibration } from './doma
 import type { KartInput, SimulationResult, SimulationSettings, TrackInput } from './domain/types'
 import { INPUT_LIMITS, validateSimulationInput } from './domain/validation'
 import { useHistory } from './hooks/useHistory'
+import { useI18n } from './i18n/context'
+import { LOCALES, LOCALE_LABEL } from './i18n/locales'
 import { checkApiHealth, runSimulation } from './services/api'
 import { downloadProject, parseProject, toProject } from './services/projectFile'
 
@@ -37,11 +40,12 @@ function freshPreset(key: string): TrackInput {
 }
 
 export default function App() {
+  const { t, locale, setLocale } = useI18n()
   const trackHistory = useHistory<TrackInput>(freshPreset('technical'))
   const [kart, setKart] = useState<KartInput>(DEFAULT_KART)
   const [settings, setSettings] = useState<SimulationSettings>(DEFAULT_SETTINGS)
   const [result, setResult] = useState<SimulationResult>(() =>
-    simulateInBrowser({ track: freshPreset('technical'), kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }),
+    simulateInBrowser({ track: freshPreset('technical'), kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }, t),
   )
   const [selectedSample, setSelectedSample] = useState<number | null>(null)
   const [tool, setTool] = useState<EditorTool>('edit')
@@ -51,13 +55,13 @@ export default function App() {
   const [elapsedS, setElapsedS] = useState(0)
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null)
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('success')
-  const [message, setMessage] = useState('Exemplo pronto para explorar.')
+  const [message, setMessage] = useState(() => t('app.statusReady'))
   const [dirty, setDirty] = useState(false)
   const [fitRequest, setFitRequest] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const issues = useMemo(
-    () => validateSimulationInput(trackHistory.value, kart, settings),
-    [trackHistory.value, kart, settings],
+    () => validateSimulationInput(trackHistory.value, kart, settings, t),
+    [trackHistory.value, kart, settings, t],
   )
   const hasErrors = issues.some((issue) => issue.level === 'error')
   const playbackFrame = useMemo(
@@ -156,44 +160,44 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     setDirty(true)
-    setMessage(`${next.name} carregado. Ajuste os pontos ou simule.`)
+    setMessage(t('app.statusPresetLoaded', { name: next.name }))
   }
 
   const simulate = async () => {
     if (hasErrors) {
       setStatus('error')
-      setMessage('Corrija os campos destacados antes de simular.')
+      setMessage(t('app.statusFixBeforeSimulating'))
       return
     }
     setStatus('running')
-    setMessage('Calculando trajetória e perfil de velocidade…')
+    setMessage(t('app.statusSolving'))
     setSelectedSample(null)
     try {
-      const next = await runSimulation({ track: trackHistory.value, kart, settings }, apiAvailable === true)
+      const next = await runSimulation(
+        { track: trackHistory.value, kart, settings },
+        apiAvailable === true,
+        t,
+      )
       setResult(next)
       setStatus('success')
       setDirty(false)
-      setMessage(
-        next.source === 'api'
-          ? 'Referência calculada pelo motor físico MVP.'
-          : 'Referência calculada localmente no navegador.',
-      )
+      setMessage(t(next.source === 'api' ? 'app.statusSolvedApi' : 'app.statusSolvedLocal'))
       if (apiAvailable && next.source === 'browser') setApiAvailable(false)
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'Não foi possível executar a simulação.')
+      setMessage(error instanceof Error ? error.message : t('app.statusSolveFailed'))
     }
   }
 
   const exportFile = () => {
     if (hasErrors) {
       setStatus('error')
-      setMessage('Corrija os campos destacados antes de salvar o projeto.')
+      setMessage(t('app.statusFixBeforeSaving'))
       return
     }
-    const built = toProject(trackHistory.value, kart, settings)
+    const built = toProject(trackHistory.value, kart, settings, t)
     downloadProject(built.project)
-    setMessage(['Projeto .okl.json salvo no seu dispositivo.', ...built.warnings].join(' '))
+    setMessage([t('app.statusProjectSaved'), ...built.warnings].join(' '))
     setStatus('success')
   }
 
@@ -203,11 +207,11 @@ export default function App() {
     if (!file) return
     if (file.size > INPUT_LIMITS.projectBytes) {
       setStatus('error')
-      setMessage('O projeto excede o limite de 1 MiB.')
+      setMessage(t('app.statusProjectTooLarge'))
       return
     }
     try {
-      const imported = parseProject(await file.text())
+      const imported = parseProject(await file.text(), t)
       trackHistory.reset(imported.track)
       setKart(imported.kart)
       setSettings(imported.settings)
@@ -216,29 +220,32 @@ export default function App() {
       setDirty(true)
       setStatus('success')
       setMessage(
-        imported.track.background && imported.track.background.scaleMPerPx === undefined
-          ? `${file.name} importado. Calibre a escala da imagem (ferramenta Calibrar) antes de simular.`
-          : `${file.name} importado com sucesso.`,
+        t(
+          imported.track.background && imported.track.background.scaleMPerPx === undefined
+            ? 'app.statusImportedNeedsScale'
+            : 'app.statusImported',
+          { name: file.name },
+        ),
       )
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'Arquivo inválido.')
+      setMessage(error instanceof Error ? error.message : t('app.statusInvalidFile'))
     }
   }
 
   const importBackgroundImage = async (file: File) => {
     try {
-      const image = await readImageFile(file)
-      const background = downscaleTrackImage(image)
+      const image = await readImageFile(file, t)
+      const background = downscaleTrackImage(image, t)
       trackHistory.set((current) => ({ ...current, background }))
       setFitRequest((value) => value + 1)
       setDirty(true)
       setStatus('success')
-      setMessage('Imagem adicionada. Use a ferramenta Calibrar para definir a escala antes de simular.')
+      setMessage(t('app.statusImageAdded'))
       setTool('calibrate')
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'Não foi possível importar a imagem.')
+      setMessage(error instanceof Error ? error.message : t('app.statusImageFailed'))
     }
   }
 
@@ -250,11 +257,11 @@ export default function App() {
     })
     setDirty(true)
     if (tool === 'calibrate') setTool('edit')
-    setMessage('Imagem de fundo removida.')
+    setMessage(t('app.statusImageRemoved'))
   }
 
   const applyCalibration = (pixelDistance: number, realMeters: number) => {
-    const newScale = scaleFromCalibration(pixelDistance, realMeters)
+    const newScale = scaleFromCalibration(pixelDistance, realMeters, t)
     trackHistory.set((current) => {
       if (!current.background) return current
       const oldScale = current.background.scaleMPerPx
@@ -272,12 +279,12 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setTool('edit')
     setStatus('success')
-    setMessage(`Escala aplicada: ${newScale.toFixed(3)} m/px. Ajuste os pontos e simule.`)
+    setMessage(t('app.statusScaleApplied', { scale: newScale.toFixed(3) }))
   }
 
   const importGpsFile = async (file: File) => {
     try {
-      const imported = parseGpsFile(file.name, await file.text())
+      const imported = parseGpsFile(file.name, await file.text(), t)
       trackHistory.set((current) => ({
         ...current,
         centerline: imported.centerline,
@@ -288,11 +295,15 @@ export default function App() {
       setDirty(true)
       setStatus('success')
       setMessage(
-        `GPS importado: ${imported.pointCountRaw} pontos → ${imported.centerline.length} de controle, ${(imported.lengthM / 1000).toFixed(2)} km. Revise a largura da pista.`,
+        t('app.statusGpsImported', {
+          raw: imported.pointCountRaw,
+          kept: imported.centerline.length,
+          km: (imported.lengthM / 1000).toFixed(2),
+        }),
       )
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'Não foi possível importar o GPS.')
+      setMessage(error instanceof Error ? error.message : t('app.statusGpsFailed'))
     }
   }
 
@@ -301,36 +312,57 @@ export default function App() {
     trackHistory.reset(track)
     setKart(DEFAULT_KART)
     setSettings(DEFAULT_SETTINGS)
-    setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
+    setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }, t))
     setDirty(false)
     setSelectedSample(null)
     setFitRequest((value) => value + 1)
-    setMessage('Exemplo restaurado.')
+    setMessage(t('app.statusExampleRestored'))
     setStatus('success')
   }
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace">
+        {t('app.skipToTrack')}
+      </a>
       <header className="app-header">
-        <a className="brand" href="./" aria-label="OpenKartLine — início">
+        <a className="brand" href="./" aria-label={t('app.brandHome')}>
           <span className="brand-mark">
-            <i />
-            <i />
-            <i />
+            <BrandMark size={34} />
           </span>
           <span>
             <strong>OpenKartLine</strong>
-            <small>RACING LINE LAB</small>
+            <small>{t('app.brandTagline')}</small>
           </span>
         </a>
-        <div className="header-status" title={apiAvailable ? 'API conectada' : 'Simulador local ativo'}>
+        <div
+          className="header-status"
+          title={apiAvailable ? t('app.engineTitleConnected') : t('app.engineTitleLocal')}
+        >
           <span className={apiAvailable ? 'online' : 'local'} />
-          {apiAvailable === null ? 'Verificando motor…' : apiAvailable ? 'Motor MVP conectado' : 'Modo local'}
+          {apiAvailable === null
+            ? t('app.engineChecking')
+            : apiAvailable
+              ? t('app.engineConnected')
+              : t('app.engineLocal')}
         </div>
-        <nav className="header-actions" aria-label="Ações do projeto">
+        <nav className="header-actions" aria-label={t('app.projectActions')}>
+          <div className="language-switch" role="group" aria-label={t('app.language')}>
+            {LOCALES.map((option) => (
+              <button
+                key={option}
+                className={option === locale ? 'active' : ''}
+                onClick={() => setLocale(option)}
+                aria-pressed={option === locale}
+                lang={option}
+              >
+                {LOCALE_LABEL[option]}
+              </button>
+            ))}
+          </div>
           <button onClick={() => fileInput.current?.click()}>
             <Upload size={16} />
-            <span>Importar</span>
+            <span>{t('app.import')}</span>
           </button>
           <input
             ref={fileInput}
@@ -341,16 +373,16 @@ export default function App() {
           />
           <button onClick={exportFile}>
             <Save size={16} />
-            <span>Salvar</span>
+            <span>{t('app.save')}</span>
           </button>
           <a
             href="https://github.com/Navesz/openkartline"
             target="_blank"
             rel="noreferrer"
-            aria-label="Abrir OpenKartLine no GitHub"
+            aria-label={t('app.githubAria')}
           >
             <GithubIcon size={18} />
-            <span className="desktop-only">GitHub</span>
+            <span className="desktop-only">{t('app.github')}</span>
           </a>
         </nav>
       </header>
@@ -358,18 +390,18 @@ export default function App() {
       <main>
         <div className="intro-bar">
           <div>
-            <span className="eyebrow">PLANEJAMENTO DE TRAJETÓRIA</span>
-            <h1>Planeje uma volta melhor.</h1>
-            <p>Desenhe a pista, descreva seu kart e transforme física em referências práticas.</p>
+            <span className="eyebrow">{t('app.introEyebrow')}</span>
+            <h1>{t('app.introTitle')}</h1>
+            <p>{t('app.introSubtitle')}</p>
           </div>
           <div className="project-actions">
-            <button onClick={trackHistory.undo} disabled={!trackHistory.canUndo} title="Desfazer (Ctrl+Z)">
+            <button onClick={trackHistory.undo} disabled={!trackHistory.canUndo} title={t('app.undo')}>
               <Undo2 size={16} />
             </button>
-            <button onClick={trackHistory.redo} disabled={!trackHistory.canRedo} title="Refazer (Ctrl+Y)">
+            <button onClick={trackHistory.redo} disabled={!trackHistory.canRedo} title={t('app.redo')}>
               <Redo2 size={16} />
             </button>
-            <button onClick={reset} title="Restaurar exemplo">
+            <button onClick={reset} title={t('app.restoreExample')}>
               <RotateCcw size={16} />
             </button>
           </div>
@@ -447,7 +479,11 @@ export default function App() {
                 disabled={status === 'running' || hasErrors}
               >
                 <Play size={17} fill="currentColor" />
-                {status === 'running' ? 'Calculando…' : dirty ? 'Recalcular volta' : 'Simular novamente'}
+                {status === 'running'
+                  ? t('app.runCalculating')
+                  : dirty
+                    ? t('app.runRecalculate')
+                    : t('app.runAgain')}
               </button>
             </div>
             {playbackFrame && (
@@ -480,10 +516,10 @@ export default function App() {
         </div>
       </main>
       <footer>
-        <span>OpenKartLine · aberto, reproduzível e feito para aprender</span>
-        <span>A simulação é uma estimativa. Pilote dentro dos seus limites e das regras da pista.</span>
+        <span>{t('app.footerTagline')}</span>
+        <span>{t('app.footerDisclaimer')}</span>
         <a href="https://github.com/Navesz/openkartline" target="_blank" rel="noreferrer">
-          <Download size={14} /> Código aberto
+          <Download size={14} /> {t('app.footerSource')}
         </a>
       </footer>
     </div>

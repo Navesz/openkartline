@@ -1,0 +1,60 @@
+import { defineMessages } from '../locales'
+
+export const canvas = defineMessages({
+  'canvas.sectionLabel': { en: 'Track visual editor', 'pt-BR': 'Editor visual da pista' },
+  'canvas.toolbarLabel': { en: 'Editor tools', 'pt-BR': 'Ferramentas do editor' },
+  'canvas.toolEditTitle': { en: 'Edit points (V)', 'pt-BR': 'Editar pontos (V)' },
+  'canvas.toolEdit': { en: 'Edit', 'pt-BR': 'Editar' },
+  'canvas.toolAddTitle': { en: 'Add point (A)', 'pt-BR': 'Adicionar ponto (A)' },
+  'canvas.toolAdd': { en: 'Point', 'pt-BR': 'Ponto' },
+  'canvas.toolPanTitle': { en: 'Pan view (H)', 'pt-BR': 'Mover visualização (H)' },
+  'canvas.toolPan': { en: 'Move', 'pt-BR': 'Mover' },
+  'canvas.toolCalibrateTitle': { en: 'Calibrate image scale (C)', 'pt-BR': 'Calibrar escala da imagem (C)' },
+  'canvas.toolCalibrate': { en: 'Calibrate', 'pt-BR': 'Calibrar' },
+  'canvas.fitTitle': { en: 'Fit track to view', 'pt-BR': 'Enquadrar pista' },
+  'canvas.fit': { en: 'Fit', 'pt-BR': 'Enquadrar' },
+  'canvas.playTitle': { en: 'Animate the lap', 'pt-BR': 'Animar a volta' },
+  'canvas.play': { en: 'Animate', 'pt-BR': 'Animar' },
+  'canvas.hintEdit': {
+    en: 'Drag the points to adjust the layout',
+    'pt-BR': 'Arraste os pontos para ajustar o traçado',
+  },
+  'canvas.hintAdd': {
+    en: 'Click the background to add points',
+    'pt-BR': 'Clique no fundo para adicionar pontos',
+  },
+  'canvas.hintCalibrateStart': {
+    en: 'Mark two points of known distance (e.g. the start straight)',
+    'pt-BR': 'Marque dois pontos de distância conhecida (ex.: a reta de largada)',
+  },
+  'canvas.hintCalibrateScale': {
+    en: 'Current scale: {scale} m/px · mark two points to recalibrate',
+    'pt-BR': 'Escala atual: {scale} m/px · marque dois pontos para recalibrar',
+  },
+  'canvas.hintPan': {
+    en: 'Drag to move · scroll to zoom',
+    'pt-BR': 'Arraste para mover · role para ampliar',
+  },
+  'canvas.trackAria': {
+    en: '{name} layout with {count} control points',
+    'pt-BR': 'Traçado {name} com {count} pontos de controle',
+  },
+  'canvas.startLine': { en: 'Start line', 'pt-BR': 'Linha de largada' },
+  'canvas.calibrationLabel': {
+    en: 'Real distance between the marked points',
+    'pt-BR': 'Distância real entre os pontos marcados',
+  },
+  'canvas.calibrationApply': { en: 'Apply scale', 'pt-BR': 'Aplicar escala' },
+  'canvas.calibrationCancel': { en: 'Cancel', 'pt-BR': 'Cancelar' },
+  'canvas.calibrationNote': {
+    en: 'The layout over the image will be converted from pixels to metres.',
+    'pt-BR': 'O traçado sobre a imagem será convertido de pixels para metros.',
+  },
+  'canvas.calibrationInvalid': { en: 'Invalid calibration.', 'pt-BR': 'Calibração inválida.' },
+  'canvas.legendLabel': { en: 'Legend', 'pt-BR': 'Legenda' },
+  'canvas.legendBrake': { en: 'Braking', 'pt-BR': 'Freio' },
+  'canvas.legendCoast': { en: 'Coasting', 'pt-BR': 'Transição' },
+  'canvas.legendThrottle': { en: 'On throttle', 'pt-BR': 'Acelerador' },
+  'canvas.removeLastTitle': { en: 'Remove last point', 'pt-BR': 'Remover último ponto' },
+  'canvas.removeLast': { en: 'Remove last', 'pt-BR': 'Remover último' },
+})

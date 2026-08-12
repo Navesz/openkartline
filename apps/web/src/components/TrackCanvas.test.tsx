@@ -1,12 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { PRESETS } from '../domain/presets'
+import { I18nProvider } from '../i18n/I18nProvider'
 import { TrackCanvas } from './TrackCanvas'
+
+function renderCanvas(ui: React.ReactElement) {
+  return render(<I18nProvider>{ui}</I18nProvider>)
+}
 
 describe('TrackCanvas', () => {
   it('adds a control point when the add tool clicks the grid background', () => {
     const onPointsChange = vi.fn()
-    render(
+    renderCanvas(
       <TrackCanvas
         track={PRESETS.oval}
         result={null}
@@ -47,7 +52,7 @@ describe('TrackCanvas', () => {
     // Track coordinates are metric with +y north. SVG y grows downward, so
     // drawing them straight in mirrored every circuit vertically and made the
     // direction control read backwards. The flip is the fix; assert it stays.
-    render(
+    renderCanvas(
       <TrackCanvas
         track={PRESETS.oval}
         result={null}

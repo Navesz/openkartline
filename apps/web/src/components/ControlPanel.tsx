@@ -18,6 +18,7 @@ import {
 import { KART_PRESETS, toKartInput } from '../domain/presets'
 import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
+import { useI18n } from '../i18n/context'
 
 interface NumberFieldProps {
   id: string
@@ -97,6 +98,7 @@ export function ControlPanel({
   onRemoveImage,
   onGpsFile,
 }: ControlPanelProps) {
+  const { t } = useI18n()
   const [pointIndex, setPointIndex] = useState(0)
   const imageInput = useRef<HTMLInputElement>(null)
   const gpsInput = useRef<HTMLInputElement>(null)
@@ -106,27 +108,27 @@ export function ControlPanel({
   const selectedPoint = track.centerline[pointIndex]
 
   return (
-    <aside className="control-panel" aria-label="Configuração da simulação">
+    <aside className="control-panel" aria-label={t('panel.ariaConfig')}>
       <section className="panel-section">
         <div className="section-heading">
           <div>
             <span className="step-number">01</span>
-            <span className="eyebrow">PISTA</span>
-            <h2>Defina o traçado</h2>
+            <span className="eyebrow">{t('panel.trackEyebrow')}</span>
+            <h2>{t('panel.trackHeading')}</h2>
           </div>
         </div>
         <label className="field" htmlFor="preset">
           <span className="field-label">
-            <Flag size={15} /> Começar com um exemplo
+            <Flag size={15} /> {t('panel.startFromExample')}
           </span>
           <span className="select-wrap">
             <select id="preset" defaultValue="technical" onChange={(event) => onPreset(event.target.value)}>
-              <optgroup label="Sintéticas">
-                <option value="technical">Circuito Aurora</option>
-                <option value="oval">Oval de validação</option>
-                <option value="hairpin">Complexo Hairpin</option>
+              <optgroup label={t('panel.syntheticGroup')}>
+                <option value="technical">{t('panel.trackAurora')}</option>
+                <option value="oval">{t('panel.trackOval')}</option>
+                <option value="hairpin">{t('panel.trackHairpin')}</option>
               </optgroup>
-              <optgroup label="Reais (OpenStreetMap)">
+              <optgroup label={t('panel.realGroup')}>
                 <option value="voltaRedonda">Kartódromo Int. de Volta Redonda</option>
                 <option value="adria">Adria Karting Raceway</option>
                 <option value="casteloBranco">Kartódromo de Castelo Branco</option>
@@ -138,11 +140,11 @@ export function ControlPanel({
         </label>
         {track.attribution && (
           <p className="track-attribution">
-            Traçado: {track.attribution}. Geometria mapeada, não levantamento topográfico.
+            {t('panel.trackAttribution', { attribution: track.attribution })}
           </p>
         )}
         <label className="field" htmlFor="track-name">
-          <span className="field-label">Nome da pista</span>
+          <span className="field-label">{t('panel.trackName')}</span>
           <input
             id="track-name"
             value={track.name}
@@ -153,7 +155,7 @@ export function ControlPanel({
         <div className="two-columns">
           <NumberField
             id="track-width"
-            label="Largura"
+            label={t('panel.width')}
             value={track.widthM}
             unit="m"
             min={0.1}
@@ -163,36 +165,36 @@ export function ControlPanel({
             onChange={(widthM) => onTrack({ widthM })}
           />
           <label className="field" htmlFor="direction">
-            <span className="field-label">Sentido</span>
+            <span className="field-label">{t('panel.direction')}</span>
             <span className="select-wrap">
               <select
                 id="direction"
                 value={track.direction}
                 onChange={(event) => onTrack({ direction: event.target.value as TrackInput['direction'] })}
               >
-                <option value="clockwise">Horário</option>
-                <option value="counterclockwise">Anti-horário</option>
+                <option value="clockwise">{t('panel.clockwise')}</option>
+                <option value="counterclockwise">{t('panel.counterclockwise')}</option>
               </select>
               <ChevronDown size={15} />
             </span>
           </label>
         </div>
         <div className="track-meta">
-          <span>{track.centerline.length} pontos</span>
+          <span>{t('panel.pointsCount', { count: track.centerline.length })}</span>
           <span>
             {track.background && track.background.scaleMPerPx === undefined
-              ? 'imagem sem escala — calibre antes de simular'
-              : 'coordenadas em metros'}
+              ? t('panel.noScaleWarning')
+              : t('panel.metersCoordinates')}
           </span>
         </div>
         <div className="import-tools">
-          <span className="field-label">Traçar a partir da pista real</span>
+          <span className="field-label">{t('panel.traceFromReal')}</span>
           <div className="import-tools-row">
             <button type="button" onClick={() => imageInput.current?.click()}>
-              <ImageIcon size={15} /> Imagem da pista
+              <ImageIcon size={15} /> {t('panel.trackImageButton')}
             </button>
             <button type="button" onClick={() => gpsInput.current?.click()}>
-              <MapPin size={15} /> GPS (GPX/CSV)
+              <MapPin size={15} /> {t('panel.gpsButton')}
             </button>
           </div>
           <input
@@ -200,7 +202,7 @@ export function ControlPanel({
             type="file"
             accept="image/png,image/jpeg"
             className="visually-hidden"
-            aria-label="Importar imagem da pista"
+            aria-label={t('panel.importTrackImageAria')}
             onChange={(event) => {
               const file = event.target.files?.[0]
               event.target.value = ''
@@ -212,7 +214,7 @@ export function ControlPanel({
             type="file"
             accept=".gpx,.csv,application/gpx+xml,text/csv"
             className="visually-hidden"
-            aria-label="Importar trajeto GPS"
+            aria-label={t('panel.importGpsAria')}
             onChange={(event) => {
               const file = event.target.files?.[0]
               event.target.value = ''
@@ -221,13 +223,16 @@ export function ControlPanel({
           />
           {track.background && (
             <p className="background-status">
-              Imagem {track.background.imageWidthPx}×{track.background.imageHeightPx} px
+              {t('panel.imageDimensions', {
+                width: track.background.imageWidthPx,
+                height: track.background.imageHeightPx,
+              })}
               {track.background.scaleMPerPx
-                ? ` · escala ${track.background.scaleMPerPx.toFixed(3)} m/px`
-                : ' · sem escala (use a ferramenta Calibrar no mapa)'}
+                ? t('panel.imageScale', { scale: track.background.scaleMPerPx.toFixed(3) })
+                : t('panel.imageNoScale')}
               {' · '}
               <button type="button" className="link-button" onClick={onRemoveImage}>
-                remover
+                {t('panel.removeButton')}
               </button>
             </p>
           )}
@@ -235,18 +240,18 @@ export function ControlPanel({
         {selectedPoint && (
           <details className="point-editor">
             <summary>
-              <Ruler size={15} /> Editar ponto por coordenadas <ChevronDown size={14} />
+              <Ruler size={15} /> {t('panel.editPointSummary')} <ChevronDown size={14} />
             </summary>
             <div className="point-picker">
               <button
                 type="button"
-                aria-label="Ponto anterior"
+                aria-label={t('panel.previousPointAria')}
                 disabled={pointIndex === 0}
                 onClick={() => setPointIndex((index) => Math.max(0, index - 1))}
               >
                 <ChevronLeft size={15} />
               </button>
-              <label htmlFor="control-point">Ponto</label>
+              <label htmlFor="control-point">{t('panel.pointLabel')}</label>
               <select
                 id="control-point"
                 value={pointIndex}
@@ -254,13 +259,13 @@ export function ControlPanel({
               >
                 {track.centerline.map((_, index) => (
                   <option key={index} value={index}>
-                    {index + 1} de {track.centerline.length}
+                    {t('panel.pointOf', { index: index + 1, total: track.centerline.length })}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
-                aria-label="Próximo ponto"
+                aria-label={t('panel.nextPointAria')}
                 disabled={pointIndex === track.centerline.length - 1}
                 onClick={() => setPointIndex((index) => Math.min(track.centerline.length - 1, index + 1))}
               >
@@ -270,7 +275,7 @@ export function ControlPanel({
             <div className="point-coordinates">
               <NumberField
                 id="point-x"
-                label={`Ponto ${pointIndex + 1} · X`}
+                label={t('panel.pointCoordinate', { index: pointIndex + 1, axis: 'X' })}
                 value={selectedPoint.x}
                 unit="m"
                 min={-100_000}
@@ -280,7 +285,7 @@ export function ControlPanel({
               />
               <NumberField
                 id="point-y"
-                label={`Ponto ${pointIndex + 1} · Y`}
+                label={t('panel.pointCoordinate', { index: pointIndex + 1, axis: 'Y' })}
                 value={selectedPoint.y}
                 unit="m"
                 min={-100_000}
@@ -295,7 +300,7 @@ export function ControlPanel({
               disabled={track.centerline.length <= 4}
               onClick={() => onPointRemove(pointIndex)}
             >
-              <Trash2 size={14} /> Remover ponto {pointIndex + 1}
+              <Trash2 size={14} /> {t('panel.removePoint', { index: pointIndex + 1 })}
             </button>
           </details>
         )}
@@ -314,13 +319,13 @@ export function ControlPanel({
         <div className="section-heading">
           <div>
             <span className="step-number">02</span>
-            <span className="eyebrow">KART + PILOTO</span>
-            <h2>Modele seu conjunto</h2>
+            <span className="eyebrow">{t('panel.kartEyebrow')}</span>
+            <h2>{t('panel.kartHeading')}</h2>
           </div>
         </div>
         <label className="field" htmlFor="kart-preset">
           <span className="field-label">
-            <Sparkles size={15} /> Categoria
+            <Sparkles size={15} /> {t('panel.category')}
           </span>
           <span className="select-wrap">
             <select
@@ -331,10 +336,10 @@ export function ControlPanel({
                 if (preset) onKart(toKartInput(preset))
               }}
             >
-              <option value="">Personalizado</option>
+              <option value="">{t('panel.custom')}</option>
               {Object.entries(KART_PRESETS).map(([key, preset]) => (
                 <option key={key} value={key}>
-                  {preset.label}
+                  {t(preset.labelKey)}
                 </option>
               ))}
             </select>
@@ -343,13 +348,11 @@ export function ControlPanel({
         </label>
         {/* Outside the label: inside it, this text joins the select's accessible
             name and collides with the "Potência" field below. */}
-        <p className="preset-note">
-          Potências e pesos mínimos são publicados; aderência e frenagem são estimativas.
-        </p>
+        <p className="preset-note">{t('panel.presetNote')}</p>
         <div className="two-columns">
           <NumberField
             id="power"
-            label="Potência"
+            label={t('panel.power')}
             value={kart.powerHp}
             unit="hp"
             min={1}
@@ -360,7 +363,7 @@ export function ControlPanel({
           />
           <NumberField
             id="top-speed"
-            label="Vel. máxima"
+            label={t('panel.topSpeed')}
             value={kart.topSpeedKph}
             unit="km/h"
             min={10}
@@ -370,7 +373,7 @@ export function ControlPanel({
           />
           <NumberField
             id="kart-mass"
-            label="Kart"
+            label={t('panel.kartMass')}
             value={kart.kartMassKg}
             unit="kg"
             min={20}
@@ -380,7 +383,7 @@ export function ControlPanel({
           />
           <NumberField
             id="driver-mass"
-            label="Piloto"
+            label={t('panel.driverMass')}
             value={kart.driverMassKg}
             unit="kg"
             min={20}
@@ -391,23 +394,23 @@ export function ControlPanel({
         </div>
         <details className="advanced-settings">
           <summary>
-            <Sparkles size={15} /> Ajustes avançados <ChevronDown size={14} />
+            <Sparkles size={15} /> {t('panel.advancedSettings')} <ChevronDown size={14} />
           </summary>
           <div className="two-columns">
             <NumberField
               id="grip"
-              label="Aderência μ"
+              label={t('panel.grip')}
               value={kart.gripCoefficient}
               unit="μ"
               min={0.2}
               max={2}
               step={0.05}
-              hint="1,0 ≈ pneu rental seco"
+              hint={t('panel.gripHint')}
               onChange={(gripCoefficient) => onKart({ gripCoefficient })}
             />
             <NumberField
               id="braking"
-              label="Frenagem"
+              label={t('panel.braking')}
               value={kart.brakeDecelMps2}
               unit="m/s²"
               min={0.5}
@@ -417,18 +420,18 @@ export function ControlPanel({
             />
             <NumberField
               id="margin"
-              label="Margem"
+              label={t('panel.margin')}
               value={settings.safetyMarginM}
               unit="m"
               min={0}
               max={3}
               step={0.1}
-              hint="Distância mínima da borda"
+              hint={t('panel.marginHint')}
               onChange={(safetyMarginM) => onSettings({ safetyMarginM })}
             />
             <NumberField
               id="samples"
-              label="Amostras"
+              label={t('panel.samples')}
               value={settings.sampleCount}
               unit="pts"
               min={64}
@@ -440,7 +443,7 @@ export function ControlPanel({
         </details>
         <div className="mass-summary">
           <CircleGauge size={16} />
-          <span>Massa total</span>
+          <span>{t('panel.totalMass')}</span>
           <strong>{kart.kartMassKg + kart.driverMassKg} kg</strong>
         </div>
       </section>

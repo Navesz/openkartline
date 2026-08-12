@@ -1,3 +1,4 @@
+import type { Translate } from '../i18n/context'
 import { signedArea } from './geometry'
 import type { Direction, Point } from './types'
 
@@ -28,9 +29,8 @@ interface LatLon {
  * need `lat`/`lon` on `<trkpt>`; feeding the whole file into a parser would
  * reinterpret user text as markup for no benefit.
  */
-export function parseGpx(text: string): LatLon[] {
-  if (!/<gpx\b/i.test(text) || !/<trkpt\b/i.test(text))
-    throw new Error('O arquivo GPX não contém pontos de trajeto (<trkpt>).')
+export function parseGpx(text: string, t: Translate): LatLon[] {
+  if (!/<gpx\b/i.test(text) || !/<trkpt\b/i.test(text)) throw new Error(t('imports.gpxNoPoints'))
   const points: LatLon[] = []
   const tagPattern = /<trkpt\b([^>]*)>/gi
   const latPattern = /\blat\s*=\s*["']([^"']+)["']/i
@@ -41,11 +41,11 @@ export function parseGpx(text: string): LatLon[] {
     const lon = Number(attrs.match(lonPattern)?.[1])
     points.push({ lat, lon })
   }
-  return validatedLatLon(points, 'GPX')
+  return validatedLatLon(points, 'GPX', t)
 }
 
 /** Track points from CSV rows of `lat,lon` (an optional header is skipped). */
-export function parseCsvLatLon(text: string): LatLon[] {
+export function parseCsvLatLon(text: string, t: Translate): LatLon[] {
   const points: LatLon[] = []
   text.split(/\r?\n/).forEach((line, index) => {
     const trimmed = line.trim()
@@ -55,16 +55,16 @@ export function parseCsvLatLon(text: string): LatLon[] {
     const lon = Number(columns[1])
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
       if (index === 0 && /[a-z]/i.test(trimmed)) return // header row
-      throw new Error(`Linha ${index + 1} do CSV não contém "lat,lon" numérico.`)
+      throw new Error(t('imports.csvInvalidRow', { line: index + 1 }))
     }
     points.push({ lat, lon })
   })
-  return validatedLatLon(points, 'CSV')
+  return validatedLatLon(points, 'CSV', t)
 }
 
-function validatedLatLon(points: LatLon[], source: string): LatLon[] {
+function validatedLatLon(points: LatLon[], source: string, t: Translate): LatLon[] {
   if (points.length > GPS_LIMITS.maxPointsRaw)
-    throw new Error(`O ${source} excede o limite de ${GPS_LIMITS.maxPointsRaw} pontos.`)
+    throw new Error(t('imports.tooManyPoints', { source, limit: GPS_LIMITS.maxPointsRaw }))
   const usable = points.filter(
     (point) =>
       Number.isFinite(point.lat) &&
@@ -72,7 +72,7 @@ function validatedLatLon(points: LatLon[], source: string): LatLon[] {
       Math.abs(point.lat) <= 90 &&
       Math.abs(point.lon) <= 180,
   )
-  if (usable.length < 8) throw new Error(`O ${source} precisa de pelo menos 8 pontos de trajeto válidos.`)
+  if (usable.length < 8) throw new Error(t('imports.notEnoughPoints', { source }))
   return usable
 }
 
@@ -140,7 +140,7 @@ export function simplifyClosedTrack(points: Point[], toleranceM: number): Point[
  * simplify, and detect travel direction from the signed area (GPS loggers
  * record the direction actually driven).
  */
-export function gpsToTrack(points: LatLon[]): GpsTrack {
+export function gpsToTrack(points: LatLon[], t: Translate): GpsTrack {
   const metric = latLonToMetric(points)
   // Walk against the last KEPT point, not the immediate predecessor. Comparing
   // with the predecessor drops every point of a uniformly dense trace, because
@@ -167,12 +167,11 @@ export function gpsToTrack(points: LatLon[]): GpsTrack {
     0,
   )
   if (lengthM < GPS_LIMITS.minTrackLengthM)
-    throw new Error(`O trajeto tem ${lengthM.toFixed(0)} m — curto demais para uma pista.`)
+    throw new Error(t('imports.trackTooShort', { length: lengthM.toFixed(0) }))
   if (lengthM > GPS_LIMITS.maxTrackLengthM)
-    throw new Error(`O trajeto tem ${(lengthM / 1000).toFixed(1)} km — acima do esperado para kart.`)
+    throw new Error(t('imports.trackTooLong', { length: (lengthM / 1000).toFixed(1) }))
   const centerline = simplifyClosedTrack(deduped, GPS_LIMITS.simplifyToleranceM)
-  if (centerline.length < 4)
-    throw new Error('O trajeto simplificado ficou com menos de 4 pontos; grave uma volta completa.')
+  if (centerline.length < 4) throw new Error(t('imports.simplifiedTooFewPoints'))
   return {
     centerline,
     direction: signedArea(centerline) > 0 ? 'counterclockwise' : 'clockwise',
@@ -182,8 +181,8 @@ export function gpsToTrack(points: LatLon[]): GpsTrack {
 }
 
 /** Pick the parser from the file extension, defaulting to GPX. */
-export function parseGpsFile(name: string, text: string): GpsTrack {
+export function parseGpsFile(name: string, text: string, t: Translate): GpsTrack {
   const lower = name.toLowerCase()
-  const points = lower.endsWith('.csv') ? parseCsvLatLon(text) : parseGpx(text)
-  return gpsToTrack(points)
+  const points = lower.endsWith('.csv') ? parseCsvLatLon(text, t) : parseGpx(text, t)
+  return gpsToTrack(points, t)
 }

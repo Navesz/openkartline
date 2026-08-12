@@ -114,35 +114,27 @@ summary:focus-visible {
   letter-spacing: 0.17em;
 }
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  border: 1px solid #466455;
-  background: #18271f;
-  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+.language-switch {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   overflow: hidden;
-  transform: skew(-5deg);
 }
-.brand-mark i {
-  position: absolute;
-  height: 2px;
-  width: 27px;
+.language-switch button {
+  border: 0;
+  border-radius: 0;
+  padding: 0.34rem 0.6rem;
+  font: 600 0.68rem/1 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: transparent;
+}
+.language-switch button.active {
   background: var(--green);
-  border-radius: 5px;
-  transform: rotate(-28deg);
-  left: 4px;
-}
-.brand-mark i:first-child {
-  top: 9px;
-  width: 17px;
-}
-.brand-mark i:nth-child(2) {
-  top: 16px;
-}
-.brand-mark i:last-child {
-  top: 23px;
-  width: 20px;
-  left: 12px;
+  color: #06120c;
 }
 .header-status {
   display: flex;

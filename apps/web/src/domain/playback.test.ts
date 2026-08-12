@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { frameAtElapsed, wrapElapsed } from './playback'
 import { DEFAULT_KART, PRESETS } from './presets'
 import { simulateInBrowser } from './simulator'
 import type { SimulationResult } from './types'
 
-const result: SimulationResult = simulateInBrowser({
-  track: PRESETS.technical,
-  kart: DEFAULT_KART,
-  settings: { safetyMarginM: 0.55, sampleCount: 200 },
-})
+const t: Translate = (key, params) => translate('en', key, params)
+
+const result: SimulationResult = simulateInBrowser(
+  {
+    track: PRESETS.technical,
+    kart: DEFAULT_KART,
+    settings: { safetyMarginM: 0.55, sampleCount: 200 },
+  },
+  t,
+)
 
 describe('lap playback', () => {
   it('walks the whole lap once and loops without a seam', () => {

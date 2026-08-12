@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import {
   dataUrlBytes,
   fitsProjectBudget,
@@ -6,6 +8,8 @@ import {
   scaleFromCalibration,
   TRACK_IMAGE_LIMITS,
 } from './trackImage'
+
+const t: Translate = (key, params) => translate('en', key, params)
 
 // 1x1 red JPEG, small enough to keep in source.
 const TINY_JPEG =
@@ -50,20 +54,20 @@ describe('fitsProjectBudget', () => {
 
 describe('scaleFromCalibration', () => {
   it('computes metres per pixel from a known segment', () => {
-    expect(scaleFromCalibration(250, 100)).toBeCloseTo(0.4)
+    expect(scaleFromCalibration(250, 100, t)).toBeCloseTo(0.4)
   })
 
   it('rejects zero or negative real distances', () => {
-    expect(() => scaleFromCalibration(250, 0)).toThrow(/maior que zero/)
-    expect(() => scaleFromCalibration(250, -10)).toThrow(/maior que zero/)
+    expect(() => scaleFromCalibration(250, 0, t)).toThrow(/greater than zero/)
+    expect(() => scaleFromCalibration(250, -10, t)).toThrow(/greater than zero/)
   })
 
   it('rejects clicks that are too close together to be meaningful', () => {
-    expect(() => scaleFromCalibration(2, 100)).toThrow(/mais afastados/)
+    expect(() => scaleFromCalibration(2, 100, t)).toThrow(/farther apart/)
   })
 
   it('rejects implausible scales for a kart track', () => {
-    expect(() => scaleFromCalibration(5, 100)).toThrow(/fora do esperado/)
-    expect(() => scaleFromCalibration(100_000, 10)).toThrow(/fora do esperado/)
+    expect(() => scaleFromCalibration(5, 100, t)).toThrow(/outside what is expected/)
+    expect(() => scaleFromCalibration(100_000, 10, t)).toThrow(/outside what is expected/)
   })
 })

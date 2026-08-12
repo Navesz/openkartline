@@ -1,4 +1,5 @@
 import type { SimulationResult } from '../domain/types'
+import { useI18n } from '../i18n/context'
 
 interface LapChartsProps {
   result: SimulationResult
@@ -32,6 +33,7 @@ function cursorIndex(event: React.PointerEvent<SVGSVGElement>, count: number): n
 }
 
 export function LapCharts({ result, selectedSample, onSelectedSample }: LapChartsProps) {
+  const { t } = useI18n()
   const speeds = result.samples.map((sample) => sample.speedMps * 3.6)
   const maxSpeed = Math.ceil(Math.max(...speeds) / 10) * 10
   const speedPath = linePath(speeds, maxSpeed)
@@ -54,11 +56,11 @@ export function LapCharts({ result, selectedSample, onSelectedSample }: LapChart
   }))
 
   return (
-    <section className="chart-card" aria-label="Telemetria simulada">
+    <section className="chart-card" aria-label={t('results.telemetryAria')}>
       <div className="section-heading compact">
         <div>
-          <span className="eyebrow">VOLTA SIMULADA</span>
-          <h2>Velocidade e comandos</h2>
+          <span className="eyebrow">{t('results.simulatedLapEyebrow')}</span>
+          <h2>{t('results.speedAndInputs')}</h2>
         </div>
         {selected && (
           <div className="hover-readout">
@@ -71,7 +73,7 @@ export function LapCharts({ result, selectedSample, onSelectedSample }: LapChart
         className="lap-chart"
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label="Gráfico sincronizado de velocidade, acelerador e freio ao longo da volta"
+        aria-label={t('results.chartAria')}
         onPointerMove={(event) => onSelectedSample(cursorIndex(event, result.samples.length))}
         onPointerLeave={() => onSelectedSample(null)}
       >
@@ -122,10 +124,10 @@ export function LapCharts({ result, selectedSample, onSelectedSample }: LapChart
         )}
       </svg>
       <div className="chart-legend">
-        <span className="speed-key">Velocidade</span>
-        <span className="throttle-key">Acelerador</span>
-        <span className="brake-key">Freio</span>
-        <span className="chart-help">Passe o cursor para localizar na pista</span>
+        <span className="speed-key">{t('results.legendSpeed')}</span>
+        <span className="throttle-key">{t('results.legendThrottle')}</span>
+        <span className="brake-key">{t('results.legendBrake')}</span>
+        <span className="chart-help">{t('results.legendHelp')}</span>
       </div>
     </section>
   )

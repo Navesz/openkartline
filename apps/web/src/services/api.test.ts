@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import type { SimulationRequest } from '../domain/types'
+import type { Translate } from '../i18n/context'
+import { translate } from '../i18n/translate'
 import { ScientificSimulationError, runSimulation, toApiRequest } from './api'
+
+const t: Translate = (key, params) => translate('en', key, params)
 
 const request: SimulationRequest = {
   track: PRESETS.oval,
@@ -30,7 +34,7 @@ describe('engine API adapter', () => {
 
   it('uses the browser solver when the API request fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
-    const result = await runSimulation(request, true)
+    const result = await runSimulation(request, true, t)
     expect(result.source).toBe('browser')
     expect(result.samples).toHaveLength(80)
   })
@@ -47,7 +51,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    const result = await runSimulation(request, true)
+    const result = await runSimulation(request, true, t)
     expect(result.source).toBe('browser')
     expect(result.samples).toHaveLength(80)
   })
@@ -75,7 +79,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true)).rejects.toThrow(ScientificSimulationError)
+    await expect(runSimulation(request, true, t)).rejects.toThrow(ScientificSimulationError)
 
     const scientificFailure = {
       engine_version: '0.1.0',
@@ -96,7 +100,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true)).rejects.toThrow(/did not converge/)
+    await expect(runSimulation(request, true, t)).rejects.toThrow(/did not converge/)
   })
 
   it('maps engine channels into the unified UI result', async () => {
@@ -131,7 +135,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    const result = await runSimulation(request, true)
+    const result = await runSimulation(request, true, t)
     expect(result.source).toBe('api')
     expect(result.solver).toBe('engine-0.1.0')
     expect(result.events[0]).toEqual(expect.objectContaining({ kind: 'throttle', sampleIndex: 1 }))

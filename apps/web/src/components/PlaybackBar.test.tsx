@@ -4,13 +4,21 @@ import { describe, expect, it, vi } from 'vitest'
 import { frameAtElapsed } from '../domain/playback'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import { simulateInBrowser } from '../domain/simulator'
+import type { Translate } from '../i18n/context'
+import { I18nProvider } from '../i18n/I18nProvider'
+import { translate } from '../i18n/translate'
 import { PlaybackBar } from './PlaybackBar'
 
-const result = simulateInBrowser({
-  track: PRESETS.technical,
-  kart: DEFAULT_KART,
-  settings: { safetyMarginM: 0.15, sampleCount: 200 },
-})
+const t: Translate = (key, params) => translate('en', key, params)
+
+const result = simulateInBrowser(
+  {
+    track: PRESETS.technical,
+    kart: DEFAULT_KART,
+    settings: { safetyMarginM: 0.15, sampleCount: 200 },
+  },
+  t,
+)
 
 function renderBar(overrides: Partial<Parameters<typeof PlaybackBar>[0]> = {}) {
   const props = {
@@ -23,7 +31,11 @@ function renderBar(overrides: Partial<Parameters<typeof PlaybackBar>[0]> = {}) {
     onSeek: vi.fn(),
     ...overrides,
   }
-  render(<PlaybackBar {...props} />)
+  render(
+    <I18nProvider>
+      <PlaybackBar {...props} />
+    </I18nProvider>,
+  )
   return props
 }
 
@@ -35,7 +47,7 @@ describe('PlaybackBar', () => {
     const lapTime = result.lapTimeS.toFixed(2)
     expect(screen.getByText(new RegExp(`/ ${lapTime} s`))).toBeInTheDocument()
     expect(
-      screen.getByText(`volta simulada · reprodução 3x leva ${(result.lapTimeS / 3).toFixed(2)} s`),
+      screen.getByText(`simulated lap · 3x replay takes ${(result.lapTimeS / 3).toFixed(2)} s`),
     ).toBeInTheDocument()
   })
 
@@ -47,7 +59,7 @@ describe('PlaybackBar', () => {
 
   it('pauses and resumes without touching the clock', async () => {
     const props = renderBar({ playing: true })
-    await userEvent.click(screen.getByRole('button', { name: 'Pausar reprodução' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Pause playback' }))
     expect(props.onPlayingChange).toHaveBeenCalledWith(false)
     expect(props.onSeek).not.toHaveBeenCalled()
   })
@@ -62,7 +74,7 @@ describe('PlaybackBar', () => {
 
   it('seeks back to the start line', async () => {
     const props = renderBar()
-    await userEvent.click(screen.getByRole('button', { name: 'Voltar para a largada' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to start' }))
     expect(props.onSeek).toHaveBeenCalledWith(0)
   })
 
@@ -77,6 +89,6 @@ describe('PlaybackBar', () => {
 
   it('switches the play control when paused', () => {
     renderBar({ playing: false })
-    expect(screen.getByRole('button', { name: 'Reproduzir volta' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play lap' })).toBeInTheDocument()
   })
 })
