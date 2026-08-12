@@ -3,7 +3,10 @@ import { defineMessages } from '../locales'
 export const results = defineMessages({
   'results.ariaEmpty': { en: 'Results', 'pt-BR': 'Resultados' },
   'results.ariaLabel': { en: 'Simulation results', 'pt-BR': 'Resultados da simulação' },
-  'results.emptyTitle': { en: 'Your reference lap will show up here', 'pt-BR': 'Sua referência aparecerá aqui' },
+  'results.emptyTitle': {
+    en: 'Your reference lap will show up here',
+    'pt-BR': 'Sua referência aparecerá aqui',
+  },
   'results.emptyBody': {
     en: 'Adjust the track and the kart, then run the simulation.',
     'pt-BR': 'Ajuste a pista e o kart, depois execute a simulação.',
@@ -23,7 +26,10 @@ export const results = defineMessages({
   'results.maxSpeed': { en: 'Top speed', 'pt-BR': 'Máxima' },
   'results.minSpeed': { en: 'Min speed', 'pt-BR': 'Mínima' },
   'results.pointLabel': { en: 'POINT {index}', 'pt-BR': 'PONTO {index}' },
-  'results.distanceAfterStart': { en: '{distance} m after the start', 'pt-BR': '{distance} m após a largada' },
+  'results.distanceAfterStart': {
+    en: '{distance} m after the start',
+    'pt-BR': '{distance} m após a largada',
+  },
   'results.keyReferences': { en: 'Key reference points', 'pt-BR': 'Referências principais' },
   'results.eventsShownAria': {
     en: '{shown} of {total} reference points shown',

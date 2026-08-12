@@ -106,8 +106,7 @@ function parseBackground(
   t: Translate,
 ): Pick<TrackInput, 'background'> {
   if (background === undefined) return {}
-  if (typeof background !== 'object' || background === null)
-    throw new Error(t('project.malformedBackground'))
+  if (typeof background !== 'object' || background === null) throw new Error(t('project.malformedBackground'))
   if (!isImageDataUrl(background.image_data_url)) return {}
   const widthPx = finite(background.image_width_px, t('project.field.imageWidth'), t)
   const heightPx = finite(background.image_height_px, t('project.field.imageHeight'), t)
@@ -167,8 +166,7 @@ export function parseProject(
   ) {
     throw new Error(t('project.missingCenterline'))
   }
-  if (!project.kart?.parameters || !project.simulation)
-    throw new Error(t('project.missingKartOrSimulation'))
+  if (!project.kart?.parameters || !project.simulation) throw new Error(t('project.missingKartOrSimulation'))
   if (project.track.coordinate_system !== 'local_cartesian_m')
     throw new Error(t('project.unsupportedCoordinateSystem'))
   if (project.track.direction !== 'clockwise' && project.track.direction !== 'counterclockwise')
@@ -209,7 +207,6 @@ export function parseProject(
   if (validationMessage) throw new Error(validationMessage)
   const declaredTotalMass = finite(project.kart.total_mass_kg, t('project.field.totalMass'), t)
   const calculatedTotalMass = parsed.kart.kartMassKg + parsed.kart.driverMassKg
-  if (Math.abs(declaredTotalMass - calculatedTotalMass) > 1e-6)
-    throw new Error(t('project.massMismatch'))
+  if (Math.abs(declaredTotalMass - calculatedTotalMass) > 1e-6) throw new Error(t('project.massMismatch'))
   return parsed
 }

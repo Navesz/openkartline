@@ -48,9 +48,7 @@ describe('central simulation validation', () => {
     const tooMany = Array.from({ length: 501 }, (_, index) => ({ x: index, y: index % 2 }))
     expect(
       validateSimulationInput({ ...PRESETS.oval, centerline: tooMany }, DEFAULT_KART, settings, t),
-    ).toEqual(
-      expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('500') })]),
-    )
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('500') })]))
     expect(
       validateSimulationInput(
         { ...PRESETS.oval, centerline: [{ x: 100_001, y: 0 }, ...PRESETS.oval.centerline.slice(1)] },

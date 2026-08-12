@@ -71,16 +71,26 @@ describe('.okl.json project files', () => {
 
   it('rejects oversized and out-of-contract project input', () => {
     expect(() => parseProject(' '.repeat(1024 * 1024 + 1), t)).toThrow(/1 MiB/)
-    const { project: invalid } = toProject(PRESETS.oval, DEFAULT_KART, {
-      safetyMarginM: 0.5,
-      sampleCount: 240,
-    }, t)
+    const { project: invalid } = toProject(
+      PRESETS.oval,
+      DEFAULT_KART,
+      {
+        safetyMarginM: 0.5,
+        sampleCount: 240,
+      },
+      t,
+    )
     invalid.simulation.settings.sample_count = 32.5
     expect(() => parseProject(JSON.stringify(invalid), t)).toThrow(/integer/)
   })
 
   it('rejects incompatible project constants and inconsistent derived values', () => {
-    const { project: valid } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 }, t)
+    const { project: valid } = toProject(
+      PRESETS.oval,
+      DEFAULT_KART,
+      { safetyMarginM: 0.5, sampleCount: 240 },
+      t,
+    )
     expect(() =>
       parseProject(JSON.stringify({ ...valid, track: { ...valid.track, direction: 'sideways' } }), t),
     ).toThrow(/clockwise or counterclockwise/i)

@@ -15,8 +15,14 @@ export const canvas = defineMessages({
   'canvas.fit': { en: 'Fit', 'pt-BR': 'Enquadrar' },
   'canvas.playTitle': { en: 'Animate the lap', 'pt-BR': 'Animar a volta' },
   'canvas.play': { en: 'Animate', 'pt-BR': 'Animar' },
-  'canvas.hintEdit': { en: 'Drag the points to adjust the layout', 'pt-BR': 'Arraste os pontos para ajustar o traçado' },
-  'canvas.hintAdd': { en: 'Click the background to add points', 'pt-BR': 'Clique no fundo para adicionar pontos' },
+  'canvas.hintEdit': {
+    en: 'Drag the points to adjust the layout',
+    'pt-BR': 'Arraste os pontos para ajustar o traçado',
+  },
+  'canvas.hintAdd': {
+    en: 'Click the background to add points',
+    'pt-BR': 'Clique no fundo para adicionar pontos',
+  },
   'canvas.hintCalibrateStart': {
     en: 'Mark two points of known distance (e.g. the start straight)',
     'pt-BR': 'Marque dois pontos de distância conhecida (ex.: a reta de largada)',
@@ -25,7 +31,10 @@ export const canvas = defineMessages({
     en: 'Current scale: {scale} m/px · mark two points to recalibrate',
     'pt-BR': 'Escala atual: {scale} m/px · marque dois pontos para recalibrar',
   },
-  'canvas.hintPan': { en: 'Drag to move · scroll to zoom', 'pt-BR': 'Arraste para mover · role para ampliar' },
+  'canvas.hintPan': {
+    en: 'Drag to move · scroll to zoom',
+    'pt-BR': 'Arraste para mover · role para ampliar',
+  },
   'canvas.trackAria': {
     en: '{name} layout with {count} control points',
     'pt-BR': 'Traçado {name} com {count} pontos de controle',

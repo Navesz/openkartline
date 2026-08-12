@@ -39,7 +39,11 @@ export function PlaybackBar({
         >
           {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
         </button>
-        <button onClick={() => onSeek(0)} aria-label={t('playback.resetAria')} title={t('playback.resetTitle')}>
+        <button
+          onClick={() => onSeek(0)}
+          aria-label={t('playback.resetAria')}
+          title={t('playback.resetTitle')}
+        >
           <RotateCcw size={15} />
         </button>
         <div className="playback-rates" role="group" aria-label={t('playback.rateGroupAria')}>

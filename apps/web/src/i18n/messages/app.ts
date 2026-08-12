@@ -122,8 +122,7 @@ export const app = defineMessages({
   },
   'app.statusGpsImported': {
     en: 'GPS imported: {raw} points → {kept} control points, {km} km. Review the track width.',
-    'pt-BR':
-      'GPS importado: {raw} pontos → {kept} de controle, {km} km. Revise a largura da pista.',
+    'pt-BR': 'GPS importado: {raw} pontos → {kept} de controle, {km} km. Revise a largura da pista.',
   },
   'app.statusGpsFailed': {
     en: 'The GPS file could not be imported.',

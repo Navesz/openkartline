@@ -156,16 +156,10 @@ export function toApiRequest(request: SimulationRequest) {
   }
 }
 
-export function fromApiResult(
-  result: ApiResult,
-  request: SimulationRequest,
-  t: Translate,
-): SimulationResult {
+export function fromApiResult(result: ApiResult, request: SimulationRequest, t: Translate): SimulationResult {
   if (result.status.state !== 'success' || !result.summary || !result.samples.length) {
     const reasons = result.validation.errors.map((issue) => issue.message).join(' ')
-    throw new ScientificSimulationError(
-      reasons || result.status.message || t('app.engineIncomplete'),
-    )
+    throw new ScientificSimulationError(reasons || result.status.message || t('app.engineIncomplete'))
   }
   const canonical = buildCanonicalTrackGeometry(request.track, result.samples.length)
   const stations = matchCenterlineIndices(

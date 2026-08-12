@@ -79,7 +79,12 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
       )}
       <div className="events-heading">
         <h3>{t('results.keyReferences')}</h3>
-        <span aria-label={t('results.eventsShownAria', { shown: visibleEvents.length, total: result.events.length })}>
+        <span
+          aria-label={t('results.eventsShownAria', {
+            shown: visibleEvents.length,
+            total: result.events.length,
+          })}
+        >
           {visibleEvents.length === result.events.length
             ? visibleEvents.length
             : t('results.eventsShown', { shown: visibleEvents.length, total: result.events.length })}

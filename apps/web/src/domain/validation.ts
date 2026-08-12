@@ -52,9 +52,7 @@ export function validateSimulationInput(
     track.centerline.length > limits.controlPointsMax
   ) {
     issues.push(
-      error(
-        t('validation.controlPoints', { min: limits.controlPointsMin, max: limits.controlPointsMax }),
-      ),
+      error(t('validation.controlPoints', { min: limits.controlPointsMin, max: limits.controlPointsMax })),
     )
   }
   const invalidCoordinate = track.centerline.findIndex(
@@ -97,9 +95,7 @@ export function validateSimulationInput(
     kart.kartMassKg < limits.kartMassKgMin ||
     kart.kartMassKg > limits.kartMassKgMax
   ) {
-    issues.push(
-      error(t('validation.kartMass', { min: limits.kartMassKgMin, max: limits.kartMassKgMax })),
-    )
+    issues.push(error(t('validation.kartMass', { min: limits.kartMassKgMin, max: limits.kartMassKgMax })))
   }
   if (
     !finite(kart.driverMassKg) ||
@@ -118,9 +114,7 @@ export function validateSimulationInput(
     kart.topSpeedKph < limits.topSpeedKphMin ||
     kart.topSpeedKph > limits.topSpeedKphMax
   ) {
-    issues.push(
-      error(t('validation.topSpeed', { min: limits.topSpeedKphMin, max: limits.topSpeedKphMax })),
-    )
+    issues.push(error(t('validation.topSpeed', { min: limits.topSpeedKphMin, max: limits.topSpeedKphMax })))
   }
   if (
     !finite(kart.gripCoefficient) ||
@@ -128,9 +122,7 @@ export function validateSimulationInput(
     kart.gripCoefficient > limits.gripCoefficientMax
   ) {
     issues.push(
-      error(
-        t('validation.grip', { min: limits.gripCoefficientMin, max: limits.gripCoefficientMax }),
-      ),
+      error(t('validation.grip', { min: limits.gripCoefficientMin, max: limits.gripCoefficientMax })),
     )
   }
   if (
@@ -139,9 +131,7 @@ export function validateSimulationInput(
     kart.brakeDecelMps2 > limits.brakeDecelMaxMps2
   ) {
     issues.push(
-      error(
-        t('validation.braking', { min: limits.brakeDecelMinMps2, max: limits.brakeDecelMaxMps2 }),
-      ),
+      error(t('validation.braking', { min: limits.brakeDecelMinMps2, max: limits.brakeDecelMaxMps2 })),
     )
   }
 
@@ -152,9 +142,7 @@ export function validateSimulationInput(
     settings.sampleCount > limits.sampleCountMax
   ) {
     issues.push(
-      error(
-        t('validation.sampleCount', { min: limits.sampleCountMin, max: limits.sampleCountMax }),
-      ),
+      error(t('validation.sampleCount', { min: limits.sampleCountMin, max: limits.sampleCountMax })),
     )
   }
   if (

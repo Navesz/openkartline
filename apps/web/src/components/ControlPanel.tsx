@@ -139,7 +139,9 @@ export function ControlPanel({
           </span>
         </label>
         {track.attribution && (
-          <p className="track-attribution">{t('panel.trackAttribution', { attribution: track.attribution })}</p>
+          <p className="track-attribution">
+            {t('panel.trackAttribution', { attribution: track.attribution })}
+          </p>
         )}
         <label className="field" htmlFor="track-name">
           <span className="field-label">{t('panel.trackName')}</span>

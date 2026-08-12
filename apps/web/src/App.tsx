@@ -173,7 +173,11 @@ export default function App() {
     setMessage(t('app.statusSolving'))
     setSelectedSample(null)
     try {
-      const next = await runSimulation({ track: trackHistory.value, kart, settings }, apiAvailable === true, t)
+      const next = await runSimulation(
+        { track: trackHistory.value, kart, settings },
+        apiAvailable === true,
+        t,
+      )
       setResult(next)
       setStatus('success')
       setDirty(false)
