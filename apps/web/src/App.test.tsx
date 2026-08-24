@@ -27,6 +27,21 @@ describe('OpenKartLine application', () => {
     expect(await screen.findByText(/computed locally in the browser/i)).toBeInTheDocument()
   })
 
+  it('leaves the canvas tool alone for a modifier chord', async () => {
+    // Ctrl+A is select-all. It used to fall through to the single-letter
+    // shortcuts and arm the add tool, so the next canvas click injected a
+    // control point into the track.
+    const user = userEvent.setup()
+    renderApp()
+    expect(screen.getByText(/drag the points to adjust/i)).toBeInTheDocument()
+
+    await user.keyboard('{Control>}a{/Control}')
+    expect(screen.getByText(/drag the points to adjust/i)).toBeInTheDocument()
+
+    await user.keyboard('a')
+    expect(screen.getByText(/click the background to add points/i)).toBeInTheDocument()
+  })
+
   it('offers a keyboard-operable numeric control-point editor', async () => {
     const user = userEvent.setup()
     renderApp()
