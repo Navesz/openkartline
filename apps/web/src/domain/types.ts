@@ -28,6 +28,18 @@ export interface TrackInput {
    */
   attribution?: string
   background?: TrackBackground
+  /**
+   * True when `centerline` was traced over `background`, and therefore moves
+   * with its calibration. A preset, a GPS import, or a project loaded already
+   * in metres is independent geometry: calibrating the image tells us how to
+   * *draw* the picture behind it, not how to resize the circuit.
+   *
+   * Deliberately not persisted. On load it is derived from whether the stored
+   * background still lacks a scale, which restores the only case that needs a
+   * conversion (an uncalibrated trace, still in pixels) and defaults every
+   * other project to the choice that cannot corrupt geometry.
+   */
+  tracedOverBackground?: boolean
 }
 
 export interface KartInput {
