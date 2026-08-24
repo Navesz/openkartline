@@ -173,3 +173,98 @@ def test_track_coordinate_span_has_a_defensive_limit() -> None:
     outcome = prepare_track(track, sample_count=64, safety_margin_m=0.1)
     assert not outcome.validation.valid
     assert "COORDINATE_SPAN_TOO_LARGE" in {error.code for error in outcome.validation.errors}
+
+
+def _stadium_corridor(
+    straight_m: float = 80.0, radius_m: float = 15.0, width_m: float = 8.0
+) -> tuple[TrackV1, np.ndarray, np.ndarray]:
+    """A constant-width corridor that actually has corners.
+
+    Every other width fixture here is a pair of concentric circles, where the
+    two edges advance through the lap at the same rate and index pairing happens
+    to be perpendicular pairing. That symmetry is what let a skewed-chord width
+    ship unnoticed, so this fixture deliberately breaks it: the straights and
+    the arcs stretch the outer edge relative to the inner one, while the true
+    perpendicular width stays exactly `width_m` everywhere.
+    """
+
+    half = width_m / 2
+    points: list[tuple[float, float]] = []
+    for index in range(80):
+        points.append((-straight_m / 2 + straight_m * index / 80, -radius_m))
+    for index in range(120):
+        angle = -np.pi / 2 + np.pi * index / 120
+        points.append((straight_m / 2 + radius_m * np.cos(angle), radius_m * np.sin(angle)))
+    for index in range(80):
+        points.append((straight_m / 2 - straight_m * index / 80, radius_m))
+    for index in range(120):
+        angle = np.pi / 2 + np.pi * index / 120
+        points.append((-straight_m / 2 + radius_m * np.cos(angle), radius_m * np.sin(angle)))
+
+    center = np.asarray(points, dtype=float)
+    tangent = np.roll(center, -1, axis=0) - np.roll(center, 1, axis=0)
+    tangent /= np.hypot(tangent[:, 0], tangent[:, 1])[:, None]
+    normal = np.column_stack((-tangent[:, 1], tangent[:, 0]))
+    left = center + normal * half
+    right = center - normal * half
+
+    track = TrackV1(
+        name="Stadium corridor",
+        direction="counterclockwise",
+        left_boundary=[Point2D(x_m=float(x), y_m=float(y)) for x, y in left],
+        right_boundary=[Point2D(x_m=float(x), y_m=float(y)) for x, y in right],
+    )
+    return track, left, right
+
+
+def _distance_to_polyline(point: np.ndarray, polyline: np.ndarray) -> float:
+    starts = polyline
+    edges = np.roll(polyline, -1, axis=0) - polyline
+    lengths_sq = np.maximum(np.sum(edges * edges, axis=1), 1e-12)
+    offset = point[None, :] - starts
+    projection = np.clip(np.sum(offset * edges, axis=1) / lengths_sq, 0.0, 1.0)
+    delta = offset - projection[:, None] * edges
+    return float(np.min(np.hypot(delta[:, 0], delta[:, 1])))
+
+
+def test_constant_width_corridor_with_corners_measures_its_real_width() -> None:
+    """Pairing the edges by index reports the skewed chord, not the width.
+
+    Equal-arc resampling advances through a corner at different rates on the
+    inner and the outer edge, so `left[i]` does not face `right[i]`. Measured on
+    this fixture that inflated the width to 11.16 m on a corridor that is 8 m
+    wide everywhere, and nothing warned: the WIDTH_VARIATION_HIGH threshold is
+    a multiple of the median, so it rises with the same error it should catch.
+    """
+
+    track, _, _ = _stadium_corridor()
+    outcome = prepare_track(track, sample_count=300, safety_margin_m=0.35)
+
+    assert outcome.validation.valid
+    assert outcome.prepared is not None
+    widths = outcome.prepared.widths
+    assert float(np.max(widths) - np.min(widths)) < 0.01
+    assert float(np.median(widths)) == pytest.approx(8.0, abs=0.01)
+
+
+def test_safety_margin_is_delivered_against_the_drawn_boundaries() -> None:
+    """The margin has to hold against the track as drawn, not as parameterised.
+
+    `lower = safety_margin_m / widths` only buys real clearance if `widths` is
+    the real width, so this measures the returned line against the boundary
+    polylines the caller passed in rather than against the engine's own
+    corridor. Under the skewed-chord width this delivered 0.285 m of a 0.35 m
+    request, and in tighter corners the line left the track entirely.
+    """
+
+    margin = 0.35
+    track, left, right = _stadium_corridor()
+    outcome = prepare_track(track, sample_count=300, safety_margin_m=margin)
+    assert outcome.prepared is not None
+
+    path, _ = minimum_bending_path(outcome.prepared, safety_margin_m=margin, iterations=40)
+    delivered = min(
+        min(_distance_to_polyline(point, left), _distance_to_polyline(point, right))
+        for point in path
+    )
+    assert delivered >= margin - 1e-3
