@@ -103,3 +103,35 @@ def test_resistance_parameters_reject_unphysical_and_misspelled_values(
     payload = kart.model_dump() | overrides
     with pytest.raises(ValidationError):
         KartV1.model_validate(payload)
+
+
+def test_longitudinal_ceiling_matches_its_siblings() -> None:
+    """The three acceleration ceilings describe the same tyre.
+
+    `max_accel_mps2` sat at 30 while brake and lateral allowed 50, so a kart the
+    editor considers valid -- its own extremes derive 42.53 m/s2 through
+    `tractionCeilingMps2` -- was refused with a 422 the client could not even
+    render. The bound is a sanity guard, not physics; the odd one out was 30.
+    """
+
+    fields = KartV1.model_fields
+    ceilings = {
+        name: next(item.le for item in fields[name].metadata if hasattr(item, "le"))
+        for name in ("max_accel_mps2", "max_brake_mps2", "max_lateral_accel_mps2")
+    }
+    assert len(set(ceilings.values())) == 1, ceilings
+
+
+def test_accepts_a_kart_at_the_editors_extremes() -> None:
+    """42.53 m/s2 is reachable from the editor, so the engine has to take it."""
+
+    kart = KartV1(
+        name="Editor extreme",
+        total_mass_kg=40,
+        power_hp=100,
+        top_speed_mps=50,
+        max_accel_mps2=42.53049739180614,
+        max_brake_mps2=20,
+        max_lateral_accel_mps2=24.777341844429014,
+    )
+    assert kart.max_accel_mps2 == pytest.approx(42.5305, abs=1e-3)
