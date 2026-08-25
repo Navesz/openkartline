@@ -91,6 +91,11 @@ export const project = defineMessages({
     en: "Narrow track: there's little margin available to adjust the racing line.",
     'pt-BR': 'Pista estreita: a margem disponível para ajustar a trajetória é pequena.',
   },
+  'project.warningSolverFallback': {
+    en: 'The minimum-bending engine could not solve this track, so the lap was estimated with the coarser anchor model. Expect a few per cent of difference.',
+    'pt-BR':
+      'O motor de curvatura mínima não conseguiu resolver esta pista, então a volta foi estimada com o modelo de âncoras, mais grosseiro. Espere alguns por cento de diferença.',
+  },
   'project.warningNotConverged': {
     en: "The racing line didn't reach the convergence criterion; the line returned is feasible, but isn't reported as converged.",
     'pt-BR':
