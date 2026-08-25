@@ -51,8 +51,8 @@ export default function App() {
   /**
    * Read off the track rather than remembered. Undo and redo move the track
    * without going through any of the loaders, so a remembered key drifted:
-   * loading Technical, loading Sprint, then undoing left the picker naming
-   * Sprint over Technical's geometry.
+   * loading Technical, loading Oval, then undoing left the picker naming Oval
+   * over Technical's geometry.
    */
   const trackPresetKey = useMemo(() => trackPresetKeyFor(trackHistory.value), [trackHistory.value])
   const [kart, setKart] = useState<KartInput>(DEFAULT_KART)

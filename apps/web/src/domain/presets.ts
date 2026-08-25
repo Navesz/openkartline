@@ -596,28 +596,30 @@ export function toKartInput(preset: KartPreset): KartInput {
 export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'baltar'] as const
 
 /**
- * The preset key a kart currently matches, or `''` for a custom one.
- *
- * The picker was uncontrolled, so it went on naming a category after the
- * values under it had been edited away from it -- and after a project load
- * replaced them outright. Deriving the label from the values means it can only
- * say what is true.
- */
-/**
  * The preset key a track currently matches, or `''` for one that is not a
- * preset any more -- imported, traced from GPS, or edited away from it.
+ * preset any more -- imported, traced from GPS, edited away from it, or
+ * carrying a background photo none of the presets ship with.
  *
  * Derived rather than remembered. The key used to be state the picker was told
  * about at each load, which undo and redo never reconciled: loading Technical,
- * loading Sprint, then undoing gave back Technical's geometry under a picker
- * still reading "Sprint".
+ * loading Oval, then undoing gave back Technical's geometry under a picker
+ * still reading "Oval".
+ *
+ * Every field is compared, not just the geometry. A track carrying a calibrated
+ * satellite photo is not the preset it started from, and saying it is put the
+ * picker one click from throwing that photo away: re-selecting a preset loads
+ * a fresh copy, which has no image, and the status line reports only that the
+ * circuit was loaded. `attribution` likewise -- a circuit stripped of its ODbL
+ * credit is not the circuit the picker would be naming.
  */
 export function trackPresetKeyFor(track: TrackInput): string {
+  if (track.background) return ''
   const entry = Object.entries(PRESETS).find(
     ([, preset]) =>
       preset.name === track.name &&
       preset.direction === track.direction &&
       preset.widthM === track.widthM &&
+      preset.attribution === track.attribution &&
       preset.centerline.length === track.centerline.length &&
       preset.centerline.every(
         (point, index) => point.x === track.centerline[index].x && point.y === track.centerline[index].y,
@@ -625,6 +627,15 @@ export function trackPresetKeyFor(track: TrackInput): string {
   )
   return entry ? entry[0] : ''
 }
+
+/**
+ * The preset key a kart currently matches, or `''` for a custom one.
+ *
+ * The picker was uncontrolled, so it went on naming a category after the
+ * values under it had been edited away from it -- and after a project load
+ * replaced them outright. Deriving the label from the values means it can only
+ * say what is true.
+ */
 
 export function kartPresetKeyFor(kart: KartInput): string {
   const entry = Object.entries(KART_PRESETS).find(([, preset]) => {
