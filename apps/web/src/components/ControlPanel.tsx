@@ -196,11 +196,12 @@ export function ControlPanel({
           </span>
           <span className="select-wrap">
             <select id="preset" value={trackPresetKey} onChange={(event) => onPreset(event.target.value)}>
-              {/* Only reachable when the track came from a file or a GPS
-                  trace, where naming a preset would be a lie. */}
+              {/* Reachable whenever the track is not a preset: imported,
+                  traced from GPS, or edited away from one. Naming a preset in
+                  any of those cases would be a lie. */}
               {trackPresetKey === '' && (
                 <option value="" disabled>
-                  {t('panel.trackImported')}
+                  {t('panel.trackCustom')}
                 </option>
               )}
               <optgroup label={t('panel.syntheticGroup')}>

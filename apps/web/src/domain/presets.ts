@@ -603,6 +603,29 @@ export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'balta
  * replaced them outright. Deriving the label from the values means it can only
  * say what is true.
  */
+/**
+ * The preset key a track currently matches, or `''` for one that is not a
+ * preset any more -- imported, traced from GPS, or edited away from it.
+ *
+ * Derived rather than remembered. The key used to be state the picker was told
+ * about at each load, which undo and redo never reconciled: loading Technical,
+ * loading Sprint, then undoing gave back Technical's geometry under a picker
+ * still reading "Sprint".
+ */
+export function trackPresetKeyFor(track: TrackInput): string {
+  const entry = Object.entries(PRESETS).find(
+    ([, preset]) =>
+      preset.name === track.name &&
+      preset.direction === track.direction &&
+      preset.widthM === track.widthM &&
+      preset.centerline.length === track.centerline.length &&
+      preset.centerline.every(
+        (point, index) => point.x === track.centerline[index].x && point.y === track.centerline[index].y,
+      ),
+  )
+  return entry ? entry[0] : ''
+}
+
 export function kartPresetKeyFor(kart: KartInput): string {
   const entry = Object.entries(KART_PRESETS).find(([, preset]) => {
     const values = toKartInput(preset)
