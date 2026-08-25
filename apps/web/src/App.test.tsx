@@ -4,11 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { DEFAULT_KART, PRESETS } from './domain/presets'
 import { toProject } from './services/projectFile'
+import type { TrackInput } from './domain/types'
 import { I18nProvider } from './i18n/I18nProvider'
 
 // The chosen locale is persisted, so a test that switches language leaves every
 // test after it running in that language. One of them does.
 beforeEach(() => window.localStorage.clear())
+
+const TINY_JPEG =
+  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAa//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ISP/2gAMAwEAAgADAAAAEB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ECP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ECP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ECP/2Q=='
 
 function renderApp() {
   return render(
@@ -309,5 +313,67 @@ describe('an undo with nothing to undo', () => {
     await user.keyboard('{Control>}z{/Control}')
 
     expect(screen.getByRole('button', { name: /recalculate lap/i })).toBeInTheDocument()
+  })
+})
+
+describe('loading a circuit while a background photo is attached', () => {
+  // Attached by importing a project that already carries a calibrated photo:
+  // jsdom decodes no images, so the upload path cannot run here. It is the
+  // same track shape either way, and the E2E suite covers the upload itself.
+  const importWithPhoto = async (
+    user: ReturnType<typeof userEvent.setup>,
+    container: HTMLElement,
+    track: TrackInput,
+  ) => {
+    const { project } = toProject(
+      {
+        ...track,
+        background: {
+          imageDataUrl: TINY_JPEG,
+          imageWidthPx: 1200,
+          imageHeightPx: 800,
+          scaleMPerPx: 0.35,
+        },
+      },
+      DEFAULT_KART,
+      { safetyMarginM: 0.5, sampleCount: 240 },
+    )
+    const input = container.querySelector('input[type="file"][accept*="okl"]') as HTMLInputElement
+    await user.upload(
+      input,
+      new File([JSON.stringify(project)], 'circuit.okl.json', { type: 'application/json' }),
+    )
+  }
+
+  it('keeps the photo when the same circuit is loaded again', async () => {
+    // The picker reads "Custom track" the moment a photo is attached, which is
+    // what invites the click. Before this, that click discarded the photo and
+    // the run bar said only that the circuit had loaded.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, PRESETS.oval)
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    expect(picker).toHaveValue('')
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+  })
+
+  it('says so when a different circuit replaces it', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, PRESETS.oval)
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'hairpin')
+
+    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
   })
 })
