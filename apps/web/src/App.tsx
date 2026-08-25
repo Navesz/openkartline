@@ -396,7 +396,7 @@ export default function App() {
             <BrandMark size={34} />
           </span>
           <span>
-            <strong>OpenKartLine</strong>
+            <strong>{t('app.brandName')}</strong>
             <small>{t('app.brandTagline')}</small>
           </span>
         </a>

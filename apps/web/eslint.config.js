@@ -22,4 +22,26 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // AGENTS.md: never write a literal string into a component. The rule was
+    // unenforced, and four real-track names had already drifted from the data
+    // they select.
+    //
+    // A run of three or more letters is the signal for prose. SI unit symbols
+    // (kg, km/h, m, s) are internationally standardised and are not translated
+    // -- routing them through t() would be theatre -- and they are all shorter
+    // than that, so the threshold separates the two without an allowlist.
+    files: ['src/**/*.tsx'],
+    ignores: ['src/**/*.test.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXText[value=/[A-Za-zÀ-ɏ]{3,}/]',
+          message:
+            'User-facing text belongs in src/i18n/messages/ and is rendered through t(). See AGENTS.md.',
+        },
+      ],
+    },
+  },
 )
