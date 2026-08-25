@@ -595,4 +595,27 @@ export function toKartInput(preset: KartPreset): KartInput {
  */
 export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'baltar'] as const
 
+/**
+ * The preset key a kart currently matches, or `''` for a custom one.
+ *
+ * The picker was uncontrolled, so it went on naming a category after the
+ * values under it had been edited away from it -- and after a project load
+ * replaced them outright. Deriving the label from the values means it can only
+ * say what is true.
+ */
+export function kartPresetKeyFor(kart: KartInput): string {
+  const entry = Object.entries(KART_PRESETS).find(([, preset]) => {
+    const values = toKartInput(preset)
+    return (
+      values.powerHp === kart.powerHp &&
+      values.kartMassKg === kart.kartMassKg &&
+      values.driverMassKg === kart.driverMassKg &&
+      values.topSpeedKph === kart.topSpeedKph &&
+      values.gripCoefficient === kart.gripCoefficient &&
+      values.brakeDecelMps2 === kart.brakeDecelMps2
+    )
+  })
+  return entry ? entry[0] : ''
+}
+
 export const clonePoints = (points: Point[]): Point[] => points.map((point) => ({ ...point }))

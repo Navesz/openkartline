@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_KART, PRESETS, REAL_TRACK_KEYS } from '../domain/presets'
-import type { TrackInput, ValidationIssue } from '../domain/types'
+import { DEFAULT_KART, KART_PRESETS, PRESETS, REAL_TRACK_KEYS, toKartInput } from '../domain/presets'
+import type { KartInput, TrackInput, ValidationIssue } from '../domain/types'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { ControlPanel } from './ControlPanel'
 
@@ -12,14 +12,21 @@ const BACKGROUND = {
   imageHeightPx: 800,
 }
 
-function renderPanel(overrides: { track?: TrackInput; issues?: ValidationIssue[] } = {}) {
+function renderPanel(
+  overrides: {
+    track?: TrackInput
+    issues?: ValidationIssue[]
+    kart?: KartInput
+    trackPresetKey?: string
+  } = {},
+) {
   const onCalibrate = vi.fn()
   const onPointRemove = vi.fn()
   const { container } = render(
     <I18nProvider>
       <ControlPanel
         track={overrides.track ?? PRESETS.oval}
-        kart={DEFAULT_KART}
+        kart={overrides.kart ?? DEFAULT_KART}
         settings={{ safetyMarginM: 0.5, sampleCount: 200 }}
         issues={overrides.issues ?? []}
         onTrack={vi.fn()}
@@ -32,6 +39,7 @@ function renderPanel(overrides: { track?: TrackInput; issues?: ValidationIssue[]
         onRemoveImage={vi.fn()}
         onGpsFile={vi.fn()}
         onCalibrate={onCalibrate}
+        trackPresetKey={overrides.trackPresetKey ?? 'technical'}
       />
     </I18nProvider>,
   )
@@ -100,6 +108,7 @@ describe('ControlPanel accessibility', () => {
           onImageFile={vi.fn()}
           onRemoveImage={vi.fn()}
           onGpsFile={vi.fn()}
+          trackPresetKey="technical"
           onCalibrate={() => {
             throw new Error('Points are too close together')
           }}
@@ -132,5 +141,29 @@ describe('the track picker names the tracks it selects', () => {
     for (const key of REAL_TRACK_KEYS) {
       expect(values.filter((value) => value === key)).toHaveLength(1)
     }
+  })
+})
+
+describe('the pickers say what is actually loaded', () => {
+  it('names the kart preset only while the values still match it', () => {
+    // Both pickers were uncontrolled, so they went on naming a choice after the
+    // thing under it had been edited away or replaced outright.
+    const { container } = renderPanel({ kart: toKartInput(KART_PRESETS.senior) })
+    const picker = container.querySelector('#kart-preset') as HTMLSelectElement
+    expect(picker.value).toBe('senior')
+  })
+
+  it('falls back to Custom once a value is edited away from the preset', () => {
+    const edited = { ...toKartInput(KART_PRESETS.senior), powerHp: 42 }
+    const { container } = renderPanel({ kart: edited })
+    const picker = container.querySelector('#kart-preset') as HTMLSelectElement
+    expect(picker.value).toBe('')
+  })
+
+  it('does not name a circuit for a track that came from a file', () => {
+    const { container } = renderPanel({ trackPresetKey: '' })
+    const picker = container.querySelector('#preset') as HTMLSelectElement
+    expect(picker.value).toBe('')
+    expect(picker.selectedOptions[0].textContent).toMatch(/imported track/i)
   })
 })
