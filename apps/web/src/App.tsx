@@ -62,6 +62,7 @@ export default function App() {
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('success')
   const [message, setMessage] = useState(() => t('app.statusReady'))
   const [dirty, setDirty] = useState(false)
+  const unmounted = useRef(false)
   const [fitRequest, setFitRequest] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const issues = useMemo(
@@ -97,6 +98,13 @@ export default function App() {
   useEffect(() => {
     setElapsedS(0)
   }, [result])
+
+  useEffect(() => {
+    unmounted.current = false
+    return () => {
+      unmounted.current = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -200,7 +208,16 @@ export default function App() {
       setStatus('success')
       setDirty(false)
       setMessage(t(next.source === 'api' ? 'app.statusSolvedApi' : 'app.statusSolvedLocal'))
-      if (apiAvailable && next.source === 'browser') setApiAvailable(false)
+      // A browser result does not mean the engine is gone. `api.ts:74` falls
+      // back on 429, and MAX_CONCURRENT_COMPUTATIONS is 2, so a second tab can
+      // momentarily take both slots -- latching false here stranded this tab on
+      // the browser solver until the window lost and regained focus. `/health`
+      // sits outside the compute semaphore, so it answers while both are busy.
+      if (apiAvailable && next.source === 'browser') {
+        void checkApiHealth().then((available) => {
+          if (!unmounted.current) setApiAvailable(available)
+        })
+      }
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : t('app.statusSolveFailed'))

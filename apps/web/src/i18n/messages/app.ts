@@ -16,6 +16,10 @@ export const app = defineMessages({
   'app.engineChecking': { en: 'Checking engine…', 'pt-BR': 'Verificando motor…' },
   'app.engineConnected': { en: 'MVP engine connected', 'pt-BR': 'Motor MVP conectado' },
   'app.engineLocal': { en: 'Local mode', 'pt-BR': 'Modo local' },
+  'app.engineFieldRejected': {
+    en: 'The engine rejected {field}: {reason}.',
+    'pt-BR': 'O motor recusou {field}: {reason}.',
+  },
   'app.engineHttpError': {
     en: 'The MVP physics engine responded with HTTP {status}.',
     'pt-BR': 'O motor físico MVP respondeu com HTTP {status}.',

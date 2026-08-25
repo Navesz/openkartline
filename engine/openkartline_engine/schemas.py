@@ -76,7 +76,11 @@ class KartV1(StrictModel):
     total_mass_kg: Annotated[float, Field(ge=40, le=600, allow_inf_nan=False)]
     power_hp: Annotated[float, Field(gt=0, le=250, allow_inf_nan=False)]
     top_speed_mps: Annotated[float, Field(gt=1, le=120, allow_inf_nan=False)]
-    max_accel_mps2: Annotated[float, Field(gt=0, le=30, allow_inf_nan=False)]
+    # 50 matches the sibling brake and lateral ceilings. At 30 the editor could
+    # build karts the engine refuses: its own extremes (20 kg + 20 kg, grip 2.0)
+    # derive 42.53 m/s2 through `tractionCeilingMps2`, and every Simulate click
+    # on such a kart returned 422 while the browser solved it happily.
+    max_accel_mps2: Annotated[float, Field(gt=0, le=50, allow_inf_nan=False)]
     max_brake_mps2: Annotated[float, Field(gt=0, le=50, allow_inf_nan=False)]
     max_lateral_accel_mps2: Annotated[float, Field(gt=0, le=50, allow_inf_nan=False)]
     # Matches the browser solver's constant: a direct API client that omits the
