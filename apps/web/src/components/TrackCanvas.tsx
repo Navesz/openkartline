@@ -126,8 +126,6 @@ export function TrackCanvas({
 }: TrackCanvasProps) {
   const { t, n } = useI18n()
   const svgRef = useRef<SVGSVGElement>(null)
-  const latestPoints = useRef(track.centerline)
-  latestPoints.current = track.centerline
   const background = track.background
   const imageScale = background?.scaleMPerPx ?? 1
   // World frame of the background image: origin at (0, 0), metres per pixel.
@@ -139,13 +137,13 @@ export function TrackCanvas({
     { x: width, y: height },
     { x: 0, y: height },
   ]
-  const [viewBox, setViewBox] = useState(() =>
-    fitPoints(
-      imageWidthM !== null && imageHeightM !== null
-        ? [...track.centerline, ...imageCorners(imageWidthM, imageHeightM)]
-        : track.centerline,
-    ),
-  )
+  /** Everything the viewport has to frame: the lap, plus the photo if there is one. */
+  const fitTargets = () =>
+    imageWidthM !== null && imageHeightM !== null
+      ? [...track.centerline, ...imageCorners(imageWidthM, imageHeightM)]
+      : track.centerline
+
+  const [viewBox, setViewBox] = useState(() => fitPoints(fitTargets()))
   /**
    * The pointer that owns each gesture, not just what it is doing. A bare index
    * meant a second finger landing on another control point overwrote it, and
@@ -183,18 +181,36 @@ export function TrackCanvas({
   const boundaries = { left: canonical.left, right: canonical.right }
   const racingLine = useMemo(() => (result ? racingLineRuns(result.samples) : []), [result])
 
-  const fitAll = () =>
-    setViewBox(
-      fitPoints(
-        imageWidthM !== null && imageHeightM !== null
-          ? [...latestPoints.current, ...imageCorners(imageWidthM, imageHeightM)]
-          : latestPoints.current,
-      ),
-    )
+  const fitAll = () => setViewBox(fitPoints(fitTargets()))
 
-  // App bumps `fitRequest` whenever the track or background changes; the
-  // image dimensions are listed so a late-arriving background also re-fits.
-  useEffect(fitAll, [fitRequest, imageWidthM, imageHeightM])
+  /**
+   * Re-frame when App says the geometry was replaced -- adjusted while
+   * rendering rather than in an effect.
+   *
+   * The centreline is deliberately absent from the signal. A drag calls
+   * `onPointsChange` on every pointermove, so the array gets a fresh identity
+   * on the first pixel of movement; re-framing on that would throw away the
+   * user's zoom and pan mid-gesture. `fitRequest` is the explicit "the
+   * geometry was replaced" bump, batched with the track change in the same
+   * commit, and the image dimensions are here so a late-arriving photo also
+   * re-fits.
+   *
+   * This used to be an effect whose dependency array omitted the centreline,
+   * with the points smuggled in through a ref written during render -- which
+   * the dependency rule cannot see through and React 19 forbids outright. The
+   * omission is the same; it is stated here instead of hidden.
+   *
+   * Nothing fits on mount: `viewBox` is initialised with this very expression.
+   */
+  const [fitSignal, setFitSignal] = useState({ fitRequest, imageWidthM, imageHeightM })
+  if (
+    fitSignal.fitRequest !== fitRequest ||
+    fitSignal.imageWidthM !== imageWidthM ||
+    fitSignal.imageHeightM !== imageHeightM
+  ) {
+    setFitSignal({ fitRequest, imageWidthM, imageHeightM })
+    fitAll()
+  }
 
   const clientToWorld = (clientX: number, clientY: number): Point => {
     const rect = svgRef.current?.getBoundingClientRect()

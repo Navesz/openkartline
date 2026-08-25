@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronLeft,
@@ -181,9 +181,25 @@ export function ControlPanel({
   const [pointIndex, setPointIndex] = useState(0)
   const imageInput = useRef<HTMLInputElement>(null)
   const gpsInput = useRef<HTMLInputElement>(null)
-  useEffect(() => {
+  /**
+   * Clamped while rendering, not afterwards.
+   *
+   * React re-runs this component immediately, before painting, so the shorter
+   * centreline and the index that fits it land in the same frame. An effect is
+   * a frame late, and this editor cannot survive that frame: removing the last
+   * point leaves `selectedPoint` undefined, the `{selectedPoint && …}` guard
+   * below unmounts the whole block, and an uncontrolled `<details open>` loses
+   * its open state along with the focus the remove button had just handed to
+   * `#control-point` precisely so it would not fall to `<body>`.
+   *
+   * `prevLength` is what makes this an adjustment rather than a loop: the
+   * clamp runs on the render where the length actually changed and not again.
+   */
+  const [prevLength, setPrevLength] = useState(track.centerline.length)
+  if (prevLength !== track.centerline.length) {
+    setPrevLength(track.centerline.length)
     setPointIndex((current) => Math.max(0, Math.min(track.centerline.length - 1, current)))
-  }, [track.centerline.length])
+  }
   const selectedPoint = track.centerline[pointIndex]
 
   return (

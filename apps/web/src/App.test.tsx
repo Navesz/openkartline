@@ -377,3 +377,30 @@ describe('loading a circuit while a background photo is attached', () => {
     expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
   })
 })
+
+describe('removing the last control point', () => {
+  it('keeps the editor open and the focus it just handed over', async () => {
+    // The index was clamped in an effect, which lands a render after the
+    // centerline shrinks. For that one render `selectedPoint` was undefined,
+    // the `{selectedPoint && …}` guard unmounted the whole editor, and an
+    // uncontrolled `<details open>` lost both its open state and the focus the
+    // remove button had just moved to the point picker — the exact fall to
+    // <body> that the button's own comment exists to prevent.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.click(screen.getByText(/edit point by coordinates/i))
+    const editor = container.querySelector('details.point-editor') as HTMLDetailsElement
+    expect(editor.open).toBe(true)
+
+    const picker = container.querySelector('#control-point') as HTMLSelectElement
+    const lastIndex = picker.options.length - 1
+    await user.selectOptions(picker, picker.options[lastIndex].value)
+
+    await user.click(screen.getByRole('button', { name: new RegExp(`remove point ${lastIndex + 1}`, 'i') }))
+
+    expect(container.querySelector('details.point-editor')).toBe(editor)
+    expect(editor.open).toBe(true)
+    expect(document.activeElement).toBe(container.querySelector('#control-point'))
+  })
+})
