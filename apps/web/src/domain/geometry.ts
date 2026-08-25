@@ -33,15 +33,19 @@ export function validateTrack(points: Point[], widthM: number, t: Translate): Va
   if (points.length >= 4 && Math.abs(signedArea(points)) < 10) {
     issues.push({ level: 'error', message: t('validation.noUsableArea') })
   }
+  // Report the first close pair once, but keep scanning: a short segment is a
+  // warning, and stopping here let a genuinely self-crossing lap through as
+  // merely "points too close" with Simulate still enabled.
+  let reportedClosePair = false
   for (let i = 0; i < points.length; i += 1) {
     const a = points[i]
     const b = points[(i + 1) % points.length]
-    if (distance(a, b) < 1) {
+    if (!reportedClosePair && distance(a, b) < 1) {
       issues.push({
         level: 'warning',
         message: t('validation.pointsTooClose', { a: i + 1, b: ((i + 1) % points.length) + 1 }),
       })
-      break
+      reportedClosePair = true
     }
     for (let j = i + 2; j < points.length; j += 1) {
       if (i === 0 && j === points.length - 1) continue
