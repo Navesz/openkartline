@@ -44,6 +44,7 @@ export const project = defineMessages({
     'pt-BR': 'O arquivo não contém JSON válido.',
   },
   'project.missingVersion': { en: 'missing', 'pt-BR': 'ausente' },
+  'project.unreadableVersion': { en: 'not a version string', 'pt-BR': 'não é uma versão' },
   'project.unsupportedVersion': {
     en: 'Unsupported project version: {version}.',
     'pt-BR': 'Versão de projeto não suportada: {version}.',

@@ -16,7 +16,14 @@ import {
   Zap,
 } from 'lucide-react'
 import { KART_PRESETS, PRESETS, REAL_TRACK_KEYS, kartPresetKeyFor, toKartInput } from '../domain/presets'
-import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
+import type {
+  KartInput,
+  Point,
+  ResultNote,
+  SimulationSettings,
+  TrackInput,
+  ValidationIssue,
+} from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 import { noteForError } from '../domain/localisedError'
 import { useI18n } from '../i18n/context'
@@ -103,7 +110,7 @@ function KeyboardCalibration({
   const { t } = useI18n()
   const [pixels, setPixels] = useState(500)
   const [meters, setMeters] = useState(100)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ResultNote | null>(null)
 
   return (
     <div className="keyboard-calibration">
@@ -135,11 +142,10 @@ function KeyboardCalibration({
           } catch (failure) {
             // `applyCalibration` validates; surface its reason rather than a
             // generic one, and keep the fields so the value can be corrected.
-            // Rendered through the note, not through `Error.message`: a
-            // `LocalisedError` carries its key there, so reading the message
-            // put `imports.calibrationPointsTooClose` in front of the user.
-            const note = noteForError(failure, { key: 'canvas.calibrationInvalid' })
-            setError('key' in note ? t(note.key, note.params) : note.text)
+            // Stored as the note, not as text rendered here: `LocalisedError`
+            // carries its key on `Error.message`, and rendering at throw time
+            // freezes the wording in whichever language was on screen then.
+            setError(noteForError(failure, { key: 'canvas.calibrationInvalid' }))
           }
         }}
       >
@@ -147,7 +153,7 @@ function KeyboardCalibration({
       </button>
       {error && (
         <p className="calibration-error" role="alert">
-          {error}
+          {'key' in error ? t(error.key, error.params) : error.text}
         </p>
       )}
     </div>
