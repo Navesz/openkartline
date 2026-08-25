@@ -3,6 +3,7 @@ import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import { TRACK_IMAGE_LIMITS } from '../domain/trackImage'
 import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
+import { LocalisedError } from '../domain/localisedError'
 import { ATTRIBUTION_MAX_LENGTH, parseProject, toProject } from './projectFile'
 
 const t: Translate = (key, params) => translate('en', key, params)
@@ -141,5 +142,52 @@ describe('a GPS trace carries no borrowed credit', () => {
       sampleCount: 240,
     })
     expect(project.track.attribution).toBeUndefined()
+  })
+})
+
+describe('a project file cannot nominate a message this app owns', () => {
+  it('quotes an object version as missing rather than resolving it', () => {
+    // A slot value shaped `{ key: … }` is a message reference. `schema_version`
+    // is whatever the file said, so without coercion a file could name one of
+    // this app's messages and have it quoted back: a crafted file produced
+    // "Unsupported project version: RACING LINE LAB."
+    const hostile = JSON.stringify({
+      schema_version: { key: 'app.brandTagline' },
+      project: { name: 'x' },
+      track: {},
+      kart: { parameters: {} },
+      simulation: {},
+    })
+
+    let rendered = ''
+    try {
+      parseProject(hostile, t)
+    } catch (error) {
+      const note = error instanceof LocalisedError ? error.note : null
+      rendered = note && 'key' in note ? translate('en', note.key, note.params) : String(error)
+    }
+
+    expect(rendered).toMatch(/missing/i)
+    expect(rendered).not.toMatch(/racing line lab/i)
+  })
+
+  it('does not echo an unknown key from a file as prose', () => {
+    const injected = JSON.stringify({
+      schema_version: { key: 'not-a-real-key-just-file-content' },
+      project: { name: 'x' },
+      track: {},
+      kart: { parameters: {} },
+      simulation: {},
+    })
+
+    let rendered = ''
+    try {
+      parseProject(injected, t)
+    } catch (error) {
+      const note = error instanceof LocalisedError ? error.note : null
+      rendered = note && 'key' in note ? translate('en', note.key, note.params) : String(error)
+    }
+
+    expect(rendered).not.toMatch(/not-a-real-key-just-file-content/)
   })
 })

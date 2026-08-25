@@ -42,7 +42,11 @@ export function translate(locale: Locale, key: MessageKey, params?: MessageParam
     // sentence follows the toggle like the sentence does. One level only: a
     // label is a noun, not a template with slots of its own.
     if (value && typeof value === 'object' && 'key' in value) {
-      return translate(locale, value.key, value.params)
+      // Only a key this dictionary holds. `translate` otherwise falls back to
+      // echoing the key itself, which would print an unrecognised string --
+      // file content, in the case that motivated this -- as the app's own
+      // prose. Defence in depth: the callers coerce untrusted values too.
+      return value.key in MESSAGES ? translate(locale, value.key, value.params) : match
     }
     return String(value)
   })

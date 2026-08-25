@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_KART, KART_PRESETS, PRESETS, REAL_TRACK_KEYS, toKartInput } from '../domain/presets'
 import type { KartInput, TrackInput, ValidationIssue } from '../domain/types'
 import { I18nProvider } from '../i18n/I18nProvider'
+import { LocalisedError } from '../domain/localisedError'
 import { ControlPanel } from './ControlPanel'
 
 const BACKGROUND = {
@@ -110,7 +111,7 @@ describe('ControlPanel accessibility', () => {
           onGpsFile={vi.fn()}
           trackPresetKey="technical"
           onCalibrate={() => {
-            throw new Error('Points are too close together')
+            throw new LocalisedError({ key: 'imports.calibrationPointsTooClose' })
           }}
         />
       </I18nProvider>,
@@ -118,7 +119,11 @@ describe('ControlPanel accessibility', () => {
 
     await user.click(screen.getByRole('button', { name: /set scale/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/too close together/i)
+    // `LocalisedError.message` is the key, so reading it put
+    // `imports.calibrationPointsTooClose` in front of the user.
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/farther apart/i)
+    expect(alert).not.toHaveTextContent(/imports\./)
   })
 })
 
