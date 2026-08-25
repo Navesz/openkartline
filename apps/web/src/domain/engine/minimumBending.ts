@@ -135,9 +135,12 @@ function fractionGradient(path: Point[], corridor: Point[], epsilon = GRADIENT_E
  * silently weakens as `sampleCount` rises and the same track converges to a
  * measurably different line.
  */
-function smoothingPasses(sampleCount: number): number {
+export function smoothingPasses(sampleCount: number): number {
   const scale = sampleCount / SMOOTHING_REFERENCE_SAMPLES
-  return Math.max(1, Math.round(GRADIENT_SMOOTHING_PASSES * scale * scale))
+  // `Math.floor(x + 0.5)`, spelled out so it visibly matches the engine.
+  // `Math.round` is half-up and Python's `round` is half-to-even, so the
+  // two disagreed wherever this landed on .5.
+  return Math.max(1, Math.floor(GRADIENT_SMOOTHING_PASSES * scale * scale + 0.5))
 }
 
 /**

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { distance, signedArea } from '../geometry'
 import type { Direction, Point } from '../types'
-import { alignSamples, pathChannels, prepareTrackGeometry, resampleClosedSpline } from './prepareTrack'
+import { smoothingPasses } from './minimumBending'
+import {
+  alignSamples,
+  corridorSmoothingPasses,
+  pathChannels,
+  prepareTrackGeometry,
+  resampleClosedSpline,
+} from './prepareTrack'
 
 function circlePoints(radius: number, count: number): Point[] {
   const step = (2 * Math.PI) / count
@@ -270,5 +277,44 @@ describe('prepareTrackGeometry on a corridor with corners', () => {
       const span = distance(prepared.left[index], prepared.right[index])
       expect(Math.abs(span - width)).toBeLessThan(1e-9)
     })
+  })
+})
+
+/**
+ * Smoothing pass counts both engines must agree on: [sampleCount, corridor, gradient].
+ *
+ * Duplicated verbatim in `tests/python/test_geometry.py`. That is the point: the
+ * two ports are held to numerical agreement, and a pass count that differs
+ * measures a different corridor. 449/450/451 bracket the case that went wrong —
+ * `round(4.5)` is 4 in Python and 5 in JavaScript, so at 450 the engine smoothed
+ * four times and the browser five. No parity fixture uses a sample count where
+ * that happens, so nothing caught it.
+ */
+const SMOOTHING_PASS_TABLE: [number, number, number][] = [
+  [64, 1, 1],
+  [150, 1, 6],
+  [300, 2, 24],
+  [449, 4, 54],
+  [450, 5, 54],
+  [451, 5, 54],
+  [500, 6, 67],
+  [750, 13, 150],
+  [1050, 25, 294],
+]
+
+describe('smoothing pass counts match the Python engine', () => {
+  it.each(SMOOTHING_PASS_TABLE)('%i samples', (sampleCount, corridor, gradient) => {
+    expect(corridorSmoothingPasses(sampleCount)).toBe(corridor)
+    expect(smoothingPasses(sampleCount)).toBe(gradient)
+  })
+
+  it('rounds half up at every reachable sample count', () => {
+    // The table pins the cases that mattered; this pins the rule, so a future
+    // constant cannot reintroduce the split at a count nobody listed.
+    for (let sampleCount = 64; sampleCount <= 4000; sampleCount += 1) {
+      const scale = sampleCount / 300
+      expect(corridorSmoothingPasses(sampleCount)).toBe(Math.max(1, Math.floor(2 * scale * scale + 0.5)))
+      expect(smoothingPasses(sampleCount)).toBe(Math.max(1, Math.floor(24 * scale * scale + 0.5)))
+    }
   })
 })

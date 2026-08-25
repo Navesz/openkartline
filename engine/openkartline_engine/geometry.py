@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import cast
@@ -354,8 +355,13 @@ def _corridor_smoothing_passes(sample_count: int) -> int:
     drifts with ``sample_count``.
     """
 
+    # `math.floor(x + 0.5)`, not `round`. Python rounds half to even and
+    # JavaScript's `Math.round` rounds half up, so the two ports disagreed
+    # wherever the pass count landed exactly on .5 -- at sample_count 450 the
+    # engine smoothed 4 times and the browser 5, measuring different corridors.
+    # No parity fixture uses one of those counts, so nothing caught it.
     scale = sample_count / _GRADIENT_SMOOTHING_REFERENCE_SAMPLES
-    return max(1, round(_CORRIDOR_SMOOTHING_PASSES * scale * scale))
+    return max(1, math.floor(_CORRIDOR_SMOOTHING_PASSES * scale * scale + 0.5))
 
 
 def _perpendicular_corridor(
@@ -720,8 +726,11 @@ def _smoothing_passes(sample_count: int) -> int:
     measurably different line.
     """
 
+    # Half-up, matching `Math.round` in the port. See _corridor_smoothing_passes:
+    # this one happens never to land on .5 for an integer sample count, which is
+    # luck rather than design.
     scale = sample_count / _GRADIENT_SMOOTHING_REFERENCE_SAMPLES
-    return max(1, round(_GRADIENT_SMOOTHING_PASSES * scale * scale))
+    return max(1, math.floor(_GRADIENT_SMOOTHING_PASSES * scale * scale + 0.5))
 
 
 def _free_direction(
