@@ -98,6 +98,23 @@ export default function App() {
     inputVersion.current += 1
     setDirty(true)
   }, [])
+  /**
+   * A solved lap is a new clock and a new sample range, so install all three
+   * together.
+   *
+   * The clock reset and the selection clamp used to be effects keyed on
+   * `result`, and an effect is a render late: `useEffect` is passive, so the
+   * commit that installs the lap paints once with the previous elapsed time --
+   * folded modulo the new lap length by `wrapElapsed` -- and with a selection
+   * index clamped against the previous sample count. With playback open that
+   * paints the kart, the chart cursor and the readout at an arbitrary point of
+   * the new lap before they snap back to the start line.
+   */
+  const installResult = useCallback((next: SimulationResult) => {
+    setResult(next)
+    setElapsedS(0)
+    setSelectedSample((current) => clampSelectedSample(current, next))
+  }, [])
   const fileInput = useRef<HTMLInputElement>(null)
   // Validation names its messages rather than rendering them, so it no longer
   // depends on the locale and no longer re-runs on a language switch.
@@ -130,10 +147,6 @@ export default function App() {
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
   }, [playbackEnabled, playing, rate, result])
-
-  useEffect(() => {
-    setElapsedS(0)
-  }, [result])
 
   useEffect(() => {
     unmounted.current = false
@@ -180,10 +193,6 @@ export default function App() {
     trackHistory.redo()
     markDirty()
   }, [markDirty, trackHistory])
-
-  useEffect(() => {
-    if (!playbackFrame && selectedSample !== safeSelectedSample) setSelectedSample(safeSelectedSample)
-  }, [playbackFrame, safeSelectedSample, selectedSample])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -276,7 +285,7 @@ export default function App() {
       // result synchronously -- so this one describes inputs that no longer
       // exist and has nothing to add.
       if (solvedVersion < resultVersion.current) return
-      setResult(next)
+      installResult(next)
       resultVersion.current = solvedVersion
       setStatus('success')
       // The track can be edited while the request is in flight. Clearing the
@@ -440,7 +449,7 @@ export default function App() {
     // Every input just changed, so anything already in flight is answering a
     // question about a track that no longer exists.
     inputVersion.current += 1
-    setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
+    installResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
     resultVersion.current = inputVersion.current
     setDirty(false)
     setSelectedSample(null)
