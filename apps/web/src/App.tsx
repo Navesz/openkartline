@@ -64,6 +64,16 @@ export default function App() {
   const [dirty, setDirty] = useState(false)
   const unmounted = useRef(false)
   const [fitRequest, setFitRequest] = useState(0)
+  /**
+   * Bumped by every edit to the track, kart, or settings. A ref, not state:
+   * the closures that read it are snapshots taken at render, so a state copy
+   * would always compare equal to itself and never detect the edit.
+   */
+  const inputVersion = useRef(0)
+  const markDirty = useCallback(() => {
+    inputVersion.current += 1
+    setDirty(true)
+  }, [])
   const fileInput = useRef<HTMLInputElement>(null)
   const issues = useMemo(
     () => validateSimulationInput(trackHistory.value, kart, settings, t),
@@ -141,13 +151,13 @@ export default function App() {
         event.preventDefault()
         if (event.shiftKey) trackHistory.redo()
         else trackHistory.undo()
-        setDirty(true)
+        markDirty()
         return
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         trackHistory.redo()
-        setDirty(true)
+        markDirty()
         return
       }
       // The single-letter tool shortcuts are unmodified keys only. Without this
@@ -161,23 +171,23 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [trackHistory])
+  }, [markDirty, trackHistory])
 
   const updateTrack = useCallback(
     (patch: Partial<TrackInput>) => {
       trackHistory.set((current) => ({ ...current, ...patch }))
-      setDirty(true)
+      markDirty()
     },
-    [trackHistory],
+    [markDirty, trackHistory],
   )
 
   const updateKart = (patch: Partial<KartInput>) => {
     setKart((current) => ({ ...current, ...patch }))
-    setDirty(true)
+    markDirty()
   }
   const updateSettings = (patch: Partial<SimulationSettings>) => {
     setSettings((current) => ({ ...current, ...patch }))
-    setDirty(true)
+    markDirty()
   }
 
   const selectPreset = (key: string) => {
@@ -185,7 +195,7 @@ export default function App() {
     trackHistory.set(next)
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
-    setDirty(true)
+    markDirty()
     setMessage(t('app.statusPresetLoaded', { name: next.name }))
   }
 
@@ -198,6 +208,7 @@ export default function App() {
     setStatus('running')
     setMessage(t('app.statusSolving'))
     setSelectedSample(null)
+    const solvedVersion = inputVersion.current
     try {
       const next = await runSimulation(
         { track: trackHistory.value, kart, settings },
@@ -206,8 +217,16 @@ export default function App() {
       )
       setResult(next)
       setStatus('success')
-      setDirty(false)
-      setMessage(t(next.source === 'api' ? 'app.statusSolvedApi' : 'app.statusSolvedLocal'))
+      // The track can be edited while the request is in flight. Clearing the
+      // stale flag then hid the "Recalculate" affordance while the lap time on
+      // screen belonged to the track as it was before the edit.
+      const stillCurrent = inputVersion.current === solvedVersion
+      if (stillCurrent) setDirty(false)
+      setMessage(
+        stillCurrent
+          ? t(next.source === 'api' ? 'app.statusSolvedApi' : 'app.statusSolvedLocal')
+          : t('app.statusSolvedStale'),
+      )
       // A browser result does not mean the engine is gone. `api.ts:74` falls
       // back on 429, and MAX_CONCURRENT_COMPUTATIONS is 2, so a second tab can
       // momentarily take both slots -- latching false here stranded this tab on
@@ -258,7 +277,7 @@ export default function App() {
       setSettings(imported.settings)
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
-      setDirty(true)
+      markDirty()
       setStatus('success')
       setMessage(
         t(
@@ -280,7 +299,7 @@ export default function App() {
       const background = downscaleTrackImage(image, t)
       trackHistory.set((current) => ({ ...current, background }))
       setFitRequest((value) => value + 1)
-      setDirty(true)
+      markDirty()
       setStatus('success')
       setMessage(t('app.statusImageAdded'))
       setTool('calibrate')
@@ -296,7 +315,7 @@ export default function App() {
       delete next.background
       return next
     })
-    setDirty(true)
+    markDirty()
     if (tool === 'calibrate') setTool('edit')
     setMessage(t('app.statusImageRemoved'))
   }
@@ -304,7 +323,7 @@ export default function App() {
   const applyCalibration = (pixelDistance: number, realMeters: number) => {
     const newScale = scaleFromCalibration(pixelDistance, realMeters, t)
     trackHistory.set((current) => calibratedTrack(current, newScale))
-    setDirty(true)
+    markDirty()
     setFitRequest((value) => value + 1)
     setTool('edit')
     setStatus('success')
@@ -323,7 +342,7 @@ export default function App() {
       }))
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
-      setDirty(true)
+      markDirty()
       setStatus('success')
       setMessage(
         t('app.statusGpsImported', {
@@ -454,14 +473,14 @@ export default function App() {
                   candidateIndex === index ? point : candidate,
                 ),
               }))
-              setDirty(true)
+              markDirty()
             }}
             onPointRemove={(index) => {
               trackHistory.set((current) => ({
                 ...current,
                 centerline: current.centerline.filter((_, candidateIndex) => candidateIndex !== index),
               }))
-              setDirty(true)
+              markDirty()
             }}
             onImageFile={importBackgroundImage}
             onRemoveImage={removeBackgroundImage}
@@ -499,7 +518,7 @@ export default function App() {
                   }),
                   checkpoint,
                 )
-                setDirty(true)
+                markDirty()
               }}
               onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}
               onCalibrate={applyCalibration}

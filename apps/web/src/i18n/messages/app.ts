@@ -75,6 +75,10 @@ export const app = defineMessages({
     en: 'Computing trajectory and speed profile…',
     'pt-BR': 'Calculando trajetória e perfil de velocidade…',
   },
+  'app.statusSolvedStale': {
+    en: 'Lap solved, but the track changed while it was running — recalculate for a current time.',
+    'pt-BR': 'Volta calculada, mas a pista mudou durante o cálculo — recalcule para um tempo atual.',
+  },
   'app.statusSolvedApi': {
     en: 'Reference computed by the MVP physics engine.',
     'pt-BR': 'Referência calculada pelo motor físico MVP.',
