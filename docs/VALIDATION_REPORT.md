@@ -36,32 +36,51 @@ Expected non-blocking warning: Starlette's test client recommends the future `ht
 
 ### Sample-count stability
 
-For the same synthetic circle with 32 controls and 40 path iterations:
+Regenerate every table in this section with `uv run python scripts/validation_numbers.py`.
+Figures quoted to twelve decimal places go stale the moment the engine changes,
+and a report publishing numbers the code no longer produces is worse than one
+publishing none. The script is what produced what follows.
 
-| Samples | Estimated lap time |
-|---:|---:|
-| 64 | 9.245119865224 s |
-| 128 | 9.250472792664 s |
-| 256 | 9.250471014721 s |
+For the committed circle fixture (12 controls) with 40 path iterations:
 
-Relative spread: **0.0578777%**. All runs terminated by `step_tolerance`. This regression protects against the earlier polygon-corner behavior in which adding samples could incorrectly make the same circuit much slower.
+| Samples | Estimated lap time | Termination |
+|---:|---:|---|
+| 64 | 9.267674719504 s | `iteration_limit` |
+| 128 | 9.286661970439 s | `iteration_limit` |
+| 256 | 9.290100962770 s | `step_tolerance` |
+
+Relative spread: **0.2416236%**. This regression protects against the earlier polygon-corner behavior in which adding samples could incorrectly make the same circuit much slower.
 
 A circle is a weak fixture for this property: discretization error and path-solver
 behavior are both curvature driven, so a near-analytic shape cannot expose a
 regression that only appears once a circuit has corners. On the synthetic
 serpentine fixture (`r = 50 + 14 sin 5θ`, 8 m corridor) the same measurement gave:
 
-| Samples | Lap time before | Lap time after | Path length before | Path length after |
-|---:|---:|---:|---:|---:|
-| 300 | 34.335 s | 33.893 s | 432.71 m | 432.69 m |
-| 600 | 35.346 s | 34.261 s | 441.57 m | 432.95 m |
-| 1200 | 37.208 s | 34.486 s | 449.49 m | 432.97 m |
-| 2400 | 38.439 s | 34.501 s | 452.90 m | 432.99 m |
+| Samples | Lap time | Path length | Termination |
+|---:|---:|---:|---|
+| 300 | 36.830 s | 423.42 m | `iteration_limit` |
+| 600 | 38.087 s | 428.24 m | `iteration_limit` |
+| 1200 | 38.344 s | 429.39 m | `iteration_limit` |
+| 2400 | 37.237 s | 419.52 m | `iteration_limit` |
 
-Relative lap-time spread fell from **12.0%** to **1.8%**, and path-length spread
-from **4.6%** to **0.07%**. The cause was a gradient preconditioner whose width
-was fixed in samples rather than in arc length, so it silently weakened as the
-resolution rose. `tests/python/test_simulation.py` now covers both fixtures.
+Relative lap-time spread: **4.0%**. Path-length spread: **2.32%**.
+
+These numbers replace an earlier table that reported 1.8% and 0.07% after the
+gradient preconditioner was given a width fixed in arc length rather than in
+samples. That fix stands; the figures moved because the corridor is now
+measured across the centreline normal rather than between independently
+resampled boundary samples, and this fixture offsets its boundaries *radially*.
+Its true width therefore varies between 4.55 m and 8.00 m along the lap, where
+the old measurement reported roughly 8 m everywhere.
+
+The narrower, genuinely varying corridor is the correct one, and it is harder:
+the projected-gradient search settles into a different local minimum at each
+resolution, which is the 4.0% above. That is tracked as a solver defect in
+[issue #45](https://github.com/Navesz/openkartline/issues/45), with a
+`xfail(strict=True)` regression in `tests/python/test_simulation.py` that turns
+red again the moment it is fixed. On the five shipped circuits — all true
+constant-width corridors — the same change *improved* stability, most visibly
+on Circuito Aurora, from 5.98% to 1.95%.
 
 ### Path-solver termination
 
@@ -69,8 +88,16 @@ On the same serpentine fixture the projected-gradient line search previously
 rejected every candidate step after 7–23 iterations and reported `no_progress`,
 so `path_smoothing_iterations` had no observable effect between 20 and 200. The
 preconditioned direction is now restricted to the free set before the corridor
-bounds are applied, with the unsmoothed gradient as a fallback; every run makes
-measurable progress and terminates on `iteration_limit` or `step_tolerance`.
+bounds are applied, with the unsmoothed gradient as a fallback.
+
+`no_progress` is no longer reachable at all. Exhausting the line search means
+both directions were tried with sixteen halvings from `0.08 / max|free|`, so
+the smallest displacement offered was about 1.2e-6 — an order of magnitude
+below the 1e-5 step tolerance the same function trusts as convergence. On an
+annulus sitting on the exact analytic optimum that state used to be reported as
+a failure while the returned radius matched the closed-form answer to 2e-4 m.
+The literal remains in `PathTerminationReason` because it is published contract
+and a stored result may still carry it.
 
 ### Geometry preparation cost
 
