@@ -23,5 +23,8 @@ jobs:
           persist-credentials: false
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          fail-on-severity: high
+          # Moderate, not high: the advisory that actually bit this repo was a
+          # moderate one. This job still only sees what a PR adds — the
+          # scheduled audit covers what is already pinned.
+          fail-on-severity: moderate
           comment-summary-in-pr: never
