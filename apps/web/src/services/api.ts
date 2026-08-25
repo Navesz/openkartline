@@ -61,8 +61,13 @@ interface ValidationEntry {
  */
 function validationDetail(detail: unknown, t: Translate): string {
   if (!Array.isArray(detail)) return ''
-  const parts = (detail as ValidationEntry[])
-    .map((entry) => {
+  const parts = (detail as unknown[])
+    .map((candidate) => {
+      // A `null` here used to throw reading `.loc`, and the catch around the
+      // JSON parse swallowed it, so one malformed entry cost the user every
+      // sibling message and the bare "HTTP 422" came back.
+      if (!candidate || typeof candidate !== 'object') return ''
+      const entry = candidate as ValidationEntry
       const path = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== 'body').join('.') : ''
       const message = typeof entry.msg === 'string' ? entry.msg : ''
       if (!path && !message) return ''

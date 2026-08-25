@@ -315,3 +315,25 @@ describe('engine notes are stated once', () => {
     expect(rendered.filter((line) => line === 'Large width variation.')).toHaveLength(1)
   })
 })
+
+describe('a malformed validation body', () => {
+  it('keeps the entries it can read when one of them is not an object', async () => {
+    // Reading `.loc` off a null threw, and the catch around the JSON parse
+    // swallowed it, so one bad entry cost the user every sibling message and
+    // the bare "HTTP 422" came back -- the exact failure the detail parsing
+    // was added to remove.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail: [null, 'not an object', { loc: ['body', 'kart', 'power_hp'], msg: 'too big' }],
+          }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+
+    await expect(runSimulation(request, true, t)).rejects.toThrow(/kart\.power_hp/)
+  })
+})

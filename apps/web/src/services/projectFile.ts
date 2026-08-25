@@ -5,6 +5,9 @@ import type { Translate } from '../i18n/context'
 
 export const PROJECT_SCHEMA_VERSION = '0.2.0' as const
 
+/** Matches `track.attribution.maxLength` in the published 0.2.0 schema. */
+export const ATTRIBUTION_MAX_LENGTH = 200
+
 export interface ProjectBuild {
   project: OklProject
   warnings: ResultNote[]
@@ -40,7 +43,9 @@ export function toProject(track: TrackInput, kart: KartInput, settings: Simulati
         width_m: track.widthM,
         // The licence travels with the geometry: saving an OpenStreetMap-derived
         // circuit and sharing the file redistributes ODbL data.
-        ...(track.attribution ? { attribution: track.attribution } : {}),
+        ...(track.attribution && track.attribution.length <= ATTRIBUTION_MAX_LENGTH
+          ? { attribution: track.attribution }
+          : {}),
         raw_centerline: track.centerline.map((point) => [point.x, point.y]),
         ...(background ? { background } : {}),
       },
@@ -186,8 +191,12 @@ export function parseProject(
         }
       }),
       // Degraded to absent rather than rejected: a malformed credit line is not
-      // a reason to refuse a project the user can still work on.
-      ...(typeof project.track.attribution === 'string' && project.track.attribution.trim()
+      // a reason to refuse a project the user can still work on. The length
+      // bound is the published one, so the app never holds a credit it would
+      // then re-emit outside its own schema.
+      ...(typeof project.track.attribution === 'string' &&
+      project.track.attribution.trim() &&
+      project.track.attribution.length <= ATTRIBUTION_MAX_LENGTH
         ? { attribution: project.track.attribution }
         : {}),
       ...parseBackground(project.track.background, t),
