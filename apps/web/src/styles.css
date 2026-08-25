@@ -675,21 +675,28 @@ main {
   align-items: center;
   gap: 0.3rem;
 }
+/*
+ * A short length of the line itself, not a coloured dot. The three modes are
+ * red, amber and green -- the axis red-green colour blindness runs along -- so
+ * the legend has to show the pattern that tells them apart on the track, and a
+ * 7px dot is too small for any pattern to register on.
+ */
 .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 16px;
+  height: 3px;
+  border-radius: 1.5px;
   display: inline-block;
 }
 .dot.brake {
-  background: var(--red);
+  background: repeating-linear-gradient(90deg, var(--red) 0 3px, transparent 3px 5.4px);
 }
 .dot.coast {
-  background: var(--yellow);
+  background: repeating-linear-gradient(90deg, var(--yellow) 0 7px, transparent 7px 10px);
 }
 .dot.throttle {
   background: var(--green);
 }
+
 .control-hit {
   fill: transparent;
   cursor: grab;
@@ -1027,6 +1034,20 @@ main {
   fill: none;
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
+}
+/*
+ * The three traces differed only in stroke colour, and two of them were the
+ * green and the red that red-green colour blindness collapses together. Speed
+ * stays solid as the reference; the pedals are told apart by pattern as well
+ * as hue, so the chart survives being printed, screenshotted in greyscale, or
+ * read by the one man in twelve who cannot separate the two.
+ */
+.throttle-line {
+  stroke-dasharray: 6 3;
+}
+.brake-line {
+  stroke-dasharray: 2 2.5;
+  stroke-linecap: round;
 }
 .speed-line {
   stroke: var(--cyan);

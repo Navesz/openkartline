@@ -51,6 +51,24 @@ interface ViewBox {
 
 const MODE_COLORS = { brake: '#ff5c4d', coast: '#ffd166', throttle: '#6ee7a8' }
 
+/**
+ * A second channel for what the racing line is doing, because the first one is
+ * red, amber and green -- the axis red-green colour blindness runs along, and
+ * around one man in twelve cannot separate the braking segments from the
+ * throttle segments by hue. The line is the product, so it cannot be the one
+ * thing only some readers can read.
+ *
+ * Throttle stays solid: it is the ordinary state, so the interruptions read as
+ * the exceptions they are. Lengths are in user units and scale with the view,
+ * as the stroke width beside them does and as the corridor boundaries above
+ * already do -- the pattern keeps its proportions at any zoom.
+ */
+const MODE_DASHES: Record<keyof typeof MODE_COLORS, string | undefined> = {
+  brake: '2 1.6',
+  coast: '5 2.2',
+  throttle: undefined,
+}
+
 function fitPoints(points: Point[]): ViewBox {
   const xs = points.map((point) => point.x)
   const ys = points.map((point) => point.y)
@@ -458,6 +476,7 @@ export function TrackCanvas({
                   points={run.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}
                   fill="none"
                   stroke={MODE_COLORS[run.mode]}
+                  strokeDasharray={MODE_DASHES[run.mode]}
                   strokeWidth="1.45"
                   strokeLinecap="butt"
                   strokeLinejoin="round"
