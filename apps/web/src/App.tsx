@@ -29,7 +29,7 @@ import {
   readImageFile,
   scaleFromCalibration,
 } from './domain/trackImage'
-import type { KartInput, SimulationResult, SimulationSettings, TrackInput } from './domain/types'
+import type { KartInput, ResultNote, SimulationResult, SimulationSettings, TrackInput } from './domain/types'
 import { INPUT_LIMITS, validateSimulationInput } from './domain/validation'
 import { useHistory } from './hooks/useHistory'
 import { useI18n } from './i18n/context'
@@ -60,7 +60,14 @@ export default function App() {
   const [elapsedS, setElapsedS] = useState(0)
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null)
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('success')
-  const [message, setMessage] = useState(() => t('app.statusReady'))
+  /**
+   * The status line as parts, not as rendered text. A message written in one
+   * locale used to sit in the run bar unchanged after the language toggle,
+   * because the string was built when the action happened rather than when it
+   * is shown. `{ text }` covers the pieces that come from somewhere else --
+   * a thrown Error, or the engine's own wording -- which cannot be re-rendered.
+   */
+  const [message, setMessage] = useState<ResultNote[]>([{ key: 'app.statusReady' }])
   const [dirty, setDirty] = useState(false)
   const unmounted = useRef(false)
   const [fitRequest, setFitRequest] = useState(0)
@@ -196,17 +203,17 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
-    setMessage(t('app.statusPresetLoaded', { name: next.name }))
+    setMessage([{ key: 'app.statusPresetLoaded', params: { name: next.name } }])
   }
 
   const simulate = async () => {
     if (hasErrors) {
       setStatus('error')
-      setMessage(t('app.statusFixBeforeSimulating'))
+      setMessage([{ key: 'app.statusFixBeforeSimulating' }])
       return
     }
     setStatus('running')
-    setMessage(t('app.statusSolving'))
+    setMessage([{ key: 'app.statusSolving' }])
     setSelectedSample(null)
     const solvedVersion = inputVersion.current
     try {
@@ -222,11 +229,15 @@ export default function App() {
       // screen belonged to the track as it was before the edit.
       const stillCurrent = inputVersion.current === solvedVersion
       if (stillCurrent) setDirty(false)
-      setMessage(
-        stillCurrent
-          ? t(next.source === 'api' ? 'app.statusSolvedApi' : 'app.statusSolvedLocal')
-          : t('app.statusSolvedStale'),
-      )
+      setMessage([
+        {
+          key: stillCurrent
+            ? next.source === 'api'
+              ? 'app.statusSolvedApi'
+              : 'app.statusSolvedLocal'
+            : 'app.statusSolvedStale',
+        },
+      ])
       // A browser result does not mean the engine is gone. `api.ts:74` falls
       // back on 429, and MAX_CONCURRENT_COMPUTATIONS is 2, so a second tab can
       // momentarily take both slots -- latching false here stranded this tab on
@@ -239,19 +250,19 @@ export default function App() {
       }
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : t('app.statusSolveFailed'))
+      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusSolveFailed' }])
     }
   }
 
   const exportFile = () => {
     if (hasErrors) {
       setStatus('error')
-      setMessage(t('app.statusFixBeforeSaving'))
+      setMessage([{ key: 'app.statusFixBeforeSaving' }])
       return
     }
-    const built = toProject(trackHistory.value, kart, settings, t)
+    const built = toProject(trackHistory.value, kart, settings)
     downloadProject(built.project)
-    setMessage([t('app.statusProjectSaved'), ...built.warnings].join(' '))
+    setMessage([{ key: 'app.statusProjectSaved' }, ...built.warnings])
     setStatus('success')
   }
 
@@ -261,7 +272,7 @@ export default function App() {
     if (!file) return
     if (file.size > INPUT_LIMITS.projectBytes) {
       setStatus('error')
-      setMessage(t('app.statusProjectTooLarge'))
+      setMessage([{ key: 'app.statusProjectTooLarge' }])
       return
     }
     try {
@@ -279,17 +290,18 @@ export default function App() {
       setSelectedSample(null)
       markDirty()
       setStatus('success')
-      setMessage(
-        t(
-          imported.track.background && imported.track.background.scaleMPerPx === undefined
-            ? 'app.statusImportedNeedsScale'
-            : 'app.statusImported',
-          { name: file.name },
-        ),
-      )
+      setMessage([
+        {
+          key:
+            imported.track.background && imported.track.background.scaleMPerPx === undefined
+              ? 'app.statusImportedNeedsScale'
+              : 'app.statusImported',
+          params: { name: file.name },
+        },
+      ])
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : t('app.statusInvalidFile'))
+      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusInvalidFile' }])
     }
   }
 
@@ -301,11 +313,11 @@ export default function App() {
       setFitRequest((value) => value + 1)
       markDirty()
       setStatus('success')
-      setMessage(t('app.statusImageAdded'))
+      setMessage([{ key: 'app.statusImageAdded' }])
       setTool('calibrate')
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : t('app.statusImageFailed'))
+      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusImageFailed' }])
     }
   }
 
@@ -317,7 +329,7 @@ export default function App() {
     })
     markDirty()
     if (tool === 'calibrate') setTool('edit')
-    setMessage(t('app.statusImageRemoved'))
+    setMessage([{ key: 'app.statusImageRemoved' }])
   }
 
   const applyCalibration = (pixelDistance: number, realMeters: number) => {
@@ -327,7 +339,7 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setTool('edit')
     setStatus('success')
-    setMessage(t('app.statusScaleApplied', { scale: newScale.toFixed(3) }))
+    setMessage([{ key: 'app.statusScaleApplied', params: { scale: newScale.toFixed(3) } }])
   }
 
   const importGpsFile = async (file: File) => {
@@ -344,16 +356,19 @@ export default function App() {
       setSelectedSample(null)
       markDirty()
       setStatus('success')
-      setMessage(
-        t('app.statusGpsImported', {
-          raw: imported.pointCountRaw,
-          kept: imported.centerline.length,
-          km: (imported.lengthM / 1000).toFixed(2),
-        }),
-      )
+      setMessage([
+        {
+          key: 'app.statusGpsImported',
+          params: {
+            raw: imported.pointCountRaw,
+            kept: imported.centerline.length,
+            km: (imported.lengthM / 1000).toFixed(2),
+          },
+        },
+      ])
     } catch (error) {
       setStatus('error')
-      setMessage(error instanceof Error ? error.message : t('app.statusGpsFailed'))
+      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusGpsFailed' }])
     }
   }
 
@@ -366,7 +381,7 @@ export default function App() {
     setDirty(false)
     setSelectedSample(null)
     setFitRequest((value) => value + 1)
-    setMessage(t('app.statusExampleRestored'))
+    setMessage([{ key: 'app.statusExampleRestored' }])
     setStatus('success')
   }
 
@@ -537,7 +552,7 @@ export default function App() {
                 ) : (
                   <Check size={17} />
                 )}
-                {message}
+                {message.map((part) => ('key' in part ? t(part.key, part.params) : part.text)).join(' ')}
               </span>
               <button
                 className="simulate-button"
