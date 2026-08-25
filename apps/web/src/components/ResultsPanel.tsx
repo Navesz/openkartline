@@ -2,6 +2,8 @@ import { AlertTriangle, ArrowRight, CircleGauge, Clock3, Gauge, Route } from 'lu
 import type { SimulationResult } from '../domain/types'
 import { useI18n } from '../i18n/context'
 import { formatLapTime } from '../domain/lapTime'
+import type { SimulationEvent } from '../domain/types'
+import type { Translate } from '../i18n/context'
 
 interface ResultsPanelProps {
   result: SimulationResult | null
@@ -15,6 +17,22 @@ const eventLabelKey = {
   apex: 'results.eventApex',
   throttle: 'results.eventThrottle',
 } as const
+
+/**
+ * The value line for an event, built at render.
+ *
+ * Producers store the raw station and speed rather than a rendered string, so
+ * this follows the language toggle instead of freezing in whichever locale was
+ * active when the lap was solved.
+ */
+function eventDetail(event: SimulationEvent, t: Translate): string {
+  if (event.kind === 'apex') {
+    return t('project.eventApex', { speed: (event.speedMps * 3.6).toFixed(0) })
+  }
+  return t(event.kind === 'brake' ? 'project.eventBrake' : 'project.eventThrottle', {
+    distance: event.sM.toFixed(0),
+  })
+}
 
 export function ResultsPanel({ result, dirty, selectedSample, onSelect }: ResultsPanelProps) {
   const { t } = useI18n()
@@ -102,7 +120,7 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
                 <span className={`event-index ${event.kind}`}>{index + 1}</span>
                 <span>
                   <small>{t(eventLabelKey[event.kind])}</small>
-                  <strong>{event.label}</strong>
+                  <strong>{eventDetail(event, t)}</strong>
                   <em>{t('results.distanceFromStart', { distance: sample?.distanceM.toFixed(0) ?? '' })}</em>
                 </span>
                 <ArrowRight size={15} />
@@ -120,7 +138,7 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
               : t('results.assumptionsSingular', { n: result.warnings.length })}
           </summary>
           {result.warnings.map((warning, index) => (
-            <p key={index}>{warning}</p>
+            <p key={index}>{'key' in warning ? t(warning.key, warning.params) : warning.text}</p>
           ))}
         </details>
       )}
