@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ESLint } from 'eslint'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -15,11 +15,28 @@ const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
  *
  * So both halves are pinned here: what it must catch, and what it must not.
  */
+const eslint = new ESLint({ cwd: WEB_ROOT })
+const FIXTURE = join(WEB_ROOT, 'src', 'components', 'RuleFixture.tsx')
+
+/*
+ * One instance, warmed once.
+ *
+ * Resolving `eslint.config.js` pulls in typescript-eslint and the whole plugin
+ * graph, and the first TSX parse compiles the JSX selectors. That is several
+ * seconds of real work, not an accounting artifact -- it happened before too,
+ * sixteen times over, and it grew past vitest's 5 s default when ESLint 9 and
+ * typescript-eslint 8 were upgraded, so whichever case ran first started
+ * failing on a timeout while the rule itself was perfectly fine.
+ *
+ * Warming with a TSX shape rather than a bare statement, because the JSX path
+ * is the expensive half.
+ */
+beforeAll(async () => {
+  await eslint.lintText('export const Warm = () => <p>{0}</p>\nvoid 0\n', { filePath: FIXTURE })
+}, 60_000)
+
 async function proseErrorsIn(source: string): Promise<number> {
-  const eslint = new ESLint({ cwd: WEB_ROOT })
-  const [result] = await eslint.lintText(source, {
-    filePath: join(WEB_ROOT, 'src', 'components', 'RuleFixture.tsx'),
-  })
+  const [result] = await eslint.lintText(source, { filePath: FIXTURE })
   return result.messages.filter((message) => message.ruleId === 'no-restricted-syntax').length
 }
 

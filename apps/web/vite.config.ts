@@ -29,17 +29,27 @@ export default defineConfig({
       // Matches the intent of the Python `fail_under` gate so both workspaces
       // are held to a comparable standard.
       //
-      // Set just under what the suite actually reaches -- 91.57 / 83.27 / 78.75
-      // / 91.57 -- leaving a couple of points for the wobble between platforms.
-      // The functions gate had been sitting at 55 against an actual 78.75, so
-      // a change could have deleted a quarter of the covered functions without
-      // the gate noticing. A threshold that far below reality records a past
-      // ambition rather than defending the present one.
+      // These moved when @vitest/coverage-v8 went from 3.2.7 to 4.1.11, and the
+      // move is the meter rather than the coverage: the same 1132 tests over the
+      // same source read 92.04 / 85.06 / 79.25 / 92.04 before and
+      // 86.40 / 79.41 / 82.26 / 87.95 after. Functions went UP while the other
+      // three went down, which is not what less-covered code looks like, and the
+      // whole drop sits in App.tsx, ControlPanel.tsx and TrackCanvas.tsx -- the
+      // three JSX-heavy files, where render branches are now attributed more
+      // finely.
+      //
+      // So these are lowered against the old reading and not against the old
+      // standard. What the new meter is telling us is that those three
+      // components are less covered than the previous figure implied --
+      // App.tsx 64.87%, ControlPanel.tsx 59.09%, TrackCanvas.tsx 66.66%. Raising
+      // that is real work and it is not done here; this bump only stops
+      // pretending it was already done. The functions gate goes up, 76 to 80,
+      // because that one genuinely improved.
       thresholds: {
-        statements: 90,
-        branches: 82,
-        functions: 76,
-        lines: 90,
+        statements: 85,
+        branches: 78,
+        functions: 80,
+        lines: 86,
       },
     },
   },

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { PRESETS } from '../domain/presets'
+import type { Point } from '../domain/types'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { TrackCanvas } from './TrackCanvas'
 
@@ -86,7 +88,12 @@ describe('TrackCanvas', () => {
   })
 })
 
-function renderEditor(onPointsChange: ReturnType<typeof vi.fn>) {
+// Typed by signature, not just as "some mock". `ReturnType<typeof vi.fn>` was
+// `Mock<Procedure>` under vitest 3, which accepted anything; under vitest 4 it
+// widened to `Mock<Procedure | Constructable>` and stopped being assignable to
+// the prop at all. Naming the signature fixes the error and is stricter than
+// what it replaces -- passing a wrong argument here is now a type error.
+function renderEditor(onPointsChange: Mock<(points: Point[], checkpoint?: boolean) => void>) {
   const view = renderCanvas(
     <TrackCanvas
       track={PRESETS.oval}
