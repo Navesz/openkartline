@@ -70,6 +70,12 @@ export default function App() {
    */
   const [message, setMessage] = useState<ResultNote[]>([{ key: 'app.statusReady' }])
   const [dirty, setDirty] = useState(false)
+  /**
+   * Which preset the track is, or `''` once it came from a file or a GPS
+   * trace. The picker reads this rather than remembering its own last
+   * click, so it cannot go on naming a circuit that has been replaced.
+   */
+  const [trackPresetKey, setTrackPresetKey] = useState('technical')
   const unmounted = useRef(false)
   const [fitRequest, setFitRequest] = useState(0)
   /**
@@ -226,6 +232,7 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
+    setTrackPresetKey(key)
     setMessage([{ key: 'app.statusPresetLoaded', params: { name: next.name } }])
   }
 
@@ -306,6 +313,8 @@ export default function App() {
     try {
       const imported = parseProject(await file.text(), t)
       trackHistory.reset(imported.track)
+      // The track came from a file, so no preset names it any more.
+      setTrackPresetKey('')
       setKart(imported.kart)
       setSettings(imported.settings)
       setFitRequest((value) => value + 1)
@@ -375,6 +384,7 @@ export default function App() {
         void _replaced
         return { ...rest, centerline: imported.centerline, direction: imported.direction }
       })
+      setTrackPresetKey('')
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
       markDirty()
@@ -403,6 +413,7 @@ export default function App() {
     // Every input just changed, so anything already in flight is answering a
     // question about a track that no longer exists.
     inputVersion.current += 1
+    setTrackPresetKey('technical')
     setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
     resultVersion.current = inputVersion.current
     setDirty(false)
@@ -526,6 +537,7 @@ export default function App() {
             }}
             onImageFile={importBackgroundImage}
             onRemoveImage={removeBackgroundImage}
+            trackPresetKey={trackPresetKey}
             onGpsFile={(file) => void importGpsFile(file)}
             onCalibrate={applyCalibration}
           />
