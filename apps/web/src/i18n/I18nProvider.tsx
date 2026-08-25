@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { I18nContext, type MessageParams } from './context'
 import type { Locale } from './locales'
 import type { MessageKey } from './messages'
+import { formatNumber } from './formatNumber'
 import { readStoredLocale, storeLocale, translate } from './translate'
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -24,6 +25,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       locale,
       setLocale,
       t: (key: MessageKey, params?: MessageParams) => translate(locale, key, params),
+      n: (value: number, digits?: number) => formatNumber(locale, value, digits),
     }),
     [locale, setLocale],
   )
