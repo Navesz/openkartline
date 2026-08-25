@@ -237,11 +237,23 @@ export default function App() {
 
   const selectPreset = (key: string) => {
     const next = freshPreset(key)
-    trackHistory.set(next)
+    const photo = trackHistory.value.background
+    // A background is a photograph of one particular circuit, calibrated
+    // against it. Re-selecting the circuit it belongs to is the user asking for
+    // the geometry back, not asking to throw the photograph away -- and since
+    // the picker reads "Custom track" the moment a photo is attached, that
+    // click is exactly what the interface invites. Loading a *different*
+    // circuit leaves the photo describing something else, so it goes; the run
+    // bar says so rather than dropping it in silence.
+    const sameCircuit = next.name === trackHistory.value.name
+    trackHistory.set(photo && sameCircuit ? { ...next, background: photo } : next)
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
-    setMessage([{ key: 'app.statusPresetLoaded', params: { name: next.name } }])
+    setMessage([
+      { key: 'app.statusPresetLoaded', params: { name: next.name } },
+      ...(photo && !sameCircuit ? ([{ key: 'app.statusPresetDroppedImage' }] as const) : []),
+    ])
   }
 
   const simulate = async () => {

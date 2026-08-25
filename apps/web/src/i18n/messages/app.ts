@@ -70,6 +70,10 @@ export const app = defineMessages({
     en: '{name} loaded. Adjust the points or run a simulation.',
     'pt-BR': '{name} carregado. Ajuste os pontos ou simule.',
   },
+  'app.statusPresetDroppedImage': {
+    en: 'The background image was removed: it was calibrated against a different circuit.',
+    'pt-BR': 'A imagem de fundo foi removida: ela estava calibrada para outro circuito.',
+  },
   'app.statusFixBeforeSimulating': {
     en: 'Fix the highlighted fields before simulating.',
     'pt-BR': 'Corrija os campos destacados antes de simular.',
