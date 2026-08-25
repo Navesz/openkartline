@@ -70,6 +70,10 @@ export const app = defineMessages({
     en: '{name} loaded. Adjust the points or run a simulation.',
     'pt-BR': '{name} carregado. Ajuste os pontos ou simule.',
   },
+  'app.importProjectAria': {
+    en: 'Import a project file',
+    'pt-BR': 'Importar um arquivo de projeto',
+  },
   'app.statusPresetDroppedImage': {
     en: 'The background image was removed: it was calibrated against a different circuit.',
     'pt-BR': 'A imagem de fundo foi removida: ela estava calibrada para outro circuito.',

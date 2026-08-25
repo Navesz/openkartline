@@ -498,6 +498,10 @@ export default function App() {
             type="file"
             accept=".json,.okl.json,application/json"
             className="visually-hidden"
+            // Named, as the image and GPS inputs beside it already are. Hidden
+            // by class rather than by `hidden`, so it stays in the accessibility
+            // tree and an unnamed file input is announced as just "file upload".
+            aria-label={t('app.importProjectAria')}
             onChange={importFile}
           />
           <button onClick={exportFile}>

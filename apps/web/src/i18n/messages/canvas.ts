@@ -39,7 +39,6 @@ export const canvas = defineMessages({
     en: '{name} layout with {count} control points',
     'pt-BR': 'Traçado {name} com {count} pontos de controle',
   },
-  'canvas.startLine': { en: 'Start line', 'pt-BR': 'Linha de largada' },
   'canvas.calibrationLabel': {
     en: 'Real distance between the marked points',
     'pt-BR': 'Distância real entre os pontos marcados',

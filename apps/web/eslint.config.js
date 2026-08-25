@@ -1,5 +1,6 @@
 import js from '@eslint/js'
 import globals from 'globals'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
@@ -50,6 +51,19 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
+  },
+  {
+    /*
+     * The hand-written accessibility here is careful -- a skip link, live
+     * regions, a keyboard point editor, and a whole `KeyboardCalibration`
+     * component written so keyboard users are not trapped by a canvas gesture
+     * that needs two clicks. None of it was defended by anything, while
+     * CONTRIBUTING.md invites contributions "improving keyboard accessibility"
+     * with no gate to check them against.
+     */
+    files: ['src/**/*.tsx'],
+    ignores: ['src/**/*.test.tsx'],
+    ...jsxA11y.flatConfigs.strict,
   },
   {
     // AGENTS.md: never write a literal string into a component. The rule was
