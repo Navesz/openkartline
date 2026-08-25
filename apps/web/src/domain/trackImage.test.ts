@@ -4,6 +4,7 @@ import { translate } from '../i18n/translate'
 import type { TrackInput } from './types'
 import {
   calibratedTrack,
+  imagePixelsFromWorld,
   dataUrlBytes,
   downscaleTrackImage,
   fitsProjectBudget,
@@ -215,5 +216,28 @@ describe('calibratedTrack', () => {
   it('is a no-op without a background', () => {
     const noImage: TrackInput = { ...metricTrack, background: undefined }
     expect(calibratedTrack(noImage, 0.4)).toBe(noImage)
+  })
+})
+
+describe('imagePixelsFromWorld', () => {
+  it('is the identity before a scale is set', () => {
+    // The image is drawn at 1 m/px until calibrated, so a world unit is a pixel.
+    expect(imagePixelsFromWorld(250, undefined)).toBe(250)
+  })
+
+  it('converts a world span back to pixels once a scale exists', () => {
+    // A photo at 0.4 m/px is drawn 0.4 world units per pixel, so a feature
+    // spanning 100 world metres covers 250 pixels. Passing the world span
+    // straight through gave 100, making the next scale 1 m/px instead of 0.4.
+    expect(imagePixelsFromWorld(100, 0.4)).toBe(250)
+  })
+
+  it('keeps a correct recalibration idempotent', () => {
+    // Re-marking the same feature at the same scale must reproduce that scale,
+    // rather than multiplying the error on every correction.
+    const scale = 0.4
+    const worldSpan = 100
+    const pixels = imagePixelsFromWorld(worldSpan, scale)
+    expect(scaleFromCalibration(pixels, worldSpan, t)).toBeCloseTo(scale, 12)
   })
 })

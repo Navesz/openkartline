@@ -118,6 +118,20 @@ export function downscaleTrackImage(image: HTMLImageElement, t: Translate): Trac
  * runs in pixel units until the user calibrates, so world distance IS pixel
  * distance at that moment.
  */
+/**
+ * Convert a span measured in world units into image pixels.
+ *
+ * `scaleFromCalibration` is defined in pixels, but the canvas marks its two
+ * calibration points in world units. Those are the same thing only before a
+ * scale exists, when the image is drawn at 1 m/px. Once one is set, a pixel
+ * covers `scaleMPerPx` world units — so recalibrating a photo already at
+ * 0.4 m/px and marking a known 100 m feature yielded 1 m/px instead of 0.4,
+ * wrong by 1/scale and compounding on every further correction.
+ */
+export function imagePixelsFromWorld(worldDistance: number, scaleMPerPx: number | undefined): number {
+  return worldDistance / (scaleMPerPx ?? 1)
+}
+
 export function scaleFromCalibration(pixelDistance: number, realMeters: number, t: Translate): number {
   if (!Number.isFinite(realMeters) || realMeters <= 0)
     throw new Error(t('imports.calibrationDistanceRequired'))
