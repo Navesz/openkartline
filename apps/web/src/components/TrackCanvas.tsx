@@ -111,8 +111,21 @@ export function TrackCanvas({
         : track.centerline,
     ),
   )
-  const [dragPoint, setDragPoint] = useState<number | null>(null)
-  const [panOrigin, setPanOrigin] = useState<{ clientX: number; clientY: number; view: ViewBox } | null>(null)
+  /**
+   * The pointer that owns each gesture, not just what it is doing. A bare index
+   * meant a second finger landing on another control point overwrote it, and
+   * both pointers then steered the newly grabbed one while the first was
+   * abandoned mid-drag.
+   */
+  const [drag, setDrag] = useState<{ pointerId: number; index: number } | null>(null)
+  const [panOrigin, setPanOrigin] = useState<{
+    pointerId: number
+    clientX: number
+    clientY: number
+    view: ViewBox
+  } | null>(null)
+  /** Whether this drag has already pushed its undo checkpoint. */
+  const dragCheckpointed = useRef(false)
   const [calibrationStart, setCalibrationStart] = useState<Point | null>(null)
   const [calibrationEnd, setCalibrationEnd] = useState<Point | null>(null)
   const [calibrationMeters, setCalibrationMeters] = useState('100')
@@ -175,7 +188,12 @@ export function TrackCanvas({
   const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.button === 1 || tool === 'pan') {
       event.currentTarget.setPointerCapture(event.pointerId)
-      setPanOrigin({ clientX: event.clientX, clientY: event.clientY, view: viewBox })
+      setPanOrigin({
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        view: viewBox,
+      })
       return
     }
     if (tool === 'calibrate' && background) {
@@ -224,19 +242,28 @@ export function TrackCanvas({
     setCalibrationError(null)
   }
 
+  const endGesture = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (drag && drag.pointerId === event.pointerId) setDrag(null)
+    if (panOrigin && panOrigin.pointerId === event.pointerId) setPanOrigin(null)
+  }
+
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect()
-    if (panOrigin && rect) {
+    if (panOrigin && panOrigin.pointerId === event.pointerId && rect) {
       setViewBox({
         ...panOrigin.view,
         x: panOrigin.view.x - ((event.clientX - panOrigin.clientX) / rect.width) * panOrigin.view.width,
         y: panOrigin.view.y + ((event.clientY - panOrigin.clientY) / rect.height) * panOrigin.view.height,
       })
     }
-    if (dragPoint !== null) {
+    if (drag && drag.pointerId === event.pointerId) {
       const next = [...track.centerline]
-      next[dragPoint] = clientToWorld(event.clientX, event.clientY)
-      onPointsChange(next, false)
+      next[drag.index] = clientToWorld(event.clientX, event.clientY)
+      // The checkpoint belongs to the first real movement, not to pointerdown:
+      // `set` snapshots whatever the present value is at that moment, which is
+      // still the unmoved centerline, so undo lands where the drag started.
+      onPointsChange(next, !dragCheckpointed.current)
+      dragCheckpointed.current = true
     }
   }
 
@@ -324,14 +351,8 @@ export function TrackCanvas({
         aria-label={t('canvas.trackAria', { name: track.name, count: track.centerline.length })}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={() => {
-          setDragPoint(null)
-          setPanOrigin(null)
-        }}
-        onPointerCancel={() => {
-          setDragPoint(null)
-          setPanOrigin(null)
-        }}
+        onPointerUp={endGesture}
+        onPointerCancel={endGesture}
         style={{ cursor: surfaceCursor }}
       >
         <defs>
@@ -532,8 +553,12 @@ export function TrackCanvas({
                   onPointerDown={(event) => {
                     event.stopPropagation()
                     event.currentTarget.setPointerCapture(event.pointerId)
-                    onPointsChange([...track.centerline], true)
-                    setDragPoint(index)
+                    // No checkpoint here. Pushing one on pointerdown made a
+                    // plain click mark the project dirty and leave an undo
+                    // entry identical to the present, so the first Ctrl+Z did
+                    // nothing.
+                    dragCheckpointed.current = false
+                    setDrag({ pointerId: event.pointerId, index })
                   }}
                 />
                 <circle className="control-point" cx={point.x} cy={point.y} r="1.25" />
