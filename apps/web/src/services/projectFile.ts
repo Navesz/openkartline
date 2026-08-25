@@ -152,7 +152,13 @@ function versionLabel(
   if (declared === undefined || declared === null) return { key: 'project.missingVersion' }
   if (typeof declared === 'object') return { key: 'project.unreadableVersion' }
   const text = String(declared)
-  return text.length > VERSION_LABEL_MAX ? `${text.slice(0, VERSION_LABEL_MAX)}…` : text
+  // A blank string declares nothing, and quoting it back produced a sentence
+  // with a hole in it: "Unsupported project version: ."
+  if (!text.trim()) return { key: 'project.missingVersion' }
+  // Cut by code point, not by code unit: slicing mid-surrogate leaves half a
+  // character, which renders as the replacement glyph.
+  const glyphs = Array.from(text)
+  return glyphs.length > VERSION_LABEL_MAX ? `${glyphs.slice(0, VERSION_LABEL_MAX).join('')}…` : text
 }
 
 export function parseProject(text: string): {
@@ -169,6 +175,15 @@ export function parseProject(text: string): {
   } catch {
     throw new LocalisedError({ key: 'project.invalidJson' })
   }
+  // `JSON.parse` yields whatever the file held, and `null`, a number and a
+  // string are all valid JSON. Reading `schema_version` off `null` threw a raw
+  // `TypeError`, which the run bar then showed verbatim: a file containing the
+  // four characters `null` was answered with "Cannot read properties of null".
+  if (typeof input !== 'object' || input === null || Array.isArray(input))
+    throw new LocalisedError({
+      key: 'project.unsupportedVersion',
+      params: { version: versionLabel(input) },
+    })
   const project = input as Partial<OklProject>
   if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
     throw new LocalisedError({

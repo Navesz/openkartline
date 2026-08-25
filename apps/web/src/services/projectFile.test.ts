@@ -271,3 +271,45 @@ describe('the version a rejected file declared', () => {
     expect(rendered(['0.2.0'])).toMatch(/not a version/i)
   })
 })
+
+describe('a file that is valid JSON but not a project', () => {
+  const message = (text: string): string => {
+    try {
+      parseProject(text)
+    } catch (error) {
+      const note = error instanceof LocalisedError ? error.note : undefined
+      return note && 'key' in note ? translate('en', note.key, note.params) : String(error)
+    }
+    return ''
+  }
+
+  it.each(['null', '42', '"0.2.0"', 'true', '[]', '[{"schema_version":"0.2.0"}]'])(
+    'answers %s in this app\u2019s own words',
+    (text) => {
+      // `null`, a number, a string and an array are all valid JSON. Reading
+      // `schema_version` off `null` threw a raw `TypeError`, and the run bar
+      // showed it verbatim: "Cannot read properties of null".
+      const rendered = message(text)
+      expect(rendered).toMatch(/unsupported project version/i)
+      expect(rendered).not.toMatch(/cannot read propert/i)
+      expect(rendered).not.toMatch(/TypeError/)
+    },
+  )
+
+  it('does not leave a hole in the sentence for a blank version', () => {
+    expect(message('{"schema_version":""}')).toMatch(/missing/i)
+    expect(message('{"schema_version":"   "}')).toMatch(/missing/i)
+    expect(message('{"schema_version":""}')).not.toMatch(/version: \./)
+  })
+
+  it('truncates by code point, not by code unit', () => {
+    // Slicing mid-surrogate leaves half a character. It stays a lone surrogate
+    // in the string and only becomes U+FFFD once rendered, so asserting on
+    // U+FFFD here would pass either way -- this looks for the unpaired unit.
+    const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+    const emoji = `${'a'.repeat(39)}\u{1F600}\u{1F600}`
+    const rendered = message(`{"schema_version":${JSON.stringify(emoji)}}`)
+    expect(rendered).toMatch(/a{39}/)
+    expect(lone.test(rendered)).toBe(false)
+  })
+})

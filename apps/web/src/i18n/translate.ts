@@ -51,8 +51,12 @@ export function translate(locale: Locale, key: MessageKey, params?: MessageParam
       // app's prose -- the exact hole this check was added to close.
       //
       // An unrecognised key renders as nothing rather than as `match`, which is
-      // the matched text including its braces: a literal `{version}` in a
-      // sentence is a developer artefact, not something a reader can act on.
+      // the matched text including its braces. That differs from the missing-
+      // param branch above, which does return `match`, and deliberately: a
+      // message declaring a slot nobody fills is a caller bug, and
+      // `messages.test.ts` fails the build on it, so a loud `{version}` is
+      // wanted there. An unresolvable key is data, and there is no build-time
+      // check that could have caught it.
       return Object.hasOwn(MESSAGES, value.key) ? translate(locale, value.key, value.params) : ''
     }
     return String(value)
