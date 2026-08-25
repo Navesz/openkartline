@@ -9,6 +9,9 @@ export const app = defineMessages({
   'app.skipToTrack': { en: 'Skip to the track', 'pt-BR': 'Pular para a pista' },
 
   'app.brandHome': { en: 'OpenKartLine — home', 'pt-BR': 'OpenKartLine — início' },
+  // Same in every locale, keyed like `app.github` so the no-literals rule has
+  // no exceptions to carve out.
+  'app.brandName': { en: 'OpenKartLine', 'pt-BR': 'OpenKartLine' },
   'app.brandTagline': { en: 'RACING LINE LAB', 'pt-BR': 'RACING LINE LAB' },
 
   'app.engineTitleConnected': { en: 'API connected', 'pt-BR': 'API conectada' },

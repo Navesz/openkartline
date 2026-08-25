@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_KART, PRESETS } from '../domain/presets'
+import { DEFAULT_KART, PRESETS, REAL_TRACK_KEYS } from '../domain/presets'
 import type { TrackInput, ValidationIssue } from '../domain/types'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { ControlPanel } from './ControlPanel'
@@ -110,5 +110,27 @@ describe('ControlPanel accessibility', () => {
     await user.click(screen.getByRole('button', { name: /set scale/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/too close together/i)
+  })
+})
+
+describe('the track picker names the tracks it selects', () => {
+  it.each(REAL_TRACK_KEYS)('offers %s under the name the preset carries', (key) => {
+    // The option labels used to be retyped in the component, and one had
+    // already drifted: the picker read "Kartódromo Int. de Volta Redonda"
+    // while the track it selected was named "Kartódromo Internacional de
+    // Volta Redonda". Rendering from the data makes that impossible.
+    renderPanel()
+    const option = screen.getByRole('option', { name: PRESETS[key].name })
+    expect(option).toHaveValue(key)
+  })
+
+  it('offers every real track exactly once', () => {
+    const { container } = renderPanel()
+    const values = [...container.querySelectorAll('optgroup')]
+      .flatMap((group) => [...group.querySelectorAll('option')])
+      .map((option) => option.value)
+    for (const key of REAL_TRACK_KEYS) {
+      expect(values.filter((value) => value === key)).toHaveLength(1)
+    }
   })
 })

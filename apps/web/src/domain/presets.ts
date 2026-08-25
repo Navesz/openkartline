@@ -512,13 +512,11 @@ export const PRESETS: Record<string, TrackInput> = {
  */
 export interface KartPreset extends KartInput {
   labelKey: MessageKey
-  noteKey: MessageKey
 }
 
 export const KART_PRESETS: Record<string, KartPreset> = {
   rentalIndoor: {
     labelKey: 'presets.rentalIndoor.label',
-    noteKey: 'presets.rentalIndoor.note',
     powerHp: 15,
     kartMassKg: 186,
     driverMassKg: 75,
@@ -528,7 +526,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   rentalOutdoor: {
     labelKey: 'presets.rentalOutdoor.label',
-    noteKey: 'presets.rentalOutdoor.note',
     powerHp: 12,
     kartMassKg: 159,
     driverMassKg: 75,
@@ -538,7 +535,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   cadete: {
     labelKey: 'presets.cadete.label',
-    noteKey: 'presets.cadete.note',
     powerHp: 9.5,
     kartMassKg: 65,
     driverMassKg: 40,
@@ -548,7 +544,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   junior: {
     labelKey: 'presets.junior.label',
-    noteKey: 'presets.junior.note',
     powerHp: 23,
     kartMassKg: 85,
     driverMassKg: 60,
@@ -558,7 +553,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   senior: {
     labelKey: 'presets.senior.label',
-    noteKey: 'presets.senior.note',
     powerHp: 30,
     kartMassKg: 85,
     driverMassKg: 77,
@@ -568,7 +562,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   shifter: {
     labelKey: 'presets.shifter.label',
-    noteKey: 'presets.shifter.note',
     powerHp: 50,
     kartMassKg: 95,
     driverMassKg: 85,
@@ -578,7 +571,6 @@ export const KART_PRESETS: Record<string, KartPreset> = {
   },
   superkart: {
     labelKey: 'presets.superkart.label',
-    noteKey: 'presets.superkart.note',
     powerHp: 95,
     kartMassKg: 133,
     driverMassKg: 85,
@@ -590,10 +582,17 @@ export const KART_PRESETS: Record<string, KartPreset> = {
 
 /** Strip the presentation fields, leaving only what the solver models. */
 export function toKartInput(preset: KartPreset): KartInput {
-  const { labelKey, noteKey, ...values } = preset
+  const { labelKey, ...values } = preset
   void labelKey
-  void noteKey
   return values
 }
+
+/**
+ * The circuits traced from OpenStreetMap, in the order the picker offers them.
+ *
+ * Exported so the picker renders their names from here instead of repeating
+ * them, which is how the two came to disagree.
+ */
+export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'baltar'] as const
 
 export const clonePoints = (points: Point[]): Point[] => points.map((point) => ({ ...point }))

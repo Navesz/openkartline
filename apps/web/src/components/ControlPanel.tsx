@@ -15,7 +15,7 @@ import {
   Weight,
   Zap,
 } from 'lucide-react'
-import { KART_PRESETS, toKartInput } from '../domain/presets'
+import { KART_PRESETS, PRESETS, REAL_TRACK_KEYS, toKartInput } from '../domain/presets'
 import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 import { useI18n } from '../i18n/context'
@@ -194,10 +194,16 @@ export function ControlPanel({
                 <option value="hairpin">{t('panel.trackHairpin')}</option>
               </optgroup>
               <optgroup label={t('panel.realGroup')}>
-                <option value="voltaRedonda">Kartódromo Int. de Volta Redonda</option>
-                <option value="adria">Adria Karting Raceway</option>
-                <option value="casteloBranco">Kartódromo de Castelo Branco</option>
-                <option value="baltar">Kartódromo de Baltar</option>
+                {/* Rendered from the presets rather than retyped. These are
+                    proper nouns, identical in every locale, so a second copy
+                    buys nothing and can drift -- the option for Volta Redonda
+                    already read "Kartódromo Int." while the track it selects
+                    was named "Kartódromo Internacional". */}
+                {REAL_TRACK_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {PRESETS[key].name}
+                  </option>
+                ))}
               </optgroup>
             </select>
             <ChevronDown size={15} />
