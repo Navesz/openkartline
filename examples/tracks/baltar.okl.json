@@ -9,6 +9,7 @@
     "coordinate_system": "local_cartesian_m",
     "direction": "counterclockwise",
     "width_m": 8.0,
+    "attribution": "© OpenStreetMap contributors · ODbL 1.0",
     "raw_centerline": [
       [
         17.24,

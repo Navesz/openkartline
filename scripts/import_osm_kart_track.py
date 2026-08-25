@@ -63,6 +63,10 @@ SIMULATION_BLOCK: dict[str, Any] = {
 }
 
 
+#: Credit line required by the OpenStreetMap Database Licence.
+OSM_ATTRIBUTION = "© OpenStreetMap contributors · ODbL 1.0"
+
+
 def fetch_way(way_id: int, url: str, attempts: int, pause_s: float) -> dict[str, Any]:
     """Fetch one way with metadata and geometry from an Overpass endpoint."""
     query = f"[out:json][timeout:120];way(id:{way_id});out meta geom;"
@@ -240,6 +244,10 @@ def main() -> int:
             "coordinate_system": "local_cartesian_m",
             "direction": direction,
             "width_m": args.width_m,
+            # ODbL requires the credit to travel with the data, and this file is
+            # meant to be shared. Written here rather than left to the editor so
+            # a project is never produced without it.
+            "attribution": OSM_ATTRIBUTION,
             "raw_centerline": [[x, y] for x, y in rounded],
         },
         "kart": KART_BLOCK,
