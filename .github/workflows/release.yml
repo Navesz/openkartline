@@ -1,0 +1,105 @@
+name: Release
+
+# docs/RELEASES.md steps 5 to 9 were manual: build in clean environments,
+# attach artifacts and SHA-256 checksums, publish. That note ends with "until
+# artifact publication is fully automated and verified, a tag must not imply
+# that installers exist" -- this is that automation.
+#
+# `workflow_dispatch` builds and attests exactly the same way but uploads to the
+# run instead of to a release, so the whole path can be exercised without
+# spending a tag on it.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  artifacts:
+    name: Build, attest, and publish artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write # attach artifacts to the drafted release
+      id-token: write # provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          uv sync --locked --all-extras --dev
+
+      - name: Verify the tag matches the version being released
+        # A tag that disagrees with the packaged version produces artifacts that
+        # cannot be traced back to it, which is the one thing a release is for.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          packaged="$(uv run python -c 'import importlib.metadata as m; print(m.version("openkartline"))')"
+          if [ "$tag" != "$packaged" ]; then
+            echo "tag $GITHUB_REF_NAME does not match packaged version $packaged" >&2
+            exit 1
+          fi
+
+      - name: Build the Python distributions
+        run: uv build --out-dir dist
+
+      - name: Build and pack the web application
+        run: |
+          pnpm --filter @openkartline/web build
+          tar --create --gzip \
+            --file "dist/openkartline-web-${GITHUB_REF_NAME:-dev}.tar.gz" \
+            --directory apps/web/dist .
+
+      - name: Generate software bills of materials
+        # Both ecosystems, because a lap time produced by this project depends
+        # on the resolved graph of both. cdxgen rather than cyclonedx-npm: the
+        # latter shells out to `npm ls`, which cannot read a pnpm workspace.
+        run: |
+          uvx --from cyclonedx-bom cyclonedx-py environment \
+            --of JSON -o dist/sbom-python.cdx.json
+          pnpm dlx @cyclonedx/cdxgen@11 -t pnpm --no-recurse -o dist/sbom-node.cdx.json .
+
+      - name: Checksum every artifact
+        working-directory: dist
+        run: |
+          # Named explicitly rather than by glob: `./*` would be expanded
+          # before the redirect creates SHA256SUMS, which is correct but relies
+          # on an ordering subtlety a reader should not have to know.
+          sha256sum ./*.tar.gz ./*.whl ./*.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.whl
+
+      - name: Upload artifacts to the run
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-artifacts
+          path: dist/
+          if-no-files-found: error
+
+      - name: Attach the artifacts to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber
