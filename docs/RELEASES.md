@@ -31,14 +31,31 @@ Before tagging, the release manager verifies:
 2. Move relevant entries from `Unreleased` in [CHANGELOG.md](../CHANGELOG.md) to a dated version heading.
 3. Update version metadata and [CITATION.cff](../CITATION.cff).
 4. Run the full required checks in [DEVELOPMENT.md](DEVELOPMENT.md) from a clean checkout.
-5. Build the production web app and any advertised packages in clean environments.
-6. Smoke-test artifacts, not only the source tree.
+5. Run [`Release`](../.github/workflows/release.yml) from the Actions tab, on the release branch. It builds everything a tag would and uploads it to the run instead of to a release, so the artifacts can be smoke-tested before the tag exists.
+6. Smoke-test those artifacts, not only the source tree.
 7. Open a release pull request containing only release metadata and necessary fixes.
 8. Merge, create a signed annotated tag `vX.Y.Z`, and push the tag.
-9. Publish the prepared GitHub release after attaching artifacts and SHA-256 checksums.
+9. The same workflow runs on the tag and attaches the artifacts, their `SHA256SUMS`, and both SBOMs to the drafted release. Review the draft and publish it.
 10. Verify public downloads and start a fresh-install test from the published instructions.
 
-Until artifact publication is fully automated and verified, a tag must not imply that installers exist. Release Drafter prepares notes but does not publish on its own.
+## What a tag produces
+
+Pushing `vX.Y.Z` builds, checksums, attests and attaches:
+
+- `openkartline-X.Y.Z.tar.gz` and `openkartline-X.Y.Z-py3-none-any.whl` — the engine and API distributions;
+- `openkartline-web-vX.Y.Z.tar.gz` — the production web build;
+- `sbom-python.cdx.json` and `sbom-node.cdx.json` — CycloneDX 1.6 bills of materials for both dependency graphs;
+- `SHA256SUMS` — checksums over all of the above.
+
+The Python distributions carry a [build provenance attestation](https://docs.github.com/en/actions/concepts/security/artifact-attestations), so a consumer can verify which workflow run, from which commit, produced the file they downloaded:
+
+```bash
+gh attestation verify openkartline-X.Y.Z-py3-none-any.whl --repo Navesz/openkartline
+```
+
+The workflow refuses to run on a tag whose name disagrees with the packaged version. A tag that cannot be traced to the artifact it names is the one thing a release must not produce.
+
+Release Drafter prepares the notes; it does not publish on its own, and neither does this workflow — publishing the reviewed draft stays a human step.
 
 ## Release notes
 
