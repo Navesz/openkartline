@@ -126,16 +126,21 @@ function simulateWithMinimumBending(request: SimulationRequest, t: Translate): S
     ...(track.widthM < 5 ? [t('project.warningNarrowTrack')] : []),
     ...(diagnostics.converged ? [] : [t('project.warningNotConverged')]),
   ]
+  // The apex spacing rule wraps with `trackLengthM - gap`, so this has to be
+  // the length of the racing line the stations sit on -- `simulation.py:233`
+  // passes `path_length`. Passing the centerline's length made that term
+  // negative for apex pairs straddling s = 0 and changed which apexes survived.
+  const pathLengthM = segmentLengths.reduce((sum, length) => sum + length, 0)
   return {
     source: 'browser',
     solver: 'browser-minimum-bending-v1',
     lapTimeS: profile.lapTimeS,
-    trackLengthM: segmentLengths.reduce((sum, length) => sum + length, 0),
+    trackLengthM: pathLengthM,
     maxSpeedMps: Math.max(...profile.speed),
     minSpeedMps: Math.min(...profile.speed),
     samples,
     events: eventsFromMarkers(
-      buildDrivingMarkers(station, path, curvature, profile, prepared.lengthM),
+      buildDrivingMarkers(station, path, curvature, profile, pathLengthM),
       samples.length,
       t,
     ),
@@ -301,8 +306,12 @@ export function simulateInBrowser(request: SimulationRequest, t: Translate): Sim
     return simulateWithMinimumBending(request, t)
   } catch (error) {
     // The ported engine mirrors the API's strictness; the demo must still
-    // answer when an edge case slips past client-side validation.
+    // answer when an edge case slips past client-side validation. But the
+    // answer comes from a different model -- measured 6.7% apart on the shipped
+    // presets -- so it is marked here, at the failure, rather than inside the
+    // heuristic, which is a legitimate solver in its own right.
     console.warn('Minimum-bending engine unavailable, using anchor heuristic:', error)
-    return simulateWithAnchorHeuristic(request, t)
+    const fallback = simulateWithAnchorHeuristic(request, t)
+    return { ...fallback, warnings: [t('project.warningSolverFallback'), ...fallback.warnings] }
   }
 }

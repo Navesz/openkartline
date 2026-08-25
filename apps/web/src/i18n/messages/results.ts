@@ -15,6 +15,10 @@ export const results = defineMessages({
   'results.titleStale': { en: 'Previous reference', 'pt-BR': 'Referência anterior' },
   'results.titleCurrent': { en: 'Reference lap', 'pt-BR': 'Linha de referência' },
   'results.sourceApi': { en: 'MVP physics engine', 'pt-BR': 'Motor físico MVP' },
+  'results.sourceFallbackHeuristic': {
+    en: 'Local mode · estimate',
+    'pt-BR': 'Modo local · estimativa',
+  },
   'results.sourceFallback': { en: 'Local fallback', 'pt-BR': 'Fallback local' },
   'results.staleNote': {
     en: 'Parameters changed. Re-run the simulation to update.',

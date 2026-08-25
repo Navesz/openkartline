@@ -45,9 +45,6 @@ const UPDATE = process.env.OKL_UPDATE_PARITY === '1'
 const LAP_TIME_TOLERANCE = 1e-6 // relative to the Python lap time
 const LINE_DEVIATION_TOLERANCE_M = 1e-5 // per-sample distance between the two lines
 const SPEED_TOLERANCE_MPS = 1e-3 // per-sample absolute speed difference
-const APEX_MATCH_TOLERANCE_SAMPLES = 3
-/** Advisory apex dots can flip on last-bit curvature ties; actionable ones cannot. */
-const APEX_MIN_MATCH_RATIO = 0.9
 
 const KARTS: Record<string, KartInput> = {
   default: DEFAULT_KART,
@@ -113,7 +110,10 @@ function runTypeScriptEngine(body: ReturnType<typeof toApiRequest>) {
     { frictionExponent: body.settings.friction_exponent },
   )
   expect(body.settings.friction_exponent).toBe(FRICTION_EXPONENT)
-  const markers = buildDrivingMarkers(station, path, curvature, profile, prepared.lengthM)
+  // Same length the engine uses for the apex wrap: the racing line's, not the
+  // centerline's. See `simulation.py:233`.
+  const pathLengthM = segmentLengths.reduce((sum, length) => sum + length, 0)
+  const markers = buildDrivingMarkers(station, path, curvature, profile, pathLengthM)
   return { path, profile, markers }
 }
 
@@ -169,10 +169,16 @@ describe('engine parity: TypeScript port vs Python reference', () => {
     expect(Math.max(...speedErrors)).toBeLessThanOrEqual(SPEED_TOLERANCE_MPS)
 
     // Driving markers. Brake and throttle edges come from the (roundoff-equal)
-    // pedal channels, so they must land on the exact same sample. Apex dots are
-    // picked by a greedy magnitude ordering over curvature peaks, where a ~1e-12
-    // tie flip can reshuffle the selection; they are advisory, so the gate is a
-    // high match ratio instead of exact equality.
+    // pedal channels, so they must land on the exact same sample.
+    //
+    // Apexes are compared exactly too. The gate used to be a 0.9 match ratio,
+    // on the theory that a ~1e-12 curvature tie could reshuffle the greedy
+    // selection -- but that ratio is wide enough to absorb a real divergence,
+    // and it did: passing the centerline's length where the engine passes the
+    // racing line's made volta-redonda drop apex 7 and invent apex 79, at
+    // 19/20 matched. Eight of the ten fixtures agreed by luck. If a libm
+    // difference ever does flip a tie, the floor is a symmetric match at 1.0,
+    // never a one-directional ratio.
     const actionable = reference.markers.filter((marker) => marker.kind !== 'apex')
     for (const marker of actionable) {
       const match = markers.some(
@@ -180,16 +186,10 @@ describe('engine parity: TypeScript port vs Python reference', () => {
       )
       expect(match, `marker ${marker.kind} @ ${marker.sample_index} (${slug})`).toBe(true)
     }
-    const referenceApexes = reference.markers.filter((marker) => marker.kind === 'apex')
-    if (referenceApexes.length > 0) {
-      const matched = referenceApexes.filter((marker) =>
-        markers.some(
-          (candidate) =>
-            candidate.kind === 'apex' &&
-            Math.abs(candidate.sampleIndex - marker.sample_index) <= APEX_MATCH_TOLERANCE_SAMPLES,
-        ),
-      )
-      expect(matched.length / referenceApexes.length).toBeGreaterThanOrEqual(APEX_MIN_MATCH_RATIO)
-    }
+    const referenceApexes = reference.markers
+      .filter((marker) => marker.kind === 'apex')
+      .map((marker) => marker.sample_index)
+    const portApexes = markers.filter((marker) => marker.kind === 'apex').map((marker) => marker.sampleIndex)
+    expect(portApexes).toEqual(referenceApexes)
   })
 })

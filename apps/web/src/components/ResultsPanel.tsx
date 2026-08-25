@@ -44,7 +44,11 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
           <h2>{dirty ? t('results.titleStale') : t('results.titleCurrent')}</h2>
         </div>
         <span className={`source-badge ${result.source}`}>
-          {result.source === 'api' ? t('results.sourceApi') : t('results.sourceFallback')}
+          {result.source === 'api'
+            ? t('results.sourceApi')
+            : result.solver === 'browser-point-mass-v1'
+              ? t('results.sourceFallbackHeuristic')
+              : t('results.sourceFallback')}
         </span>
       </div>
       {dirty && <div className="stale-note">{t('results.staleNote')}</div>}
