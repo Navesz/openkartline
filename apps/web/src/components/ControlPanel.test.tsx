@@ -61,7 +61,7 @@ describe('ControlPanel accessibility', () => {
 
   it('renders the issues into that same region', () => {
     renderPanel({
-      issues: [{ level: 'error', message: 'Corridor is too narrow' }],
+      issues: [{ level: 'error', note: { text: 'Corridor is too narrow' } }],
     })
     expect(screen.getByText('Corridor is too narrow')).toBeInTheDocument()
   })

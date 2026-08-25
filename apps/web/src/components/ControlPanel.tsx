@@ -405,8 +405,8 @@ export function ControlPanel({
             field to attach to, which is why they need this region at all. */}
         <div className="issue-list" role="status" aria-live="polite">
           {issues.map((issue, index) => (
-            <p className={issue.level} key={`${issue.message}-${index}`}>
-              {issue.message}
+            <p className={issue.level} key={`${JSON.stringify(issue.note)}-${index}`}>
+              {'key' in issue.note ? t(issue.note.key, issue.note.params) : issue.note.text}
             </p>
           ))}
         </div>

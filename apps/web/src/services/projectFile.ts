@@ -1,7 +1,6 @@
 import { fitsProjectBudget, isImageDataUrl } from '../domain/trackImage'
 import type { KartInput, OklProject, ResultNote, SimulationSettings, TrackInput } from '../domain/types'
-import { INPUT_LIMITS, validateSimulationInput, validationErrorMessage } from '../domain/validation'
-import type { Translate } from '../i18n/context'
+import { INPUT_LIMITS, validateSimulationInput, validationErrorNotes } from '../domain/validation'
 import { LocalisedError } from '../domain/localisedError'
 import type { MessageKey } from '../i18n/messages'
 
@@ -131,10 +130,7 @@ function parseBackground(background: OklProject['track']['background']): Pick<Tr
   }
 }
 
-export function parseProject(
-  text: string,
-  t: Translate,
-): {
+export function parseProject(text: string): {
   track: TrackInput
   kart: KartInput
   settings: SimulationSettings
@@ -226,9 +222,8 @@ export function parseProject(
       sampleCount: finite(project.simulation.settings?.sample_count, 'project.field.sampleCount'),
     },
   }
-  const issues = validateSimulationInput(parsed.track, parsed.kart, parsed.settings, t)
-  const validationMessage = validationErrorMessage(issues)
-  if (validationMessage) throw new Error(validationMessage)
+  const errors = validationErrorNotes(validateSimulationInput(parsed.track, parsed.kart, parsed.settings))
+  if (errors.length) throw new LocalisedError(errors)
   const declaredTotalMass = finite(project.kart.total_mass_kg, 'project.field.totalMass')
   const calculatedTotalMass = parsed.kart.kartMassKg + parsed.kart.driverMassKg
   if (Math.abs(declaredTotalMass - calculatedTotalMass) > 1e-6)

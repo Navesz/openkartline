@@ -162,5 +162,9 @@ export interface OklProject {
 
 export interface ValidationIssue {
   level: 'error' | 'warning'
-  message: string
+  /**
+   * Named, not rendered. The domain does not translate -- it says which message
+   * applies and leaves the wording to whatever is on screen when it is shown.
+   */
+  note: ResultNote
 }
