@@ -7,6 +7,32 @@ import tseslint from 'typescript-eslint'
 const PROSE_MESSAGE =
   'User-facing text belongs in src/i18n/messages/ and is rendered through t(). See AGENTS.md.'
 
+/** A run of three or more letters: the signal for prose rather than a symbol. */
+const PROSE_TEXT = '/[A-Za-zÀ-ɏ]{3,}/'
+
+/**
+ * Attributes an assistive technology reads aloud, or a tooltip. Listed by name
+ * rather than excluded by name: className, id, type, href, role and the SVG
+ * geometry attributes are not prose, and an allowlist cannot go stale into
+ * false positives the way a denylist can.
+ */
+const PROSE_ATTRIBUTE =
+  'JSXAttribute[name.name=/^(title|alt|placeholder|aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext)$/]'
+
+/** Prose in child position, or behind one of those attribute names. */
+const PROSE_HOLDERS = [
+  // `<p>{'…'}</p>` renders exactly like text between tags. Scoped to a child of
+  // an element or fragment, because the same node shape in attribute position
+  // is a class name or an SVG transform.
+  ':matches(JSXElement, JSXFragment) > JSXExpressionContainer',
+  // `title="…"` -- the attribute holds the string directly.
+  PROSE_ATTRIBUTE,
+  // `title={'…'}` -- the same prose, one node deeper. Writing it this way is
+  // unusual by hand but is what a mechanical edit produces, and the rule read
+  // as though it covered these when it did not.
+  `${PROSE_ATTRIBUTE} > JSXExpressionContainer`,
+]
+
 export default tseslint.config(
   { ignores: ['dist', 'coverage', 'playwright-report', 'test-results'] },
   {
@@ -44,31 +70,20 @@ export default tseslint.config(
           selector: 'JSXText[value=/[A-Za-zÀ-ɏ]{3,}/]',
           message: PROSE_MESSAGE,
         },
-        {
-          // Text an assistive technology reads aloud, or a tooltip. Listed by
-          // name rather than excluded by name: className, id, type, href, role
-          // and the SVG geometry attributes are not prose, and an allowlist
-          // cannot go stale into false positives the way a denylist does.
-          selector:
-            'JSXAttribute[name.name=/^(title|alt|placeholder|aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext)$/] > Literal[value=/[A-Za-zÀ-ɏ]{3,}/]',
-          message: PROSE_MESSAGE,
-        },
-        {
-          // `{'…'}` in child position renders exactly like text between tags.
-          // Scoped to a child of an element or fragment, because the same node
-          // shape in attribute position is a class name or an SVG transform.
-          selector:
-            ':matches(JSXElement, JSXFragment) > JSXExpressionContainer > Literal[value=/[A-Za-zÀ-ɏ]{3,}/]',
-          message: PROSE_MESSAGE,
-        },
-        {
-          // `{`…`}` in child position too. Without the element scope this
-          // flagged eleven `className={`badge ${kind}`}` and
-          // `transform={`translate(...)`}` values, none of which are prose.
-          selector:
-            ':matches(JSXElement, JSXFragment) > JSXExpressionContainer > TemplateLiteral > TemplateElement[value.raw=/[A-Za-zÀ-ɏ]{3,}/]',
-          message: PROSE_MESSAGE,
-        },
+        // Each holder, in both the plain-string and the template form. Written
+        // as a product rather than by hand: the attribute list had been spelled
+        // out once, so the expression form of the very same attributes was
+        // silently uncovered.
+        ...PROSE_HOLDERS.flatMap((holder) => [
+          { selector: `${holder} > Literal[value=${PROSE_TEXT}]`, message: PROSE_MESSAGE },
+          {
+            // Without the element scope on the child-position holder this
+            // flagged eleven `className={`badge ${kind}`}` and
+            // `transform={`translate(...)`}` values, none of which are prose.
+            selector: `${holder} > TemplateLiteral > TemplateElement[value.raw=${PROSE_TEXT}]`,
+            message: PROSE_MESSAGE,
+          },
+        ]),
       ],
     },
   },
