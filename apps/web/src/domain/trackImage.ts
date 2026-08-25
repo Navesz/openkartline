@@ -14,6 +14,9 @@ export const TRACK_IMAGE_LIMITS = {
 
 const BASE64_OVERHEAD = 4 / 3
 
+/** Encoder quality ladder, walked from best to worst before pixels are given up. */
+const JPEG_QUALITY_STEPS = [0.82, 0.72, 0.62, 0.52] as const
+
 /** Byte size of the image a data URL decodes to, without decoding it. */
 export function dataUrlBytes(dataUrl: string): number {
   const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
@@ -79,18 +82,35 @@ export function downscaleTrackImage(image: HTMLImageElement, t: Translate): Trac
   if (!context) throw new Error(t('imports.imageCanvasUnsupported'))
 
   let dataUrl = ''
-  for (const quality of [0.82, 0.72, 0.62, 0.52]) {
-    canvas.width = width
-    canvas.height = height
-    context.drawImage(image, 0, 0, width, height)
-    dataUrl = canvas.toDataURL('image/jpeg', quality)
-    if (dataUrlBytes(dataUrl) <= TRACK_IMAGE_LIMITS.targetBytes) break
-    if (quality <= 0.52 && Math.max(width, height) > TRACK_IMAGE_LIMITS.minDimensionPx) {
-      width = Math.round(width * 0.75)
-      height = Math.round(height * 0.75)
+  // The dimensions that produced `dataUrl`. They must be reported rather than
+  // the loop's running `width`/`height`: the canvas is what the calibration
+  // scale is measured against, so metadata that outruns the encode would put a
+  // silent scale error into every lap time traced over the picture.
+  let encodedWidth = width
+  let encodedHeight = height
+
+  for (;;) {
+    let fitsBudget = false
+    for (const quality of JPEG_QUALITY_STEPS) {
+      canvas.width = width
+      canvas.height = height
+      context.drawImage(image, 0, 0, width, height)
+      dataUrl = canvas.toDataURL('image/jpeg', quality)
+      encodedWidth = width
+      encodedHeight = height
+      if (dataUrlBytes(dataUrl) <= TRACK_IMAGE_LIMITS.targetBytes) {
+        fitsBudget = true
+        break
+      }
     }
+    // Quality alone could not buy the budget, so give up pixels and run the
+    // ladder again, down to the floor where a trace is still readable.
+    if (fitsBudget || Math.max(width, height) <= TRACK_IMAGE_LIMITS.minDimensionPx) break
+    width = Math.max(1, Math.round(width * 0.75))
+    height = Math.max(1, Math.round(height * 0.75))
   }
-  return { imageDataUrl: dataUrl, imageWidthPx: width, imageHeightPx: height }
+
+  return { imageDataUrl: dataUrl, imageWidthPx: encodedWidth, imageHeightPx: encodedHeight }
 }
 
 /**

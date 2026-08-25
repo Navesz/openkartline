@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
 import {
   dataUrlBytes,
+  downscaleTrackImage,
   fitsProjectBudget,
   isImageDataUrl,
   scaleFromCalibration,
@@ -69,5 +70,89 @@ describe('scaleFromCalibration', () => {
   it('rejects implausible scales for a kart track', () => {
     expect(() => scaleFromCalibration(5, 100, t)).toThrow(/outside what is expected/)
     expect(() => scaleFromCalibration(100_000, 10, t)).toThrow(/outside what is expected/)
+  })
+})
+
+/**
+ * jsdom has no real JPEG encoder, so the canvas is stubbed with one whose
+ * payload size is a function of the pixels and quality it is handed. That is
+ * enough to drive the budget ladder and to record what was really encoded.
+ */
+function stubCanvas(bytesFor: (width: number, height: number, quality: number) => number) {
+  const encodes: { width: number; height: number; quality: number }[] = []
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage: () => {} }),
+    toDataURL: (_type: string, quality: number) => {
+      encodes.push({ width: canvas.width, height: canvas.height, quality })
+      const base64Length = Math.ceil((bytesFor(canvas.width, canvas.height, quality) * 4) / 3)
+      return `data:image/jpeg;base64,${'A'.repeat(base64Length)}`
+    },
+  }
+  vi.spyOn(document, 'createElement').mockReturnValue(canvas as unknown as HTMLElement)
+  return encodes
+}
+
+const imageOf = (width: number, height: number) =>
+  ({ naturalWidth: width, naturalHeight: height }) as HTMLImageElement
+
+describe('downscaleTrackImage', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('keeps the first quality step when the payload already fits', () => {
+    const encodes = stubCanvas(() => 1_000)
+
+    const result = downscaleTrackImage(imageOf(1000, 800), t)
+
+    expect(encodes).toHaveLength(1)
+    expect(encodes[0].quality).toBe(0.82)
+    expect(result.imageWidthPx).toBe(1000)
+    expect(result.imageHeightPx).toBe(800)
+  })
+
+  it('caps the longest edge at the maximum dimension', () => {
+    stubCanvas(() => 1_000)
+
+    const result = downscaleTrackImage(imageOf(4000, 2000), t)
+
+    expect(result.imageWidthPx).toBe(TRACK_IMAGE_LIMITS.maxDimensionPx)
+    expect(result.imageHeightPx).toBe(TRACK_IMAGE_LIMITS.maxDimensionPx / 2)
+  })
+
+  it('gives up pixels when the quality ladder alone cannot buy the budget', () => {
+    // Size depends only on the pixel count, so no quality step can ever fit.
+    const encodes = stubCanvas((width, height) => width * height * 0.5)
+
+    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+
+    expect(encodes.at(-1)!.width).toBeLessThan(TRACK_IMAGE_LIMITS.maxDimensionPx)
+    expect(dataUrlBytes(result.imageDataUrl)).toBeLessThanOrEqual(TRACK_IMAGE_LIMITS.targetBytes)
+  })
+
+  it('reports the dimensions of the payload it actually returns', () => {
+    // A truthful size is what the calibration scale is measured against:
+    // metadata describing a smaller canvas than the one that was encoded puts a
+    // silent scale error into every lap time traced over the picture.
+    const encodes = stubCanvas((width, height) => width * height * 0.5)
+
+    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+
+    expect(result.imageWidthPx).toBe(encodes.at(-1)!.width)
+    expect(result.imageHeightPx).toBe(encodes.at(-1)!.height)
+  })
+
+  it('stops shrinking at the readable floor instead of looping forever', () => {
+    // Nothing ever fits, so only the floor can end the loop.
+    const encodes = stubCanvas(() => TRACK_IMAGE_LIMITS.targetBytes * 10)
+
+    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+
+    expect(Math.max(result.imageWidthPx, result.imageHeightPx)).toBeLessThanOrEqual(
+      TRACK_IMAGE_LIMITS.minDimensionPx,
+    )
+    expect(encodes.length).toBeLessThan(50)
   })
 })
