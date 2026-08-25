@@ -302,7 +302,7 @@ def test_a_stalled_line_search_is_not_reported_as_convergence(iterations: int) -
     """Running out of search budget is not the same as being stationary.
 
     An earlier change relabelled this branch `step_tolerance` / converged, on
-    the reasoning that sixteen halvings from `0.08 / max|free|` bottom out below
+    the reasoning that sixteen tries from `0.08 / max|free|` bottom out below
     the 1e-5 step tolerance, so nothing worth taking could remain. The loop
     halves *after* each failed try, so it reaches `0.08 * 2**-15`, and a descent
     step exists at exactly the next halving -- on this annulus with a relative
