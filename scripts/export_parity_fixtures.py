@@ -13,6 +13,9 @@
 #      `pnpm check` runs prettier --check over this directory)
 #
 # Commit the regenerated `__fixtures__` directory together with any engine change.
+# `tests/python/test_parity_fixtures.py` fails if you forget: it holds the engine
+# to whatever is committed here, which is the only thing that notices a
+# Python-side change that never made it into the fixtures.
 """Run every parity request fixture through the Python engine and record the result."""
 
 from __future__ import annotations
