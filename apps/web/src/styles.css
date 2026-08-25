@@ -11,6 +11,14 @@
   --line: #2a342e;
   --line-soft: #202923;
   --muted: #91a097;
+  /*
+   * Dim text that still clears WCAG AA at small sizes. The nine hardcoded
+   * greens it replaces ranged from 1.82:1 to 4.48:1 against the surface behind
+   * them, where 4.5:1 is the floor for text under 18pt; the worst of them, the
+   * step numbers, were very nearly invisible. This clears 4.55:1 on the
+   * darkest surface it is used on and 5.18:1 on the page background.
+   */
+  --muted-soft: #7b8880;
   --green: #6ee7a8;
   --green-deep: #35b878;
   --yellow: #ffd166;
@@ -266,7 +274,7 @@ main {
 }
 .step-number {
   float: right;
-  color: #3a473f;
+  color: var(--muted-soft);
   font: 0.62rem var(--mono);
   margin: 0.08rem 0 0 0.7rem;
 }
@@ -328,7 +336,7 @@ main {
   top: 50%;
   right: 0.62rem;
   transform: translateY(-50%);
-  color: #697970;
+  color: var(--muted-soft);
   font: 0.6rem var(--mono);
   pointer-events: none;
 }
@@ -340,7 +348,7 @@ main {
   right: 0.65rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #697970;
+  color: var(--muted-soft);
   pointer-events: none;
 }
 .two-columns {
@@ -351,7 +359,7 @@ main {
 .track-meta {
   display: flex;
   justify-content: space-between;
-  color: #637068;
+  color: var(--muted-soft);
   font: 0.57rem var(--mono);
   text-transform: uppercase;
 }
@@ -877,7 +885,7 @@ main {
   font-weight: 400;
 }
 .playback-clock small {
-  color: #6f7d74;
+  color: var(--muted-soft);
   font-size: 0.56rem;
 }
 
@@ -921,7 +929,7 @@ main {
 }
 .pedal-row em {
   width: 30px;
-  color: #6f7d74;
+  color: var(--muted-soft);
   font: 500 0.5rem var(--mono);
   font-style: normal;
 }
@@ -950,7 +958,7 @@ main {
   letter-spacing: 0.06em;
 }
 .playback-distance {
-  color: #6f7d74;
+  color: var(--muted-soft);
   font: 0.58rem var(--mono);
   font-variant-numeric: tabular-nums;
 }
@@ -964,7 +972,7 @@ main {
 .preset-note,
 .track-attribution {
   margin: -0.35rem 0 0.15rem;
-  color: #6f7d74;
+  color: var(--muted-soft);
   font-size: 0.56rem;
   line-height: 1.5;
 }
@@ -1067,7 +1075,7 @@ main {
 }
 .chart-legend .chart-help {
   margin-left: auto;
-  color: #59665e;
+  color: var(--muted-soft);
 }
 .chart-legend .chart-help::before {
   display: none;
@@ -1127,7 +1135,7 @@ main {
   color: #fff;
 }
 .hero-time small {
-  color: #536057;
+  color: var(--muted-soft);
   font: 0.52rem var(--mono);
 }
 .metric-grid {
@@ -1224,7 +1232,7 @@ main {
   min-width: 0;
 }
 .event-list small {
-  color: #75837a;
+  color: var(--muted-soft);
   font: 0.5rem var(--mono);
 }
 .event-list strong {
@@ -1235,7 +1243,7 @@ main {
   text-overflow: ellipsis;
 }
 .event-list em {
-  color: #56635a;
+  color: var(--muted-soft);
   font: normal 0.51rem var(--mono);
 }
 .event-list svg {
@@ -1248,7 +1256,9 @@ main {
   place-items: center;
   border-radius: 50%;
   font: 600 0.56rem var(--mono);
-  background: #3b2a28;
+  /* Darkened from #3b2a28, which left the red at 4.45:1. The red itself is the
+     brake colour throughout the app, so the surface moves rather than it. */
+  background: #2e211f;
   color: var(--red);
 }
 .event-index.apex {
@@ -1268,7 +1278,7 @@ main {
   color: #b0a270;
 }
 .warnings p {
-  color: #7e8a82;
+  color: var(--muted-soft);
   font-size: 0.57rem;
   line-height: 1.5;
   margin: 0.55rem 0;
@@ -1317,7 +1327,7 @@ footer {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  color: #59665e;
+  color: var(--muted-soft);
   font-size: 0.57rem;
 }
 footer a {
