@@ -19,7 +19,7 @@ const GRADIENT_SMOOTHING_PASSES = 24
 const GRADIENT_EPSILON = 1e-5
 const GLOBAL_FRACTION_STEP = 0.05
 const PRECONDITIONED_STEP_SCALE = 0.08
-const BACKTRACKING_HALVINGS = 16
+const BACKTRACKING_TRIES = 16
 const GRADIENT_NORM_TOLERANCE = 1e-10
 const STEP_TOLERANCE = 1e-5
 
@@ -247,7 +247,7 @@ export function minimumBendingPath(
       const maximumFree = maxAbs(free)
       if (maximumFree < GRADIENT_NORM_TOLERANCE) continue
       let stepSize = PRECONDITIONED_STEP_SCALE / maximumFree
-      for (let attempt = 0; attempt < BACKTRACKING_HALVINGS; attempt += 1) {
+      for (let attempt = 0; attempt < BACKTRACKING_TRIES; attempt += 1) {
         candidateFraction = fraction.map((value, index) =>
           clip(value - stepSize * free[index], lower[index], upper[index]),
         )

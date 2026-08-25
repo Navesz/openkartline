@@ -13,15 +13,21 @@ This report records software and synthetic numerical evidence for the first runn
 
 ## Local verification
 
-Local environment: Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31, Python 3.12.10. Independent engine runs also exercised Python 3.11 and 3.13 before the final consolidated run.
+The numerical tables below are regenerated from the current engine, so this
+section is too. Re-measure both together, or the document describes two
+revisions at once without saying so.
+
+Last measured 2026-08-25 on Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31,
+Python 3.12.10. Independent engine runs also exercised Python 3.11 and 3.13.
 
 | Gate | Result |
 |---|---|
-| Python tests | 41 passed |
-| Python coverage | 91.81% statements/branches combined; 85% gate satisfied |
+| Python tests | 104 passed, 1 xfailed |
+| Python coverage | 93.69% statements/branches combined; 92% gate satisfied |
 | Python lint/types | Ruff format/lint and strict mypy passed |
 | Python packaging | source distribution and universal wheel built |
-| Web tests | 25 passed across 10 files |
+| Web tests | 1106 passed, 1 skipped across 29 files |
+| Web coverage | 91.61% statements, 83.64% branches; 90/82 gates satisfied |
 | Web quality | Prettier, ESLint, TypeScript, and production build passed |
 | Browser E2E | fallback-only and real Python API flows passed in Chromium |
 | Static web bundle | 250.35 kB JavaScript / 78.20 kB gzip; 18.28 kB CSS / 5.04 kB gzip |
@@ -94,7 +100,7 @@ bounds are applied, with the unsmoothed gradient as a fallback.
 as convergence instead was reverted; it rested on the claim that exhausting the
 line search means the smallest displacement offered was `0.08 · 2^-16`, already
 an order of magnitude below the 1e-5 step tolerance the same function trusts.
-That is off by one — the step is halved *after* each trial, so sixteen halvings
+That is off by one — the step is halved *after* each try, so sixteen tries
 reach `2^-15` — and the factor is not the point: a descent step can still exist
 at the next halving, so an exhausted line search is not evidence that none
 exists. Reporting convergence there would have claimed a criterion the solver
