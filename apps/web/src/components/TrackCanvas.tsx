@@ -7,7 +7,7 @@ import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
 import { noteForError } from '../domain/localisedError'
 import { imagePixelsFromWorld, scaleFromCalibration } from '../domain/trackImage'
-import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
+import type { DriveMode, LapSample, Point, ResultNote, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 
 /**
@@ -146,7 +146,7 @@ export function TrackCanvas({
   const [calibrationStart, setCalibrationStart] = useState<Point | null>(null)
   const [calibrationEnd, setCalibrationEnd] = useState<Point | null>(null)
   const [calibrationMeters, setCalibrationMeters] = useState('100')
-  const [calibrationError, setCalibrationError] = useState<string | null>(null)
+  const [calibrationError, setCalibrationError] = useState<ResultNote | null>(null)
   // Scaled to the lap, not fixed at 180. A real circuit drew its corridor with
   // chords up to 9.6 m -- on an 8 m wide track that reads as a polygon, not a
   // curve. Raising the count is close to free: Adria rebuilds in 0.29 ms at
@@ -264,10 +264,10 @@ export function TrackCanvas({
       setCalibrationEnd(null)
       setCalibrationError(null)
     } catch (error) {
-      // The domain names its failure; render it here so the overlay follows a
-      // later language switch like everything else does.
-      const note = noteForError(error, { key: 'canvas.calibrationInvalid' })
-      setCalibrationError('key' in note ? t(note.key, note.params) : note.text)
+      // Stored as the note, not as rendered text. Rendering here would freeze
+      // the wording in the locale that was active when the calibration was
+      // rejected -- which is what the comment this replaces claimed it avoided.
+      setCalibrationError(noteForError(error, { key: 'canvas.calibrationInvalid' }))
     }
   }
 
@@ -622,7 +622,13 @@ export function TrackCanvas({
               <span className="unit">m</span>
             </span>
           </label>
-          {calibrationError && <p className="calibration-error">{calibrationError}</p>}
+          {calibrationError && (
+            <p className="calibration-error">
+              {'key' in calibrationError
+                ? t(calibrationError.key, calibrationError.params)
+                : calibrationError.text}
+            </p>
+          )}
           <div className="calibration-actions">
             <button onClick={confirmCalibration}>{t('canvas.calibrationApply')}</button>
             <button className="ghost" onClick={cancelCalibration}>

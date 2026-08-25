@@ -152,7 +152,16 @@ export function parseProject(
   if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
     throw new LocalisedError({
       key: 'project.unsupportedVersion',
-      params: { version: project.schema_version ?? { key: 'project.missingVersion' } },
+      // Coerced to a string first. `schema_version` is whatever the file said,
+      // and a slot value shaped `{ key: … }` is a message reference — so a file
+      // could name one of this app's own messages and have it quoted back as
+      // though it were the version it declared.
+      params: {
+        version:
+          typeof project.schema_version === 'string'
+            ? project.schema_version
+            : { key: 'project.missingVersion' },
+      },
     })
   if (
     !project.project ||
