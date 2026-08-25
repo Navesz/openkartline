@@ -52,6 +52,11 @@ If you want the best possible racing line for a race car, use the first one on t
 
 Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.13, and [uv](https://docs.astral.sh/uv/).
 
+The editor is tested on Chromium, Firefox and WebKit — every end-to-end run
+exercises all three, because the canvas leans on exactly where they diverge:
+pointer capture during a control-point drag, `getBoundingClientRect` read under
+an SVG user-space transform, and a non-passive wheel listener for zoom.
+
 ```bash
 git clone https://github.com/Navesz/openkartline.git
 cd openkartline
