@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import {
   GPS_LIMITS,
   gpsToTrack,
@@ -10,8 +8,6 @@ import {
   simplifyClosedTrack,
   simplifyRdp,
 } from './gpx'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 const GPX_SAMPLE = `<?xml version="1.0"?>
 <gpx version="1.1" creator="test">
@@ -30,32 +26,32 @@ const GPX_SAMPLE = `<?xml version="1.0"?>
 
 describe('parseGpx', () => {
   it('extracts every trkpt in order', () => {
-    const points = parseGpx(GPX_SAMPLE, t)
+    const points = parseGpx(GPX_SAMPLE)
     expect(points).toHaveLength(9)
     expect(points[0]).toEqual({ lat: -22.52, lon: -47.39 })
   })
 
   it('rejects content without GPX track points', () => {
-    expect(() => parseGpx('not xml at all <<<', t)).toThrow(/trkpt/)
+    expect(() => parseGpx('not xml at all <<<')).toThrow('imports.gpxNoPoints')
   })
 
   it('rejects files with too few usable points', () => {
     const sparse = `<gpx><trk><trkseg>
       <trkpt lat="1" lon="1"></trkpt><trkpt lat="2" lon="2"></trkpt>
     </trkseg></trk></gpx>`
-    expect(() => parseGpx(sparse, t)).toThrow(/8 valid track points/)
+    expect(() => parseGpx(sparse)).toThrow('imports.notEnoughPoints')
   })
 })
 
 describe('parseCsvLatLon', () => {
   it('accepts comma rows with a header', () => {
     const csv = ['lat,lon', ...Array.from({ length: 9 }, (_, i) => `-22.52${i},-47.39${i}`)].join('\n')
-    expect(parseCsvLatLon(csv, t)).toHaveLength(9)
+    expect(parseCsvLatLon(csv)).toHaveLength(9)
   })
 
   it('rejects rows without numeric coordinates', () => {
     const csv = ['-22.52,-47.39', 'garbage,row'].join('\n')
-    expect(() => parseCsvLatLon(csv, t)).toThrow(/Line 2/)
+    expect(() => parseCsvLatLon(csv)).toThrow('imports.csvInvalidRow')
   })
 })
 
@@ -119,7 +115,7 @@ describe('simplifyClosedTrack', () => {
 
 describe('gpsToTrack', () => {
   it('converts a GPX lap into a metric closed centerline with direction', () => {
-    const track = gpsToTrack(parseGpx(GPX_SAMPLE, t), t)
+    const track = gpsToTrack(parseGpx(GPX_SAMPLE))
     expect(track.centerline.length).toBeGreaterThanOrEqual(4)
     expect(track.lengthM).toBeGreaterThan(GPS_LIMITS.minTrackLengthM)
     expect(['clockwise', 'counterclockwise']).toContain(track.direction)
@@ -136,7 +132,7 @@ describe('gpsToTrack', () => {
         lon: -44.08 + (0.001432 * Math.cos(angle)) / Math.cos((-22.5 * Math.PI) / 180),
       }
     })
-    const track = gpsToTrack(dense, t)
+    const track = gpsToTrack(dense)
     expect(track.lengthM).toBeGreaterThan(900)
     expect(track.lengthM).toBeLessThan(1100)
     expect(track.centerline.length).toBeGreaterThanOrEqual(4)
@@ -147,6 +143,6 @@ describe('gpsToTrack', () => {
       lat: -22.52 + i * 1e-6,
       lon: -47.39 + i * 1e-6,
     }))
-    expect(() => gpsToTrack(tiny, t)).toThrow(/too short/)
+    expect(() => gpsToTrack(tiny)).toThrow('imports.trackTooShort')
   })
 })

@@ -1,6 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import type { TrackInput } from './types'
 import {
   calibratedTrack,
@@ -12,8 +10,6 @@ import {
   scaleFromCalibration,
   TRACK_IMAGE_LIMITS,
 } from './trackImage'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 // 1x1 red JPEG, small enough to keep in source.
 const TINY_JPEG =
@@ -58,21 +54,21 @@ describe('fitsProjectBudget', () => {
 
 describe('scaleFromCalibration', () => {
   it('computes metres per pixel from a known segment', () => {
-    expect(scaleFromCalibration(250, 100, t)).toBeCloseTo(0.4)
+    expect(scaleFromCalibration(250, 100)).toBeCloseTo(0.4)
   })
 
   it('rejects zero or negative real distances', () => {
-    expect(() => scaleFromCalibration(250, 0, t)).toThrow(/greater than zero/)
-    expect(() => scaleFromCalibration(250, -10, t)).toThrow(/greater than zero/)
+    expect(() => scaleFromCalibration(250, 0)).toThrow('imports.calibrationDistanceRequired')
+    expect(() => scaleFromCalibration(250, -10)).toThrow('imports.calibrationDistanceRequired')
   })
 
   it('rejects clicks that are too close together to be meaningful', () => {
-    expect(() => scaleFromCalibration(2, 100, t)).toThrow(/farther apart/)
+    expect(() => scaleFromCalibration(2, 100)).toThrow('imports.calibrationPointsTooClose')
   })
 
   it('rejects implausible scales for a kart track', () => {
-    expect(() => scaleFromCalibration(5, 100, t)).toThrow(/outside what is expected/)
-    expect(() => scaleFromCalibration(100_000, 10, t)).toThrow(/outside what is expected/)
+    expect(() => scaleFromCalibration(5, 100)).toThrow('imports.calibrationScaleImplausible')
+    expect(() => scaleFromCalibration(100_000, 10)).toThrow('imports.calibrationScaleImplausible')
   })
 })
 
@@ -108,7 +104,7 @@ describe('downscaleTrackImage', () => {
   it('keeps the first quality step when the payload already fits', () => {
     const encodes = stubCanvas(() => 1_000)
 
-    const result = downscaleTrackImage(imageOf(1000, 800), t)
+    const result = downscaleTrackImage(imageOf(1000, 800))
 
     expect(encodes).toHaveLength(1)
     expect(encodes[0].quality).toBe(0.82)
@@ -119,7 +115,7 @@ describe('downscaleTrackImage', () => {
   it('caps the longest edge at the maximum dimension', () => {
     stubCanvas(() => 1_000)
 
-    const result = downscaleTrackImage(imageOf(4000, 2000), t)
+    const result = downscaleTrackImage(imageOf(4000, 2000))
 
     expect(result.imageWidthPx).toBe(TRACK_IMAGE_LIMITS.maxDimensionPx)
     expect(result.imageHeightPx).toBe(TRACK_IMAGE_LIMITS.maxDimensionPx / 2)
@@ -129,7 +125,7 @@ describe('downscaleTrackImage', () => {
     // Size depends only on the pixel count, so no quality step can ever fit.
     const encodes = stubCanvas((width, height) => width * height * 0.5)
 
-    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+    const result = downscaleTrackImage(imageOf(1920, 1920))
 
     expect(encodes.at(-1)!.width).toBeLessThan(TRACK_IMAGE_LIMITS.maxDimensionPx)
     expect(dataUrlBytes(result.imageDataUrl)).toBeLessThanOrEqual(TRACK_IMAGE_LIMITS.targetBytes)
@@ -141,7 +137,7 @@ describe('downscaleTrackImage', () => {
     // silent scale error into every lap time traced over the picture.
     const encodes = stubCanvas((width, height) => width * height * 0.5)
 
-    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+    const result = downscaleTrackImage(imageOf(1920, 1920))
 
     expect(result.imageWidthPx).toBe(encodes.at(-1)!.width)
     expect(result.imageHeightPx).toBe(encodes.at(-1)!.height)
@@ -151,7 +147,7 @@ describe('downscaleTrackImage', () => {
     // Nothing ever fits, so only the floor can end the loop.
     const encodes = stubCanvas(() => TRACK_IMAGE_LIMITS.targetBytes * 10)
 
-    const result = downscaleTrackImage(imageOf(1920, 1920), t)
+    const result = downscaleTrackImage(imageOf(1920, 1920))
 
     expect(Math.max(result.imageWidthPx, result.imageHeightPx)).toBeLessThanOrEqual(
       TRACK_IMAGE_LIMITS.minDimensionPx,
@@ -238,6 +234,6 @@ describe('imagePixelsFromWorld', () => {
     const scale = 0.4
     const worldSpan = 100
     const pixels = imagePixelsFromWorld(worldSpan, scale)
-    expect(scaleFromCalibration(pixels, worldSpan, t)).toBeCloseTo(scale, 12)
+    expect(scaleFromCalibration(pixels, worldSpan)).toBeCloseTo(scale, 12)
   })
 })
