@@ -110,21 +110,42 @@ The circle is unmoved because every shift of a uniformly sampled circle is an
 exact symmetry of it, which isolates the effect to the shape rather than to the
 mechanism.
 
-The cause is the path solver, not the geometry: track length survives the same
-rotation to a relative 2e-3, while `minimum_bending_path` reports
-`iteration_limit` on every shipped circuit at every allowed value of
-`path_smoothing_iterations` — 0, 20, 60 and 200 were measured, and raising it
-does not converge, it only moves where the solver stops. A solve that has not
-converged depends on the parameterisation it started from, and the lap time
-inherits that dependence.
+An earlier revision of this section blamed the path solver. That was wrong, and
+the control that shows it is simple: set `path_smoothing_iterations` to 0, which
+skips `minimum_bending_path` entirely, and rotate the same lists again.
+
+| Track | Spread with no solver | Spread at the default 20 |
+|---|---:|---:|
+| Adria Karting Raceway | 1.05% | 0.92% |
+| Circuito Aurora | 1.26% | 2.18% |
+| Kartódromo Internacional | 0.61% | 0.52% |
+| Kartódromo de Baltar | 0.65% | 0.53% |
+| Castelo Branco | 0.75% | 0.81% |
+
+The artefact is already there before the solver runs, and on three of the five
+it is *larger* without it. Rotating the control-point list re-lands the periodic
+spline resample, so the prepared corridor is not quite the same object —
+centreline length moves by 3.5e-4 to 5.1e-4 relative, mean width by 7.0e-4 to
+9.9e-4 — and the discrete curvature and speed pipeline amplifies that into the
+lap time. `prepare_track` and the discretisation own most of this, not
+`minimum_bending_path`.
+
+The solver does have its own, separate defect, measured in the same
+investigation and not to be confused with this one: it reports `iteration_limit`
+on every shipped circuit at every allowed setting, and the lap it returns is
+0.5–5.2 s slower than the minimum of the very objective the API names. That
+makes the headline number depend on a knob documented as a smoothing setting —
+the same Adria request returns 74.01 s at 20 iterations, 73.35 s at 60 and
+72.63 s at 200. Fixing it would remove that dependence; it would *not* remove
+the spread in this section, which is why the two must not be sold as one.
 
 This is larger than the sample-count spread above, and it is the more
 uncomfortable of the two: a user who exports the same circuit from a tool that
 happens to start the point list elsewhere gets a different answer for the same
 track. `tests/python/test_simulation.py::TestStartIndexSensitivity` pins these
 as ceilings, so the number cannot grow quietly. It is characterised rather than
-suppressed: fixing the anchor would make the figure stable without making it
-right, and the honest fix is a solver that converges.
+suppressed: pinning the anchor would make the figure stable without making it
+right.
 
 ### Path-solver termination
 
