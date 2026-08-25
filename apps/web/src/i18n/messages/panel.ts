@@ -39,7 +39,7 @@ export const panel = defineMessages({
   // Deliberately not the canvas overlay's 'Apply scale': two buttons sharing
   // an accessible name is ambiguous for anyone navigating by name, and it
   // breaks Playwright's strict-mode locators outright.
-  'panel.trackImported': { en: 'Imported track', 'pt-BR': 'Pista importada' },
+  'panel.trackCustom': { en: 'Custom track', 'pt-BR': 'Pista personalizada' },
   'panel.calibrationApply': { en: 'Set scale', 'pt-BR': 'Definir escala' },
   'panel.calibrationPixels': {
     en: 'Known distance on the image',

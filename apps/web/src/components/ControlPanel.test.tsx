@@ -165,10 +165,13 @@ describe('the pickers say what is actually loaded', () => {
     expect(picker.value).toBe('')
   })
 
-  it('does not name a circuit for a track that came from a file', () => {
+  it('does not name a circuit for a track that is not a preset', () => {
+    // The label covers every way a track stops being a preset -- imported,
+    // traced from GPS, or edited -- now that the key is derived from the track
+    // rather than set by whichever loader ran last.
     const { container } = renderPanel({ trackPresetKey: '' })
     const picker = container.querySelector('#preset') as HTMLSelectElement
     expect(picker.value).toBe('')
-    expect(picker.selectedOptions[0].textContent).toMatch(/imported track/i)
+    expect(picker.selectedOptions[0].textContent).toMatch(/custom track/i)
   })
 })

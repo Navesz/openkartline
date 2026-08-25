@@ -205,3 +205,41 @@ describe('stepping through history', () => {
     expect(screen.getByRole('button', { name: /recalculate lap/i })).toBeInTheDocument()
   })
 })
+
+describe('the track picker after undo', () => {
+  it('names the circuit that is actually loaded', async () => {
+    // The key was state each loader set, and undo goes through no loader. So
+    // loading Technical, loading Oval, then undoing gave back Technical's
+    // geometry under a picker still reading "Oval". It is read off the track
+    // now, so there is nothing to fall out of step.
+    const user = userEvent.setup()
+    renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await user.selectOptions(picker, 'oval')
+    expect(picker).toHaveValue('oval')
+
+    await user.click(screen.getByTitle(/undo/i))
+
+    expect(picker).toHaveValue('technical')
+
+    await user.click(screen.getByTitle(/redo/i))
+    expect(picker).toHaveValue('oval')
+  })
+
+  it('stops naming a preset once the track is edited away from it', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    expect(picker).toHaveValue('technical')
+
+    await user.click(screen.getByText(/edit point by coordinates/i))
+    const xInput = screen.getByLabelText(/point 1 · x/i)
+    await user.clear(xInput)
+    await user.type(xInput, '12')
+
+    expect(picker).toHaveValue('')
+    expect(screen.getByRole('option', { name: /custom track/i })).toBeInTheDocument()
+  })
+})
