@@ -1,0 +1,58 @@
+# Audits the committed lockfiles on a schedule.
+#
+# `dependency-review` only inspects what a pull request adds, so an advisory
+# published against something already pinned is invisible to it. That is not
+# hypothetical here: the nanoid advisory sat in pnpm-lock.yaml and nothing in
+# CI ever looked at it — it surfaced only because a Dependabot job failed.
+name: Supply chain audit
+
+on:
+  schedule:
+    # Weekdays, early UTC, offset from the CodeQL run.
+    - cron: "17 6 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: supply-chain-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit committed lockfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      # Reads pnpm-lock.yaml directly; no install step needed.
+      # `--ignore-registry-errors` keeps a flaky registry from failing an
+      # unattended job, which would train everyone to ignore this one.
+      - name: Audit the JavaScript lockfile
+        run: pnpm audit --audit-level moderate --ignore-registry-errors
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.31"
+          enable-cache: true
+
+      # The explicit `--requirement` target is load-bearing. A bare
+      # `uvx pip-audit` audits the ephemeral environment uv builds for
+      # pip-audit itself, finds nothing, and exits 0 — a green check that
+      # never looked at this project.
+      - name: Export the locked Python requirements
+        run: >
+          uv export --frozen --all-extras --no-emit-project
+          --format requirements.txt -o requirements-audit.txt
+
+      - name: Audit the Python lockfile
+        run: uvx pip-audit --requirement requirements-audit.txt --disable-pip

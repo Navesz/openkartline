@@ -33,7 +33,7 @@ A pull request that adds or materially updates a dependency must record:
 5. why the existing standard library or current dependencies are insufficient;
 6. a removal or adapter strategy for high-impact solver dependencies.
 
-Lockfiles must be regenerated with repository tooling. Dependency-review CI rejects newly introduced known high-severity vulnerabilities. A passing automated check does not replace license or architecture review.
+Lockfiles must be regenerated with repository tooling. Dependency-review CI rejects newly introduced known vulnerabilities at moderate severity and above, and a scheduled supply-chain audit re-checks the committed lockfiles themselves, since an advisory published against an already-pinned package is invisible to a diff-based review. A passing automated check does not replace license or architecture review.
 
 ## Data and imagery
 
