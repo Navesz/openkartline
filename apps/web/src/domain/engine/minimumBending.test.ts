@@ -113,14 +113,13 @@ function annulusBoundaries(innerM = 18, outerM = 22, count = 360) {
   return { left: ring(innerM), right: ring(outerM), direction: 'counterclockwise' as Direction }
 }
 
-describe('minimumBendingPath at the analytic optimum', () => {
-  it.each([20, 60, 200])('reports convergence rather than no_progress (%i iterations)', (iterations) => {
-    // A stalled line search at the optimum is convergence. The search tries
-    // both directions with 16 halvings from `0.08 / max|free|`, so its smallest
-    // offer is ≈1.2e-6 — below the 1e-5 step tolerance this same function
-    // trusts. Gating on the KKT residual reported failure here, because that
-    // residual comes from a finite-difference gradient and a flat objective
-    // makes it roundoff.
+describe('minimumBendingPath when the line search stalls', () => {
+  it.each([20, 60, 200])('does not call it convergence (%i iterations)', (iterations) => {
+    // Running out of search budget is not the same as being stationary. The
+    // loop halves after each failed try, so sixteen tries reach `0.08 * 2**-15`
+    // and a descent step exists at the next halving. Reporting convergence
+    // there hid a line that was short of the optimum. See the Python original
+    // and issue #45.
     const margin = 0.35
     const { left, right, direction } = annulusBoundaries()
     const prepared = prepareTrackGeometry(left, right, direction, {
@@ -133,6 +132,8 @@ describe('minimumBendingPath at the analytic optimum', () => {
       iterations,
     })
 
+    // The line really is on the analytic optimum, which is what made the
+    // earlier mislabel tempting.
     const optimumRadius = 22 - margin
     const worstError = Math.max(
       ...path.map((point) => Math.abs(Math.hypot(point.x, point.y) - optimumRadius)),
@@ -140,7 +141,7 @@ describe('minimumBendingPath at the analytic optimum', () => {
     expect(worstError).toBeLessThan(1e-3)
     expect(diagnostics.finalObjective).toBeCloseTo((2 * Math.PI) / optimumRadius, 4)
 
-    expect(diagnostics.converged).toBe(true)
-    expect(diagnostics.terminationReason).toBe('step_tolerance')
+    expect(diagnostics.converged).toBe(false)
+    expect(diagnostics.terminationReason).toBe('no_progress')
   })
 })

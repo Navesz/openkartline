@@ -298,15 +298,22 @@ def _annulus(inner_m: float = 18.0, outer_m: float = 22.0, count: int = 360) -> 
 
 
 @pytest.mark.parametrize("iterations", [20, 60, 200])
-def test_sitting_on_the_analytic_optimum_is_reported_as_converged(iterations: int) -> None:
-    """A stalled line search at the optimum is convergence, not `no_progress`.
+def test_a_stalled_line_search_is_not_reported_as_convergence(iterations: int) -> None:
+    """Running out of search budget is not the same as being stationary.
 
-    The search tries both directions with 16 halvings from `0.08 / max|free|`,
-    so its smallest offer is about 1.2e-6 -- below the 1e-5 step tolerance this
-    same function trusts as convergence. Gating on the KKT residual instead
-    reported failure here: the residual is built from a finite-difference
-    gradient, and on a flat objective that gradient is roundoff. It read 8e-2,
-    the full step, while the line search could not buy any improvement at all.
+    An earlier change relabelled this branch `step_tolerance` / converged, on
+    the reasoning that sixteen halvings from `0.08 / max|free|` bottom out below
+    the 1e-5 step tolerance, so nothing worth taking could remain. The loop
+    halves *after* each failed try, so it reaches `0.08 * 2**-15`, and a descent
+    step exists at exactly the next halving -- on this annulus with a relative
+    drop of 9.0e-7, and on the shipped Circuito Aurora request at 4,000 samples
+    with 8.4e-5, where continuing reaches 1.79% lower objective and a lap 0.49 s
+    faster.
+
+    So the honest report is `no_progress`: the search stopped, and the line may
+    be short of the optimum. The line here happens to be on it, which makes this
+    a conservative answer rather than a correct one -- the underlying defect is
+    the search budget, tracked in issue #45.
     """
 
     margin = 0.35
@@ -317,13 +324,15 @@ def test_sitting_on_the_analytic_optimum_is_reported_as_converged(iterations: in
         outcome.prepared, safety_margin_m=margin, iterations=iterations
     )
 
+    # The line really is on the analytic optimum, which is what made the
+    # earlier mislabel tempting.
     optimum_radius = 22.0 - margin
     radii = np.hypot(path[:, 0], path[:, 1])
     assert float(np.max(np.abs(radii - optimum_radius))) < 1e-3
     assert diagnostics.final_objective == pytest.approx(2 * np.pi / optimum_radius, rel=1e-4)
 
-    assert diagnostics.converged is True
-    assert diagnostics.termination_reason == "step_tolerance"
+    assert diagnostics.converged is False
+    assert diagnostics.termination_reason == "no_progress"
 
 
 #: Smoothing pass counts both engines must agree on: (sample_count, corridor, gradient).

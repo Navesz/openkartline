@@ -264,21 +264,17 @@ export function minimumBendingPath(
     if (!accepted) {
       completed = iteration
       if (globalAccepted) continue
-      // Both directions have been tried with 16 halvings from
-      // `0.08 / max|free|`, so the smallest displacement the line search
-      // offered is `0.08 * 2**-16` ≈ 1.2e-6 — an order of magnitude below the
-      // `STEP_TOLERANCE` of 1e-5 this same function trusts as convergence
-      // twenty lines down. No feasible descent step of significant magnitude
-      // exists, which is what convergence means here; the iterate is
-      // stationary.
-      //
-      // The KKT residual cannot arbitrate that. It is built from a
-      // finite-difference gradient, and once the objective is flat that
-      // gradient is roundoff: on an annulus sitting on the exact analytic
-      // optimum the residual reads 8e-2, the full step, while the line search
-      // cannot buy an improvement at any scale.
-      converged = true
-      terminationReason = 'step_tolerance'
+      // Exhausting the line search is not the same as being stationary. It
+      // halves *after* each failed try, so sixteen tries reach
+      // `0.08 * 2**-15`, not `2**-16` — and a descent step exists at exactly
+      // that next halving. Reporting it as convergence hid a real shortfall.
+      // See the Python original and issue #45.
+      if (projectedResidual < STEP_TOLERANCE) {
+        converged = true
+        terminationReason = 'step_tolerance'
+      } else {
+        terminationReason = 'no_progress'
+      }
       break
     }
     const fractionStep = maxAbsDifference(candidateFraction, fraction)

@@ -850,21 +850,26 @@ def minimum_bending_path(
             completed = iteration
             if global_accepted:
                 continue
-            # Both directions have been tried with 16 halvings from
-            # ``0.08 / max|free|``, so the smallest displacement the line search
-            # offered is ``0.08 * 2**-16`` ~= 1.2e-6 -- an order of magnitude
-            # below the 1e-5 step tolerance this same function trusts as
-            # convergence twenty lines down. No feasible descent step of
-            # significant magnitude exists, which is what convergence means
-            # here; the iterate is stationary.
+            # Exhausting the line search is not the same as being stationary.
+            # It halves *after* each failed try, so sixteen tries reach
+            # `0.08 * 2**-15`, not `2**-16` -- and a descent step exists at
+            # exactly that next halving. Measured on the shipped Circuito
+            # Aurora request at 4,000 samples: the search stops at iteration 48
+            # with a projected residual of 7.6e-2, and one more halving finds a
+            # step whose relative objective drop is 8.4e-5, eight orders above
+            # `acceptance_tolerance`. Continuing from there reaches 1.79% lower
+            # objective and a lap 0.49 s faster.
             #
-            # The KKT residual cannot arbitrate that. It is built from a
-            # finite-difference gradient, and once the objective is flat that
-            # gradient is roundoff: on an annulus sitting on the exact analytic
-            # optimum the residual reads 8e-2, the full step, while the line
-            # search cannot buy an improvement at any scale.
-            converged = True
-            termination_reason = "step_tolerance"
+            # So this branch means the search ran out of budget, which is what
+            # `no_progress` says. Reporting it as convergence hid a real
+            # shortfall behind `SPEED_PROFILE_CONVERGED` and no warning at all.
+            # The budget itself is the defect to fix, and it is solver work:
+            # see https://github.com/Navesz/openkartline/issues/45.
+            if projected_residual < 1e-5:
+                converged = True
+                termination_reason = "step_tolerance"
+            else:
+                termination_reason = "no_progress"
             break
         fraction_step = float(np.max(np.abs(candidate_fraction - fraction)))
         max_fraction_step = max(max_fraction_step, fraction_step)
