@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
 import numpy as np
 import pytest
 
 from openkartline_engine.geometry import (
+    _corridor_smoothing_passes,
+    _smoothing_passes,
     minimum_bending_path,
     path_channels,
     prepare_track,
@@ -321,3 +324,45 @@ def test_sitting_on_the_analytic_optimum_is_reported_as_converged(iterations: in
 
     assert diagnostics.converged is True
     assert diagnostics.termination_reason == "step_tolerance"
+
+
+#: Smoothing pass counts both engines must agree on: (sample_count, corridor, gradient).
+#:
+#: Duplicated verbatim in `apps/web/src/domain/engine/prepareTrack.test.ts`. That
+#: is the point: the two ports are held to numerical agreement, and a pass count
+#: that differs measures a different corridor. 449/450/451 bracket the case that
+#: went wrong -- `round(4.5)` is 4 in Python and 5 in JavaScript, so at 450 the
+#: engine smoothed four times and the browser five. No parity fixture uses a
+#: sample count where that happens, so nothing caught it.
+SMOOTHING_PASS_TABLE = [
+    (64, 1, 1),
+    (150, 1, 6),
+    (300, 2, 24),
+    (449, 4, 54),
+    (450, 5, 54),
+    (451, 5, 54),
+    (500, 6, 67),
+    (750, 13, 150),
+    (1050, 25, 294),
+]
+
+
+@pytest.mark.parametrize(("sample_count", "corridor", "gradient"), SMOOTHING_PASS_TABLE)
+def test_smoothing_pass_counts_match_the_browser_port(
+    sample_count: int, corridor: int, gradient: int
+) -> None:
+    assert _corridor_smoothing_passes(sample_count) == corridor
+    assert _smoothing_passes(sample_count) == gradient
+
+
+def test_no_sample_count_rounds_differently_from_javascript() -> None:
+    """Half-up everywhere, across the whole reachable range.
+
+    The table above pins the cases that mattered; this pins the rule, so a
+    future constant cannot reintroduce the split at a count nobody listed.
+    """
+
+    for sample_count in range(64, 4001):
+        scale = sample_count / 300
+        assert _corridor_smoothing_passes(sample_count) == max(1, math.floor(2 * scale**2 + 0.5))
+        assert _smoothing_passes(sample_count) == max(1, math.floor(24 * scale**2 + 0.5))

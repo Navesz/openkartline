@@ -324,9 +324,12 @@ function boundaryClearance(points: Point[], boundary: Point[]): number[] {
  * is measured differently at every resolution and the lap estimate drifts with
  * `sampleCount`.
  */
-function corridorSmoothingPasses(sampleCount: number): number {
+export function corridorSmoothingPasses(sampleCount: number): number {
   const scale = sampleCount / SMOOTHING_REFERENCE_SAMPLES
-  return Math.max(1, Math.round(CORRIDOR_SMOOTHING_PASSES * scale * scale))
+  // `Math.floor(x + 0.5)`, spelled out so it visibly matches the engine.
+  // `Math.round` is half-up and Python's `round` is half-to-even, so the
+  // two disagreed wherever this landed on .5.
+  return Math.max(1, Math.floor(CORRIDOR_SMOOTHING_PASSES * scale * scale + 0.5))
 }
 
 /**
