@@ -52,6 +52,12 @@ Se você quer o melhor traçado possível para um carro de corrida, use o primei
 
 Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.13 e [uv](https://docs.astral.sh/uv/).
 
+O editor é testado em Chromium, Firefox e WebKit — cada execução ponta a ponta
+exercita os três, porque o canvas depende justamente de onde eles divergem:
+captura de ponteiro durante o arrasto de um ponto de controle,
+`getBoundingClientRect` lido sob uma transformação de espaço SVG e um listener
+de roda não passivo para o zoom.
+
 ```bash
 git clone https://github.com/Navesz/openkartline.git
 cd openkartline
