@@ -191,15 +191,18 @@ export function toApiRequest(request: SimulationRequest) {
  * then appends to it, so the two arrive overlapping; spreading both listed
  * every geometry warning twice and inflated the count in the panel heading.
  *
- * Non-convergence is the one note the engine states in prose that the browser
- * also has a key for, and `status.code` identifies it structurally -- so it is
- * mapped, and both solvers end up saying the same thing in the same language.
+ * Non-convergence is deliberately NOT mapped to the browser's own key. The
+ * engine already states it, and more precisely -- it names the termination
+ * reason, where the browser's string is generic -- so adding the key produced
+ * two sentences about convergence, one translated and one not, saying the same
+ * thing. One accurate untranslated note beats two.
+ *
+ * Making both solvers say this identically would mean the client building the
+ * whole sentence from `path_diagnostics.termination_reason` and the engine no
+ * longer sending its prose. That is an API change, not an adapter change.
  */
 function engineNotes(result: ApiResult): ResultNote[] {
   const notes: ResultNote[] = []
-  if (result.status.code === 'PATH_NOT_CONVERGED') {
-    notes.push({ key: 'project.warningNotConverged' })
-  }
   const seen = new Set<string>()
   for (const text of [
     ...result.validation.warnings.map((issue) => issue.message),

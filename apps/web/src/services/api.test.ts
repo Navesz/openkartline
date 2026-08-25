@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
 import { INPUT_LIMITS } from '../domain/validation'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
-import type { SimulationRequest } from '../domain/types'
+import type { SimulationRequest, SimulationResult } from '../domain/types'
 import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
 import { ScientificSimulationError, runSimulation, toApiRequest } from './api'
@@ -231,5 +231,87 @@ describe('every kart the editor accepts fits the engine contract', () => {
       else expect(value, `${field} = ${value}`).toBeGreaterThan(low)
       expect(value, `${field} = ${value}`).toBeLessThanOrEqual(high)
     }
+  })
+})
+
+describe('engine notes are stated once', () => {
+  const nonConverged = {
+    schema_version: '1.0',
+    engine_version: '0.1.0',
+    status: { state: 'success', code: 'PATH_NOT_CONVERGED', message: 'ok' },
+    validation: { errors: [], warnings: [{ message: 'Large width variation.' }] },
+    summary: {
+      track_length_m: 100,
+      lap_time_s: 10,
+      min_speed_mps: 10,
+      max_speed_mps: 10,
+      average_speed_mps: 10,
+      sample_count: 1,
+    },
+    samples: [
+      {
+        s_m: 0,
+        x_m: 20,
+        y_m: 0,
+        heading_rad: 0,
+        curvature_1pm: 0.05,
+        speed_mps: 10,
+        elapsed_time_s: 0,
+        longitudinal_accel_mps2: 0,
+        lateral_accel_mps2: 5,
+        throttle: 0,
+        brake: 0,
+        friction_utilization: 0.5,
+      },
+    ],
+    markers: [],
+    assumptions: ['Flat, dry track.'],
+    // What simulation.py appends when the path does not converge, plus the
+    // geometry warning it seeds the same list from.
+    warnings: [
+      'Large width variation.',
+      'Path optimization reached its configured iteration limit. The returned line is feasible but is not reported as converged.',
+    ],
+  }
+
+  const render = (result: SimulationResult) =>
+    result.warnings.map((note) => ('key' in note ? t(note.key, note.params) : note.text))
+
+  it('says non-convergence once, not twice', async () => {
+    // Mapping `PATH_NOT_CONVERGED` to the browser's own key put a translated
+    // sentence next to the engine's English one, both saying the same thing.
+    // The engine's is the more precise of the two: it names the reason.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(nonConverged), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    const rendered = render(await runSimulation(request, true, t))
+
+    expect(rendered.filter((line) => /converg/i.test(line))).toHaveLength(1)
+    expect(rendered.some((line) => /configured iteration limit/.test(line))).toBe(true)
+  })
+
+  it('does not repeat a geometry warning the engine seeds into both lists', async () => {
+    // `simulation.py` seeds `warnings` from `validation.warnings`, so spreading
+    // both listed every geometry warning twice.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(nonConverged), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    const rendered = render(await runSimulation(request, true, t))
+
+    expect(rendered.filter((line) => line === 'Large width variation.')).toHaveLength(1)
   })
 })
