@@ -413,8 +413,8 @@ export function ControlPanel({
               label={t('panel.braking')}
               value={kart.brakeDecelMps2}
               unit="m/s²"
-              min={0.5}
-              max={15}
+              min={INPUT_LIMITS.brakeDecelMinMps2}
+              max={INPUT_LIMITS.brakeDecelMaxMps2}
               step={0.5}
               onChange={(brakeDecelMps2) => onKart({ brakeDecelMps2 })}
             />

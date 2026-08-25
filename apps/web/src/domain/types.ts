@@ -122,6 +122,7 @@ export interface OklProject {
     coordinate_system: 'local_cartesian_m'
     direction: Direction
     width_m: number
+    attribution?: string
     raw_centerline: [number, number][]
     /**
      * Editor background image, 0.2.0+. `image_data_url` may be omitted when the
@@ -133,8 +134,6 @@ export interface OklProject {
       image_width_px: number
       image_height_px: number
       scale_m_per_px?: number
-      origin_x_px?: number
-      origin_y_px?: number
     }
   }
   kart: {

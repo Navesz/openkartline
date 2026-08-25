@@ -53,12 +53,12 @@
             "brake_decel_mps2"
           ],
           "properties": {
-            "power_hp": { "type": "number", "minimum": 1, "maximum": 80 },
+            "power_hp": { "type": "number", "minimum": 1, "maximum": 100 },
             "kart_mass_kg": { "type": "number", "minimum": 20, "maximum": 250 },
             "driver_mass_kg": { "type": "number", "minimum": 20, "maximum": 180 },
             "top_speed_kph": { "type": "number", "minimum": 10, "maximum": 180 },
             "grip_coefficient": { "type": "number", "minimum": 0.2, "maximum": 2 },
-            "brake_decel_mps2": { "type": "number", "minimum": 0.5, "maximum": 15 }
+            "brake_decel_mps2": { "type": "number", "minimum": 0.5, "maximum": 20 }
           }
         }
       }
