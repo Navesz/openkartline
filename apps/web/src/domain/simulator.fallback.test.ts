@@ -34,6 +34,11 @@ describe('simulateInBrowser defensive fallback', () => {
     )
     expect(result.maxSpeedMps).toBeLessThanOrEqual(DEFAULT_KART.topSpeedKph / 3.6)
     expect(result.events.length).toBeGreaterThan(0)
+    // A console warning is not a user-facing signal. The heuristic is a
+    // different model -- measured 6.7% from the primary engine on the shipped
+    // presets -- and it lands in the same hero slot, so the degradation has to
+    // be visible in the result itself.
+    expect(result.warnings[0]).toBe(translate('en', 'project.warningSolverFallback'))
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })
