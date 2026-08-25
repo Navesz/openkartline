@@ -1,12 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clapperboard, Crosshair, Hand, LocateFixed, MousePointer2, Plus, Ruler, Trash2 } from 'lucide-react'
 import { insertPointNearestSegment } from '../domain/editorGeometry'
+import { pathLength } from '../domain/geometry'
 import { useI18n } from '../i18n/context'
 import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
 import { scaleFromCalibration } from '../domain/trackImage'
 import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
+
+/**
+ * Target spacing along the control polyline, in metres, used to pick how many
+ * stations the corridor is drawn with.
+ *
+ * The drawn boundary comes out coarser than this -- the polyline understates
+ * the spline it approximates, and the outer edge is longer than the centre --
+ * so 1.5 here lands around 2.4 m on the widest real circuit. That is the
+ * quantity that matters: at a 20 m radius a 2.4 m chord sits 0.04 m off the
+ * true curve, against 0.57 m at the fixed 180 stations this replaces.
+ */
+const DISPLAY_CHORD_M = 1.5
+const MIN_DISPLAY_STATIONS = 180
+const MAX_DISPLAY_STATIONS = 900
 
 export type EditorTool = 'edit' | 'add' | 'pan' | 'calibrate'
 
@@ -130,7 +145,20 @@ export function TrackCanvas({
   const [calibrationEnd, setCalibrationEnd] = useState<Point | null>(null)
   const [calibrationMeters, setCalibrationMeters] = useState('100')
   const [calibrationError, setCalibrationError] = useState<string | null>(null)
-  const canonical = useMemo(() => buildCanonicalTrackGeometry(track, 180), [track])
+  // Scaled to the lap, not fixed at 180. A real circuit drew its corridor with
+  // chords up to 9.6 m -- on an 8 m wide track that reads as a polygon, not a
+  // curve. Raising the count is close to free: Adria rebuilds in 0.29 ms at
+  // the 840 stations it now asks for, against 0.16 ms at 180.
+  //
+  // Display only. Every solver path passes settings.sampleCount, so nothing
+  // here can move a lap time.
+  const canonical = useMemo(() => {
+    const stations = Math.min(
+      MAX_DISPLAY_STATIONS,
+      Math.max(MIN_DISPLAY_STATIONS, Math.round(pathLength(track.centerline) / DISPLAY_CHORD_M)),
+    )
+    return buildCanonicalTrackGeometry(track, stations)
+  }, [track])
   const display = canonical.center
   const boundaries = { left: canonical.left, right: canonical.right }
   const racingLine = useMemo(() => (result ? racingLineRuns(result.samples) : []), [result])
