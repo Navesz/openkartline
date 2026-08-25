@@ -194,3 +194,81 @@ describe('pathChannels', () => {
     expect(heading.every((angle) => Number.isFinite(angle))).toBe(true)
   })
 })
+
+/**
+ * A constant-width corridor that actually has corners.
+ *
+ * Every other width fixture here is a pair of concentric circles, where the two
+ * edges advance through the lap at the same rate and pairing by index happens
+ * to be pairing perpendicularly. That symmetry is what let a skewed-chord width
+ * ship unnoticed, so this fixture deliberately breaks it: the straights and the
+ * arcs stretch the outer edge relative to the inner one, while the true
+ * perpendicular width stays exactly `widthM` everywhere.
+ */
+function stadiumBoundaries(widthM = 8, straightM = 80, radiusM = 15) {
+  const center: Point[] = []
+  for (let index = 0; index < 80; index += 1) {
+    center.push({ x: -straightM / 2 + (straightM * index) / 80, y: -radiusM })
+  }
+  for (let index = 0; index < 120; index += 1) {
+    const angle = -Math.PI / 2 + (Math.PI * index) / 120
+    center.push({ x: straightM / 2 + radiusM * Math.cos(angle), y: radiusM * Math.sin(angle) })
+  }
+  for (let index = 0; index < 80; index += 1) {
+    center.push({ x: straightM / 2 - (straightM * index) / 80, y: radiusM })
+  }
+  for (let index = 0; index < 120; index += 1) {
+    const angle = Math.PI / 2 + (Math.PI * index) / 120
+    center.push({ x: -straightM / 2 + radiusM * Math.cos(angle), y: radiusM * Math.sin(angle) })
+  }
+
+  const half = widthM / 2
+  const offset = (sign: number): Point[] =>
+    center.map((point, index) => {
+      const following = center[(index + 1) % center.length]
+      const previous = center[(index - 1 + center.length) % center.length]
+      const tangentX = following.x - previous.x
+      const tangentY = following.y - previous.y
+      const length = Math.hypot(tangentX, tangentY)
+      return {
+        x: point.x + (sign * -tangentY * half) / length,
+        y: point.y + (sign * tangentX * half) / length,
+      }
+    })
+
+  return { left: offset(1), right: offset(-1), direction: 'counterclockwise' as Direction }
+}
+
+describe('prepareTrackGeometry on a corridor with corners', () => {
+  it('measures the real width rather than the chord between paired stations', () => {
+    // Equal-arc resampling advances through a corner at different rates on the
+    // inner and the outer edge, so `left[i]` does not face `right[i]`. Pairing
+    // by index inflated this 8 m corridor to 11.16 m at its worst station.
+    const { left, right, direction } = stadiumBoundaries()
+    const prepared = prepareTrackGeometry(left, right, direction, {
+      sampleCount: 300,
+      safetyMarginM: 0.35,
+    })
+
+    const widest = Math.max(...prepared.widths)
+    const narrowest = Math.min(...prepared.widths)
+    expect(widest - narrowest).toBeLessThan(0.01)
+    expect(Math.abs(mean(prepared.widths) - 8)).toBeLessThan(0.01)
+  })
+
+  it('spans the corridor with left - right, so a fraction of it is a real distance', () => {
+    // `lower = safetyMarginM / widths` only buys real clearance if the corridor
+    // vector is the corridor. A skewed chord is longer than the width it
+    // claims, so every fraction of it under-delivers by the same ratio.
+    const { left, right, direction } = stadiumBoundaries()
+    const prepared = prepareTrackGeometry(left, right, direction, {
+      sampleCount: 300,
+      safetyMarginM: 0.35,
+    })
+
+    prepared.widths.forEach((width, index) => {
+      const span = distance(prepared.left[index], prepared.right[index])
+      expect(Math.abs(span - width)).toBeLessThan(1e-9)
+    })
+  })
+})

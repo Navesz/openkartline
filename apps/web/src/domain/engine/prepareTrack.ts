@@ -14,6 +14,17 @@ import type { Direction, Point } from '../types'
 const EPS = 1e-9
 const MAX_DENSE_SAMPLES = 16_000
 const DENSE_OVERSAMPLING = 8
+/** Mirrors `_GRADIENT_SMOOTHING_REFERENCE_SAMPLES`; the scale both filters measure against. */
+export const SMOOTHING_REFERENCE_SAMPLES = 300
+/** Mirrors `_CORRIDOR_CENTERING_PASSES`. The seed is a chord midpoint, off-center in a corner. */
+const CORRIDOR_CENTERING_PASSES = 2
+/**
+ * Mirrors `_CORRIDOR_SMOOTHING_PASSES`. Point-to-polyline distance is only
+ * piecewise smooth: its slope jumps at every facet, and while the amplitude of
+ * that noise is sub-millimetre, its curvature rivals the track's own - which is
+ * exactly what the bending objective integrates.
+ */
+const CORRIDOR_SMOOTHING_PASSES = 2
 
 /** Aligned, equally sampled corridor geometry used by the solver. */
 export interface PreparedTrack {
@@ -232,6 +243,149 @@ function normalizedOrientation(points: Point[], direction: Direction): Point[] {
 }
 
 /**
+ * Apply the `[1, 2, 1]/4` circular filter `passes` times.
+ *
+ * One pass scales Fourier mode `f` (in cycles per sample) by `cos(pi f)**2`,
+ * so `passes` of them scale it by `cos(pi f)**(2 * passes)`. numpy evaluates
+ * that multiplier in one FFT pair; applying the kernel directly is the same
+ * circular convolution and costs O(n * passes), trivial at this app's sizes.
+ */
+export function smoothPeriodic(values: number[], passes: number): number[] {
+  if (passes <= 0) return values
+  let current = values
+  for (let pass = 0; pass < passes; pass += 1) {
+    const count = current.length
+    const next = new Array<number>(count)
+    for (let index = 0; index < count; index += 1) {
+      next[index] =
+        (current[(index - 1 + count) % count] + 2 * current[index] + current[(index + 1) % count]) / 4
+    }
+    current = next
+  }
+  return current
+}
+
+/** Left-hand unit normals of a closed curve, from central differences. */
+function unitNormals(curve: Point[]): Point[] {
+  const count = curve.length
+  const normals = new Array<Point>(count)
+  for (let index = 0; index < count; index += 1) {
+    const following = curve[(index + 1) % count]
+    const previous = curve[(index - 1 + count) % count]
+    const tangentX = following.x - previous.x
+    const tangentY = following.y - previous.y
+    const length = Math.hypot(tangentX, tangentY)
+    const safe = length < EPS ? 1 : length
+    normals[index] = { x: -tangentY / safe, y: tangentX / safe }
+  }
+  return normals
+}
+
+/**
+ * Distance from each point to the nearest point of a closed boundary.
+ *
+ * This is the quantity a safety margin is about - how far the wall is - and
+ * unlike casting a ray along the normal it stays defined when the reference has
+ * drifted outside the corridor, which is precisely when a ray escapes and
+ * answers with a hit from the far side of the track.
+ */
+function boundaryClearance(points: Point[], boundary: Point[]): number[] {
+  const segments = boundary.length
+  const clearances = new Array<number>(points.length)
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index]
+    let best = Infinity
+    for (let segment = 0; segment < segments; segment += 1) {
+      const start = boundary[segment]
+      const end = boundary[(segment + 1) % segments]
+      const edgeX = end.x - start.x
+      const edgeY = end.y - start.y
+      const lengthSq = edgeX * edgeX + edgeY * edgeY
+      const offsetX = point.x - start.x
+      const offsetY = point.y - start.y
+      const safe = lengthSq < EPS ? 1 : lengthSq
+      let projection = (offsetX * edgeX + offsetY * edgeY) / safe
+      projection = projection < 0 ? 0 : projection > 1 ? 1 : projection
+      const deltaX = offsetX - projection * edgeX
+      const deltaY = offsetY - projection * edgeY
+      const candidate = Math.hypot(deltaX, deltaY)
+      if (candidate < best) best = candidate
+    }
+    clearances[index] = best
+  }
+  return clearances
+}
+
+/**
+ * Hold the clearance filter's width fixed in arc length, not in samples.
+ *
+ * Same square-law scaling as the gradient filter: the filter diffuses, so its
+ * width grows with the square root of the pass count. Without this the corridor
+ * is measured differently at every resolution and the lap estimate drifts with
+ * `sampleCount`.
+ */
+function corridorSmoothingPasses(sampleCount: number): number {
+  const scale = sampleCount / SMOOTHING_REFERENCE_SAMPLES
+  return Math.max(1, Math.round(CORRIDOR_SMOOTHING_PASSES * scale * scale))
+}
+
+/**
+ * Measure the corridor from a centered reference instead of by paired index.
+ *
+ * Equal-arc resampling walks the inner and outer edge at different rates, so
+ * station `i` of one does not face station `i` of the other. The chord between
+ * them is the hypotenuse of a skewed pair: longer than the width the driver
+ * has, and in a tight corner it leaves the corridor entirely, so no fraction of
+ * it is safe. Measuring each wall's clearance from a centered reference
+ * restores the invariant the solver depends on - `left - right` spans the
+ * corridor, and a fraction of it is a real distance from the edge.
+ */
+function perpendicularCorridor(
+  seed: Point[],
+  leftBoundary: Point[],
+  rightBoundary: Point[],
+  sampleCount: number,
+): Pick<PreparedTrack, 'left' | 'right' | 'center' | 'widths'> {
+  const passes = corridorSmoothingPasses(sampleCount)
+  const clearances = (curve: Point[]): [number[], number[]] => [
+    smoothPeriodic(boundaryClearance(curve, leftBoundary), passes),
+    smoothPeriodic(boundaryClearance(curve, rightBoundary), passes),
+  ]
+
+  let reference = resampleClosedSpline(seed, sampleCount)
+  let measured = clearances(reference)
+
+  for (let pass = 0; pass < CORRIDOR_CENTERING_PASSES; pass += 1) {
+    const [toLeft, toRight] = measured
+    const normals = unitNormals(reference)
+    reference = resampleClosedSpline(
+      reference.map((point, index) => {
+        const shift = (toLeft[index] - toRight[index]) * 0.5
+        return { x: point.x + normals[index].x * shift, y: point.y + normals[index].y * shift }
+      }),
+      sampleCount,
+    )
+    measured = clearances(reference)
+  }
+
+  const [toLeft, toRight] = measured
+  const normals = unitNormals(reference)
+  const left = reference.map((point, index) => ({
+    x: point.x + normals[index].x * toLeft[index],
+    y: point.y + normals[index].y * toLeft[index],
+  }))
+  const right = reference.map((point, index) => ({
+    x: point.x - normals[index].x * toRight[index],
+    y: point.y - normals[index].y * toRight[index],
+  }))
+  const center = left.map((point, index) => ({
+    x: (point.x + right[index].x) * 0.5,
+    y: (point.y + right[index].y) * 0.5,
+  }))
+  return { left, right, center, widths: toLeft.map((value, index) => value + toRight[index]) }
+}
+
+/**
  * Normalize a corridor into aligned, equally sampled boundaries.
  *
  * Lean port of the Python `prepare_track`: the browser client pre-validates
@@ -249,13 +403,30 @@ export function prepareTrackGeometry(
 ): PreparedTrack {
   const normalizedLeft = normalizedOrientation(cleanClosed(leftBoundary), direction)
   const normalizedRight = normalizedOrientation(cleanClosed(rightBoundary), direction)
-  const left = resampleClosedSpline(normalizedLeft, options.sampleCount)
-  const right = alignSamples(left, resampleClosedSpline(normalizedRight, options.sampleCount))
-  const widths = left.map((point, index) => distance(point, right[index]))
-  const center = left.map((point, index) => ({
-    x: (point.x + right[index].x) * 0.5,
-    y: (point.y + right[index].y) * 0.5,
+
+  // The walls are sampled denser than the stations measured against them,
+  // matching `validation_count` in the Python engine. Facet error in the
+  // clearance falls as the square of this spacing.
+  const denseCount = Math.min(
+    2_000,
+    Math.max(256, options.sampleCount, normalizedLeft.length * 2, normalizedRight.length * 2),
+  )
+  const leftDense = resampleClosedSpline(normalizedLeft, denseCount)
+  const rightDense = resampleClosedSpline(normalizedRight, denseCount)
+
+  const pairedLeft = resampleClosedSpline(normalizedLeft, options.sampleCount)
+  const pairedRight = alignSamples(pairedLeft, resampleClosedSpline(normalizedRight, options.sampleCount))
+  const seed = pairedLeft.map((point, index) => ({
+    x: (point.x + pairedRight[index].x) * 0.5,
+    y: (point.y + pairedRight[index].y) * 0.5,
   }))
+
+  const { left, right, center, widths } = perpendicularCorridor(
+    seed,
+    leftDense,
+    rightDense,
+    options.sampleCount,
+  )
   return { left, right, center, widths, lengthM: closedLength(center) }
 }
 
