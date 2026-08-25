@@ -15,7 +15,7 @@ import {
   Weight,
   Zap,
 } from 'lucide-react'
-import { KART_PRESETS, PRESETS, REAL_TRACK_KEYS, toKartInput } from '../domain/presets'
+import { KART_PRESETS, PRESETS, REAL_TRACK_KEYS, kartPresetKeyFor, toKartInput } from '../domain/presets'
 import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 import { useI18n } from '../i18n/context'
@@ -82,6 +82,8 @@ interface ControlPanelProps {
   onRemoveImage: () => void
   onGpsFile: (file: File) => void
   onCalibrate: (pixelDistance: number, realMeters: number) => void
+  /** Which preset the track currently is, or `''` when it came from a file. */
+  trackPresetKey: string
 }
 
 /**
@@ -162,6 +164,7 @@ export function ControlPanel({
   onRemoveImage,
   onGpsFile,
   onCalibrate,
+  trackPresetKey,
 }: ControlPanelProps) {
   const { t, n } = useI18n()
   const [pointIndex, setPointIndex] = useState(0)
@@ -187,7 +190,14 @@ export function ControlPanel({
             <Flag size={15} /> {t('panel.startFromExample')}
           </span>
           <span className="select-wrap">
-            <select id="preset" defaultValue="technical" onChange={(event) => onPreset(event.target.value)}>
+            <select id="preset" value={trackPresetKey} onChange={(event) => onPreset(event.target.value)}>
+              {/* Only reachable when the track came from a file or a GPS
+                  trace, where naming a preset would be a lie. */}
+              {trackPresetKey === '' && (
+                <option value="" disabled>
+                  {t('panel.trackImported')}
+                </option>
+              )}
               <optgroup label={t('panel.syntheticGroup')}>
                 <option value="technical">{t('panel.trackAurora')}</option>
                 <option value="oval">{t('panel.trackOval')}</option>
@@ -411,7 +421,7 @@ export function ControlPanel({
           <span className="select-wrap">
             <select
               id="kart-preset"
-              defaultValue=""
+              value={kartPresetKeyFor(kart)}
               onChange={(event) => {
                 const preset = KART_PRESETS[event.target.value]
                 if (preset) onKart(toKartInput(preset))
