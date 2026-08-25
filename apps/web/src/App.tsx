@@ -167,10 +167,16 @@ export default function App() {
    * other track presented as current and an in-flight solve uninvalidated.
    */
   const undoEdit = useCallback(() => {
+    // Only when there is something to step to. The toolbar buttons are
+    // disabled at the ends of the history, but Ctrl+Z is not, and marking the
+    // project stale for a step that did not happen told the user their lap was
+    // out of date against a track nothing had touched.
+    if (!trackHistory.canUndo) return
     trackHistory.undo()
     markDirty()
   }, [markDirty, trackHistory])
   const redoEdit = useCallback(() => {
+    if (!trackHistory.canRedo) return
     trackHistory.redo()
     markDirty()
   }, [markDirty, trackHistory])
