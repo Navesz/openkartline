@@ -122,18 +122,31 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement
-      if (target.matches('input, select, textarea')) return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.matches('input, select, textarea') || target.isContentEditable)
+      ) {
+        return
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         if (event.shiftKey) trackHistory.redo()
         else trackHistory.undo()
         setDirty(true)
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         trackHistory.redo()
         setDirty(true)
-      } else if (event.key.toLowerCase() === 'v') setTool('edit')
+        return
+      }
+      // The single-letter tool shortcuts are unmodified keys only. Without this
+      // Ctrl+A to select the page armed the add tool, and the next canvas click
+      // inserted a control point into the track.
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key.toLowerCase() === 'v') setTool('edit')
       else if (event.key.toLowerCase() === 'a') setTool('add')
       else if (event.key.toLowerCase() === 'h') setTool('pan')
       else if (event.key.toLowerCase() === 'c' && trackHistory.value.background) setTool('calibrate')
