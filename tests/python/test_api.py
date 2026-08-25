@@ -154,3 +154,61 @@ def test_malformed_content_length_is_rejected(declared: str) -> None:
 
     assert response.status_code == 413
     assert "Content-Length" in response.json()["detail"]
+
+
+class TestPublishedExamples:
+    """The examples in `/docs` describe requests the service actually accepts.
+
+    A schema example is documentation that looks executable, so a reader will
+    paste it. These post the very objects the OpenAPI document publishes, which
+    is the only thing that stops one drifting into describing a request the
+    service would reject.
+    """
+
+    def test_every_request_schema_publishes_an_example(self) -> None:
+        spec = client.get("/openapi.json").json()
+        schemas = spec["components"]["schemas"]
+        for name in (
+            "TrackV1",
+            "KartV1",
+            "SimulationSettingsV1",
+            "SimulationRequestV1",
+            "TrackValidationRequest",
+        ):
+            assert schemas[name].get("examples"), f"{name} publishes no example"
+
+    def test_both_operations_describe_themselves(self) -> None:
+        # A summary is a label; the description is where the corridor
+        # conventions and the read-status-before-summary rule are written down.
+        spec = client.get("/openapi.json").json()
+        for path, method in (
+            ("/health", "get"),
+            ("/v1/tracks/validate", "post"),
+            ("/v1/simulations", "post"),
+        ):
+            operation = spec["paths"][path][method]
+            assert operation.get("summary")
+            assert len(operation.get("description", "")) > 80, f"{method} {path} has no description"
+
+    def test_the_published_simulation_example_runs(self) -> None:
+        spec = client.get("/openapi.json").json()
+        example = spec["components"]["schemas"]["SimulationRequestV1"]["examples"][0]
+
+        response = client.post("/v1/simulations", json=example)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"]["state"] == "success"
+        assert body["summary"]["lap_time_s"] > 0
+        assert body["summary"]["track_length_m"] > 0
+
+    def test_the_published_validation_example_runs(self) -> None:
+        spec = client.get("/openapi.json").json()
+        example = spec["components"]["schemas"]["TrackValidationRequest"]["examples"][0]
+
+        response = client.post("/v1/tracks/validate", json=example)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["valid"] is True
+        assert body["metrics"]["min_width_m"] > 0

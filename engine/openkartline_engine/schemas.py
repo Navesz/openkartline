@@ -7,10 +7,11 @@ it is converted to watts by the solver.
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 SCHEMA_VERSION = "1.0"
 ENGINE_VERSION = "0.1.0"
@@ -27,6 +28,53 @@ PathTerminationReason: TypeAlias = Literal[
     "no_progress",
     "iteration_limit",
 ]
+
+
+def _ellipse_boundary(radius_x: float, radius_y: float, count: int) -> list[JsonValue]:
+    """Points of a clockwise ellipse, for the worked examples below."""
+
+    return [
+        {
+            "x_m": round(radius_x * math.cos(-2 * math.pi * index / count), 3),
+            "y_m": round(radius_y * math.sin(-2 * math.pi * index / count), 3),
+        }
+        for index in range(count)
+    ]
+
+
+# A corridor 8 m wide around a 120 x 70 m oval. Small enough to read in the
+# generated documentation, and valid: `test_openapi.py` posts these very
+# objects to the endpoints that publish them, so an example cannot drift into
+# describing a request the service would reject.
+EXAMPLE_TRACK: dict[str, JsonValue] = {
+    "schema_version": "1.0",
+    "name": "Example oval",
+    "coordinate_system": "local_cartesian_m",
+    "direction": "clockwise",
+    "closed": True,
+    "left_boundary": _ellipse_boundary(124.0, 74.0, 24),
+    "right_boundary": _ellipse_boundary(116.0, 66.0, 24),
+}
+
+EXAMPLE_KART: dict[str, JsonValue] = {
+    "schema_version": "1.0",
+    "name": "Example senior kart",
+    "total_mass_kg": 162.0,
+    "power_hp": 30.0,
+    "top_speed_mps": 33.333,
+    "max_accel_mps2": 15.98,
+    "max_brake_mps2": 11.0,
+    "max_lateral_accel_mps2": 16.07,
+    "drivetrain_efficiency": 0.82,
+}
+
+EXAMPLE_SETTINGS: dict[str, JsonValue] = {
+    "schema_version": "1.0",
+    "sample_count": 300,
+    "safety_margin_m": 0.35,
+    "path_smoothing_iterations": 20,
+    "friction_exponent": 2.0,
+}
 
 
 class StrictModel(BaseModel):
@@ -51,6 +99,8 @@ class Point2D(StrictModel):
 class TrackV1(StrictModel):
     """Closed track corridor described by its travel-direction left and right edges."""
 
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_TRACK]})
+
     schema_version: Literal["1.0"] = "1.0"
     name: str = Field(min_length=1, max_length=120)
     coordinate_system: Literal["local_cartesian_m"] = "local_cartesian_m"
@@ -70,6 +120,8 @@ class TrackV1(StrictModel):
 
 class KartV1(StrictModel):
     """Quasi-steady point-mass kart parameters."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_KART]})
 
     schema_version: Literal["1.0"] = "1.0"
     name: str = Field(min_length=1, max_length=120)
@@ -102,6 +154,8 @@ class KartV1(StrictModel):
 class SimulationSettingsV1(StrictModel):
     """Deterministic MVP solver settings."""
 
+    model_config = ConfigDict(json_schema_extra={"examples": [EXAMPLE_SETTINGS]})
+
     schema_version: Literal["1.0"] = "1.0"
     sample_count: int = Field(default=300, ge=64, le=4_000)
     safety_margin_m: Annotated[float, Field(ge=0, le=10, allow_inf_nan=False)] = 0.35
@@ -111,6 +165,17 @@ class SimulationSettingsV1(StrictModel):
 
 class SimulationRequestV1(StrictModel):
     """Input accepted by ``POST /v1/simulations``."""
+
+    # A worked example, so `/docs` shows a request that runs instead of a form
+    # of `"string"` and `0` placeholders that a reader has to reverse-engineer
+    # the corridor geometry from.
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"track": EXAMPLE_TRACK, "kart": EXAMPLE_KART, "settings": EXAMPLE_SETTINGS}
+            ]
+        }
+    )
 
     track: TrackV1
     kart: KartV1
@@ -140,6 +205,14 @@ class TrackValidationResult(StrictModel):
 
 
 class TrackValidationRequest(StrictModel):
+    """Input accepted by ``POST /v1/tracks/validate``."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"track": EXAMPLE_TRACK, "sample_count": 256, "safety_margin_m": 0.35}]
+        }
+    )
+
     track: TrackV1
     sample_count: int = Field(default=256, ge=64, le=4_000)
     safety_margin_m: Annotated[float, Field(ge=0, le=10, allow_inf_nan=False)] = 0.35
