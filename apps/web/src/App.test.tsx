@@ -140,3 +140,42 @@ describe('run-bar announcements', () => {
     expect(container.querySelector('.run-bar')).not.toHaveAttribute('role')
   })
 })
+
+describe('restoring the example while a solve is in flight', () => {
+  it('keeps the restored example rather than the answer for the discarded track', async () => {
+    // `reset` installs its result synchronously. Without invalidating what is
+    // already in flight, the request for the previous track landed afterwards,
+    // replaced the restored example's result, and reported itself as current.
+    let release: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) => {
+        if (String(input).includes('/health')) return new Response('{}', { status: 200 })
+        await held
+        return new Response(JSON.stringify(API_RESULT), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+
+    await user.click(screen.getByRole('button', { name: /restore example/i }))
+    const restored = screen.getByText(/estimated lap/i).parentElement?.textContent
+
+    release!()
+    await screen.findByText(/example restored|exemplo restaurado/i)
+
+    // The lap on screen is still the one the restore computed. The stale
+    // engine result carried lap_time_s 10, which would read 0:10.00.
+    expect(screen.getByText(/estimated lap/i).parentElement?.textContent).toBe(restored)
+    expect(document.body.textContent).not.toContain('0:10.00')
+  })
+})
