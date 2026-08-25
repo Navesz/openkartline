@@ -6,6 +6,10 @@ import { DEFAULT_KART, PRESETS } from './domain/presets'
 import { toProject } from './services/projectFile'
 import { I18nProvider } from './i18n/I18nProvider'
 
+// The chosen locale is persisted, so a test that switches language leaves every
+// test after it running in that language. One of them does.
+beforeEach(() => window.localStorage.clear())
+
 function renderApp() {
   return render(
     <I18nProvider>
@@ -269,5 +273,41 @@ describe('a project rejected on import', () => {
 
     expect(await screen.findByText(/quantidade de amostras/i)).toBeInTheDocument()
     expect(screen.queryByText(/must be an integer between/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('an undo with nothing to undo', () => {
+  it('leaves the lap on screen current', async () => {
+    // The toolbar buttons are disabled when there is nothing to step to, but
+    // Ctrl+Z is not, and it called `markDirty` unconditionally. Pressing it on
+    // a fresh project bumped the input version and relabelled the button, so
+    // the app claimed the lap it was showing had gone stale against a track
+    // nothing had touched -- and cancelled any solve still in flight.
+    const user = userEvent.setup()
+    renderApp()
+
+    expect(await screen.findByRole('button', { name: /simulate again/i })).toBeInTheDocument()
+
+    await user.keyboard('{Control>}z{/Control}')
+    await user.keyboard('{Control>}y{/Control}')
+
+    expect(screen.getByRole('button', { name: /simulate again/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /recalculate lap/i })).not.toBeInTheDocument()
+  })
+
+  it('still marks it stale when there is something to undo', async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByText(/edit point by coordinates/i))
+    const xInput = screen.getByLabelText(/point 1 · x/i)
+    await user.clear(xInput)
+    await user.type(xInput, '12')
+    await user.click(screen.getByRole('button', { name: /recalculate lap/i }))
+    expect(await screen.findByRole('button', { name: /simulate again/i })).toBeInTheDocument()
+
+    await user.keyboard('{Control>}z{/Control}')
+
+    expect(screen.getByRole('button', { name: /recalculate lap/i })).toBeInTheDocument()
   })
 })
