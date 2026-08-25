@@ -98,3 +98,28 @@ describe('drawing resolution scales with the lap', () => {
     expect(stationsFor(huge)).toBe(900)
   })
 })
+
+describe('the sample-count floor', () => {
+  // `normalAt` and `curvatureAt` read a station's two neighbours, and the
+  // corridor is built from those normals, so a lap resampled to fewer than
+  // four stations has no interior to speak of. Nothing exercised the floor,
+  // so removing it -- or lowering it to 1 -- left every test passing while
+  // the geometry it protects collapsed.
+  it.each([
+    [0, 4],
+    [1, 4],
+    [3, 4],
+    [3.6, 4],
+    [12, 12],
+  ])('resamples a request for %s stations to %s', (asked, expected) => {
+    expect(buildCanonicalTrackGeometry(PRESETS.oval, asked).center).toHaveLength(expected)
+  })
+
+  it('still closes the corridor at the floor', () => {
+    const { center, left, right } = buildCanonicalTrackGeometry(PRESETS.oval, 1)
+    expect(left).toHaveLength(center.length)
+    expect(right).toHaveLength(center.length)
+    expect(center.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
+    expect(left.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
+  })
+})

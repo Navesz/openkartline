@@ -37,10 +37,16 @@ describe('apex spacing wraps across the start line', () => {
     // side of station 0 are near neighbours even though their station numbers
     // are far apart. Getting `trackLengthM` wrong makes the second term
     // negative and the pair looks adjacent regardless of where they are.
-    const count = 200
+    // 400 stations on a 628.32 m lap: 1.571 m apart, against a minimum gap of
+    // 6.283 m. Stations 1 and 399 are 3.14 m apart the short way, half the gap.
+    //
+    // At 200 stations the two were 6.2831853071795649 m apart against a
+    // minimum of 6.2831853071795862 -- the same number, and the test passed on
+    // 2.1e-14 of floating-point noise. Either side of that it decides nothing.
+    const count = 400
     const { path, station, lengthM } = circularLap(count, 100)
-    // Stations 1 and 199 are one step either side of the start line.
-    const curvature = curvatureWithPeaksAt(count, [1, 199])
+    // Stations 1 and 399 are one step either side of the start line.
+    const curvature = curvatureWithPeaksAt(count, [1, count - 1])
 
     const markers = buildDrivingMarkers(station, path, curvature, flatProfile(count), lengthM)
     const apexes = markers.filter((marker) => marker.kind === 'apex')
@@ -49,9 +55,10 @@ describe('apex spacing wraps across the start line', () => {
   })
 
   it('keeps two apexes that are genuinely far apart', () => {
-    const count = 200
+    const count = 400
     const { path, station, lengthM } = circularLap(count, 100)
-    const curvature = curvatureWithPeaksAt(count, [1, 100])
+    // Half a lap apart: 314 m against the same 6.283 m minimum.
+    const curvature = curvatureWithPeaksAt(count, [1, count / 2])
 
     const markers = buildDrivingMarkers(station, path, curvature, flatProfile(count), lengthM)
 
@@ -141,7 +148,12 @@ describe('apex count', () => {
       lengthM,
     )
 
-    expect(markers.filter((marker) => marker.kind === 'apex').length).toBeLessThanOrEqual(20)
+    // Exactly the limit, not merely within it. `toBeLessThanOrEqual` was
+    // satisfied by any lower cap too, so lowering `APEX_LIMIT` to 5 -- or to
+    // zero -- left this passing. All 60 peaks are 47.1 m apart against a
+    // 31.4 m minimum gap, so every one of them is a candidate and the cap is
+    // the only thing that decides the count.
+    expect(markers.filter((marker) => marker.kind === 'apex')).toHaveLength(20)
   })
 
   it('ignores curvature below the apex threshold', () => {
