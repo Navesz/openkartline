@@ -30,6 +30,10 @@ export const imports = defineMessages({
     'pt-BR': 'O trajeto simplificado ficou com menos de 4 pontos; grave uma volta completa.',
   },
 
+  'imports.gpsTooLarge': {
+    en: 'The GPS trace exceeds the {limit} MB limit.',
+    'pt-BR': 'O traçado GPS excede o limite de {limit} MB.',
+  },
   'imports.imageTooLarge': {
     en: 'The image exceeds the {limit} MB limit.',
     'pt-BR': 'A imagem excede o limite de {limit} MB.',

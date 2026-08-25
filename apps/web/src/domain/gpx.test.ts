@@ -4,6 +4,7 @@ import {
   gpsToTrack,
   latLonToMetric,
   parseCsvLatLon,
+  parseGpsFile,
   parseGpx,
   simplifyClosedTrack,
   simplifyRdp,
@@ -144,5 +145,37 @@ describe('gpsToTrack', () => {
       lon: -47.39 + i * 1e-6,
     }))
     expect(() => gpsToTrack(tiny)).toThrow('imports.trackTooShort')
+  })
+})
+
+describe('a GPS trace this app is willing to read', () => {
+  it('refuses one past the byte limit before parsing it', () => {
+    // `maxPointsRaw` bounds the parsed result, not the work to reach it: the
+    // whole file was decoded and scanned before a single point was counted.
+    const padding = ' '.repeat(GPS_LIMITS.uploadBytes + 1)
+    expect(() => parseGpsFile('trace.gpx', padding)).toThrow('imports.gpsTooLarge')
+    expect(() => parseGpsFile('trace.csv', padding)).toThrow('imports.gpsTooLarge')
+  })
+
+  it('measures bytes rather than characters', () => {
+    // A multi-byte character costs what it costs on the wire. Counting string
+    // length would admit three times the bytes for an accented trace.
+    const justUnder = 'é'.repeat(Math.floor(GPS_LIMITS.uploadBytes / 2) + 1)
+    expect(justUnder.length).toBeLessThan(GPS_LIMITS.uploadBytes)
+    expect(() => parseGpsFile('trace.gpx', justUnder)).toThrow('imports.gpsTooLarge')
+  })
+
+  it('still reads a trace within the limit', () => {
+    const points = Array.from(
+      { length: 400 },
+      (_, index) =>
+        `<trkpt lat="${(-22.5 + 0.0009 * Math.cos((2 * Math.PI * index) / 400)).toFixed(7)}" lon="${(
+          -43.2 +
+          0.0009 * Math.sin((2 * Math.PI * index) / 400)
+        ).toFixed(7)}"></trkpt>`,
+    ).join('')
+    const gpx = `<gpx><trk><trkseg>${points}</trkseg></trk></gpx>`
+    expect(gpx.length).toBeLessThan(GPS_LIMITS.uploadBytes)
+    expect(parseGpsFile('trace.gpx', gpx).centerline.length).toBeGreaterThanOrEqual(4)
   })
 })

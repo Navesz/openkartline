@@ -18,7 +18,7 @@ import { LapCharts } from './components/LapCharts'
 import { PlaybackBar } from './components/PlaybackBar'
 import { ResultsPanel } from './components/ResultsPanel'
 import { TrackCanvas, type EditorTool } from './components/TrackCanvas'
-import { parseGpsFile } from './domain/gpx'
+import { GPS_LIMITS, parseGpsFile } from './domain/gpx'
 import { frameAtElapsed, wrapElapsed, type PlaybackRate } from './domain/playback'
 import { clonePoints, DEFAULT_KART, PRESETS, trackPresetKeyFor } from './domain/presets'
 import { clampSelectedSample } from './domain/selection'
@@ -382,6 +382,14 @@ export default function App() {
   }
 
   const importGpsFile = async (file: File) => {
+    // Before the read, as the project and image uploads do. `file.text()`
+    // decodes the whole file first, so a limit applied afterwards is one the
+    // browser has already paid for.
+    if (file.size > GPS_LIMITS.uploadBytes) {
+      setStatus('error')
+      setMessage([{ key: 'imports.gpsTooLarge', params: { limit: GPS_LIMITS.uploadBytes / 1024 / 1024 } }])
+      return
+    }
     try {
       const imported = parseGpsFile(file.name, await file.text())
       trackHistory.set((current) => {

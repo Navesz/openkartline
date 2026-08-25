@@ -10,6 +10,16 @@ export interface GpsTrack {
 }
 
 export const GPS_LIMITS = {
+  /**
+   * Read no further than this.
+   *
+   * `maxPointsRaw` bounds the parsed result, not the work done to reach it: the
+   * whole file was decoded into a string and scanned before any point was
+   * counted. A 50,000-point GPX with elevation and timestamps is around 7 MB,
+   * so this admits any trace the point limit would accept and refuses the rest
+   * before reading it -- the guard the project and image uploads already have.
+   */
+  uploadBytes: 16 * 1024 * 1024,
   maxPointsRaw: 50_000,
   /** RDP tolerance: sub-GPS-noise, so shape survives while jitter collapses. */
   simplifyToleranceM: 1.5,
@@ -186,6 +196,13 @@ export function gpsToTrack(points: LatLon[]): GpsTrack {
 
 /** Pick the parser from the file extension, defaulting to GPX. */
 export function parseGpsFile(name: string, text: string): GpsTrack {
+  // Checked here as well as before the read, so the bound holds for any caller
+  // rather than only for the one that happens to look at `File.size` first.
+  if (new TextEncoder().encode(text).byteLength > GPS_LIMITS.uploadBytes)
+    throw new LocalisedError({
+      key: 'imports.gpsTooLarge',
+      params: { limit: GPS_LIMITS.uploadBytes / 1024 / 1024 },
+    })
   const lower = name.toLowerCase()
   const points = lower.endsWith('.csv') ? parseCsvLatLon(text) : parseGpx(text)
   return gpsToTrack(points)
