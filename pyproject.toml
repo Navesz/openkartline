@@ -42,7 +42,9 @@ testpaths = ["tests/python"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 85
+# Just under the 93.69% the suite actually reaches, so the gate defends the
+# coverage that exists rather than one it passed years of commits ago.
+fail_under = 92
 show_missing = true
 skip_covered = true
 
