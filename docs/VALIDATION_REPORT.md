@@ -47,7 +47,7 @@ For the committed circle fixture (12 controls) with 40 path iterations:
 |---:|---:|---|
 | 64 | 9.267674719504 s | `iteration_limit` |
 | 128 | 9.286661970439 s | `iteration_limit` |
-| 256 | 9.290100962770 s | `step_tolerance` |
+| 256 | 9.290100962770 s | `no_progress` |
 
 Relative spread: **0.2416236%**. This regression protects against the earlier polygon-corner behavior in which adding samples could incorrectly make the same circuit much slower.
 
@@ -90,14 +90,22 @@ so `path_smoothing_iterations` had no observable effect between 20 and 200. The
 preconditioned direction is now restricted to the free set before the corridor
 bounds are applied, with the unsmoothed gradient as a fallback.
 
-`no_progress` is no longer reachable at all. Exhausting the line search means
-both directions were tried with sixteen halvings from `0.08 / max|free|`, so
-the smallest displacement offered was about 1.2e-6 — an order of magnitude
-below the 1e-5 step tolerance the same function trusts as convergence. On an
-annulus sitting on the exact analytic optimum that state used to be reported as
-a failure while the returned radius matched the closed-form answer to 2e-4 m.
-The literal remains in `PathTerminationReason` because it is published contract
-and a stored result may still carry it.
+`no_progress` remains reachable, and remains a failure. An attempt to report it
+as convergence instead was reverted; it rested on the claim that exhausting the
+line search means the smallest displacement offered was `0.08 · 2^-16`, already
+an order of magnitude below the 1e-5 step tolerance the same function trusts.
+That is off by one — the step is halved *after* each trial, so sixteen halvings
+reach `2^-15` — and the factor is not the point: a descent step can still exist
+at the next halving, so an exhausted line search is not evidence that none
+exists. Reporting convergence there would have claimed a criterion the solver
+had not reached.
+
+The annulus case that motivated the attempt is real. Sitting on the exact
+analytic optimum the solver reports `no_progress` while the returned radius
+matches the closed-form answer to 2e-4 m. But that is a stalled line search at a
+point which happens to be optimal, and the solver cannot tell it apart from a
+stalled line search anywhere else. The status it reports is the one it can
+justify; a caller wanting the stronger claim should check the residual.
 
 ### Geometry preparation cost
 
