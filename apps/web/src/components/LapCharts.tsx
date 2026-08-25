@@ -18,6 +18,8 @@ function linePath(values: number[], max: number, min = 0): string {
     .map((value, index) => {
       const x = PAD.left + (index / Math.max(1, values.length - 1)) * width
       const y = PAD.top + ((max - value) / Math.max(0.001, max - min)) * height
+      // Path data, not display: SVG reads a comma as a coordinate
+      // separator, so a localised number here is a different path.
       return `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`
     })
     .join(' ')
@@ -33,7 +35,7 @@ function cursorIndex(event: React.PointerEvent<SVGSVGElement>, count: number): n
 }
 
 export function LapCharts({ result, selectedSample, onSelectedSample }: LapChartsProps) {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
   const speeds = result.samples.map((sample) => sample.speedMps * 3.6)
   const maxSpeed = Math.ceil(Math.max(...speeds) / 10) * 10
   const speedPath = linePath(speeds, maxSpeed)
@@ -64,8 +66,8 @@ export function LapCharts({ result, selectedSample, onSelectedSample }: LapChart
         </div>
         {selected && (
           <div className="hover-readout">
-            <strong>{(selected.speedMps * 3.6).toFixed(0)}</strong>
-            <span>km/h · {selected.distanceM.toFixed(0)} m</span>
+            <strong>{n(selected.speedMps * 3.6)}</strong>
+            <span>km/h · {n(selected.distanceM)} m</span>
           </div>
         )}
       </div>

@@ -27,7 +27,7 @@ export function PlaybackBar({
   onRateChange,
   onSeek,
 }: PlaybackBarProps) {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
   const realDurationS = lapTimeS / rate
   return (
     <section className="playback-bar" aria-label={t('playback.sectionAria')}>
@@ -74,17 +74,17 @@ export function PlaybackBar({
 
       <div className="playback-clock">
         <strong>
-          {frame.elapsedS.toFixed(2)}
-          <span> / {lapTimeS.toFixed(2)} s</span>
+          {n(frame.elapsedS, 2)}
+          <span> / {n(lapTimeS, 2)} s</span>
         </strong>
         {/* The rate changes only how fast the replay runs. Showing both clocks
             makes it explicit that the simulated lap time is untouched. */}
-        <small>{t('playback.simulatedNote', { rate, seconds: realDurationS.toFixed(2) })}</small>
+        <small>{t('playback.simulatedNote', { rate, seconds: n(realDurationS, 2) })}</small>
       </div>
 
       <div className={`playback-telemetry ${frame.mode}`}>
         <div className="playback-speed">
-          <strong>{(frame.speedMps * 3.6).toFixed(0)}</strong>
+          <strong>{n(frame.speedMps * 3.6)}</strong>
           <span>km/h</span>
         </div>
         <div className="playback-pedals">
@@ -102,7 +102,7 @@ export function PlaybackBar({
           </span>
         </div>
         <span className="playback-mode">{t(MODE_LABEL_KEY[frame.mode])}</span>
-        <span className="playback-distance">{frame.distanceM.toFixed(0)} m</span>
+        <span className="playback-distance">{n(frame.distanceM)} m</span>
       </div>
     </section>
   )
