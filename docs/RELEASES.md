@@ -47,7 +47,7 @@ Pushing `vX.Y.Z` builds, checksums, attests and attaches:
 - `sbom-python.cdx.json` and `sbom-node.cdx.json` — CycloneDX 1.6 bills of materials for both dependency graphs;
 - `SHA256SUMS` — checksums over all of the above.
 
-The Python distributions carry a [build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations), so a consumer can verify which workflow run, from which commit, produced the file they downloaded:
+The Python distributions carry a [build provenance attestation](https://docs.github.com/en/actions/concepts/security/artifact-attestations), so a consumer can verify which workflow run, from which commit, produced the file they downloaded:
 
 ```bash
 gh attestation verify openkartline-X.Y.Z-py3-none-any.whl --repo Navesz/openkartline
