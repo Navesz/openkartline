@@ -1,17 +1,13 @@
 import { AlertTriangle, ArrowRight, CircleGauge, Clock3, Gauge, Route } from 'lucide-react'
 import type { SimulationResult } from '../domain/types'
 import { useI18n } from '../i18n/context'
+import { formatLapTime } from '../domain/lapTime'
 
 interface ResultsPanelProps {
   result: SimulationResult | null
   dirty: boolean
   selectedSample: number | null
   onSelect: (sampleIndex: number) => void
-}
-
-function formatLapTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}:${(seconds - minutes * 60).toFixed(2).padStart(5, '0')}`
 }
 
 const eventLabelKey = {
