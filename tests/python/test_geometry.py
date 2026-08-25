@@ -268,3 +268,56 @@ def test_safety_margin_is_delivered_against_the_drawn_boundaries() -> None:
         for point in path
     )
     assert delivered >= margin - 1e-3
+
+
+def _annulus(inner_m: float = 18.0, outer_m: float = 22.0, count: int = 360) -> TrackV1:
+    """A corridor whose minimum-bending optimum is known in closed form.
+
+    The flattest line inside a ring is the largest circle the safety margin
+    allows, so the optimum radius is `outer_m - safety_margin_m` and the
+    objective is `2 * pi / radius`.
+    """
+
+    theta = np.linspace(0, 2 * np.pi, count, endpoint=False)
+
+    def ring(radius: float) -> list[Point2D]:
+        return [
+            Point2D(x_m=float(radius * np.cos(angle)), y_m=float(radius * np.sin(angle)))
+            for angle in theta
+        ]
+
+    return TrackV1(
+        name="Annulus",
+        direction="counterclockwise",
+        left_boundary=ring(inner_m),
+        right_boundary=ring(outer_m),
+    )
+
+
+@pytest.mark.parametrize("iterations", [20, 60, 200])
+def test_sitting_on_the_analytic_optimum_is_reported_as_converged(iterations: int) -> None:
+    """A stalled line search at the optimum is convergence, not `no_progress`.
+
+    The search tries both directions with 16 halvings from `0.08 / max|free|`,
+    so its smallest offer is about 1.2e-6 -- below the 1e-5 step tolerance this
+    same function trusts as convergence. Gating on the KKT residual instead
+    reported failure here: the residual is built from a finite-difference
+    gradient, and on a flat objective that gradient is roundoff. It read 8e-2,
+    the full step, while the line search could not buy any improvement at all.
+    """
+
+    margin = 0.35
+    outcome = prepare_track(_annulus(), sample_count=300, safety_margin_m=margin)
+    assert outcome.prepared is not None
+
+    path, diagnostics = minimum_bending_path(
+        outcome.prepared, safety_margin_m=margin, iterations=iterations
+    )
+
+    optimum_radius = 22.0 - margin
+    radii = np.hypot(path[:, 0], path[:, 1])
+    assert float(np.max(np.abs(radii - optimum_radius))) < 1e-3
+    assert diagnostics.final_objective == pytest.approx(2 * np.pi / optimum_radius, rel=1e-4)
+
+    assert diagnostics.converged is True
+    assert diagnostics.termination_reason == "step_tolerance"
