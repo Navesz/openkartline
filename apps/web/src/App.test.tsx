@@ -124,3 +124,19 @@ describe('a result that lands after an edit', () => {
     expect(screen.getByRole('button', { name: /recalculate lap/i })).toBeInTheDocument()
   })
 })
+
+describe('run-bar announcements', () => {
+  it('scopes the live region to the message, not the Simulate button', () => {
+    // The button label flips on the first edit. With the whole bar as the live
+    // region a screen reader re-announced it mid-typing, and the result the
+    // region exists to report was lost in that noise.
+    const { container } = renderApp()
+
+    const message = container.querySelector('.run-message')
+    expect(message).toHaveAttribute('role', 'status')
+    expect(message).toHaveAttribute('aria-live', 'polite')
+    expect(message?.querySelector('button')).toBeNull()
+
+    expect(container.querySelector('.run-bar')).not.toHaveAttribute('role')
+  })
+})

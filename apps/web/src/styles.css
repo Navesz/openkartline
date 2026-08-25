@@ -377,6 +377,15 @@ main {
   font-size: 0.62rem;
   line-height: 1.4;
 }
+/* The keyboard route to calibration, beside the image status it belongs to. */
+.keyboard-calibration {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.keyboard-calibration .link-button {
+  justify-self: start;
+}
 .link-button {
   display: inline;
   padding: 0;

@@ -81,6 +81,70 @@ interface ControlPanelProps {
   onImageFile: (file: File) => void
   onRemoveImage: () => void
   onGpsFile: (file: File) => void
+  onCalibrate: (pixelDistance: number, realMeters: number) => void
+}
+
+/**
+ * Calibration without a pointer.
+ *
+ * The canvas tool needs two clicks to set the scale, so a keyboard user who
+ * imports an image is stuck: simulation stays blocked on an uncalibrated
+ * background and the only way out is deleting the picture. This asks for the
+ * same two numbers directly and goes through the identical handler.
+ */
+function KeyboardCalibration({
+  onCalibrate,
+}: {
+  onCalibrate: (pixelDistance: number, realMeters: number) => void
+}) {
+  const { t } = useI18n()
+  const [pixels, setPixels] = useState(500)
+  const [meters, setMeters] = useState(100)
+  const [error, setError] = useState<string | null>(null)
+
+  return (
+    <div className="keyboard-calibration">
+      <NumberField
+        id="calibration-pixels"
+        label={t('panel.calibrationPixels')}
+        value={pixels}
+        unit="px"
+        min={3}
+        max={100_000}
+        onChange={setPixels}
+      />
+      <NumberField
+        id="calibration-meters"
+        label={t('panel.calibrationMeters')}
+        value={meters}
+        unit="m"
+        min={1}
+        max={2000}
+        onChange={setMeters}
+      />
+      <button
+        type="button"
+        className="link-button"
+        onClick={() => {
+          try {
+            onCalibrate(pixels, meters)
+            setError(null)
+          } catch (failure) {
+            // `applyCalibration` validates; surface its reason rather than a
+            // generic one, and keep the fields so the value can be corrected.
+            setError(failure instanceof Error ? failure.message : t('canvas.calibrationInvalid'))
+          }
+        }}
+      >
+        {t('panel.calibrationApply')}
+      </button>
+      {error && (
+        <p className="calibration-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
 }
 
 export function ControlPanel({
@@ -97,6 +161,7 @@ export function ControlPanel({
   onImageFile,
   onRemoveImage,
   onGpsFile,
+  onCalibrate,
 }: ControlPanelProps) {
   const { t } = useI18n()
   const [pointIndex, setPointIndex] = useState(0)
@@ -236,6 +301,7 @@ export function ControlPanel({
               </button>
             </p>
           )}
+          {track.background && <KeyboardCalibration onCalibrate={onCalibrate} />}
         </div>
         {selectedPoint && (
           <details className="point-editor">
@@ -298,21 +364,30 @@ export function ControlPanel({
               type="button"
               className="remove-point-button"
               disabled={track.centerline.length <= 4}
-              onClick={() => onPointRemove(pointIndex)}
+              onClick={() => {
+                onPointRemove(pointIndex)
+                // Removing can disable this very button at the four-point
+                // floor, and a disabled control drops focus to <body>, which
+                // restarts Tab at the skip link. The picker is always mounted
+                // while this block is open, so hand focus there.
+                document.getElementById('control-point')?.focus()
+              }}
             >
               <Trash2 size={14} /> {t('panel.removePoint', { index: pointIndex + 1 })}
             </button>
           </details>
         )}
-        {!!issues.length && (
-          <div className="issue-list" role="status">
-            {issues.map((issue, index) => (
-              <p className={issue.level} key={`${issue.message}-${index}`}>
-                {issue.message}
-              </p>
-            ))}
-          </div>
-        )}
+        {/* Mounted unconditionally: a live region that appears at the same
+            moment as its content has nothing to compare against, so the first
+            validation error was never announced. Geometry-level issues have no
+            field to attach to, which is why they need this region at all. */}
+        <div className="issue-list" role="status" aria-live="polite">
+          {issues.map((issue, index) => (
+            <p className={issue.level} key={`${issue.message}-${index}`}>
+              {issue.message}
+            </p>
+          ))}
+        </div>
       </section>
 
       <section className="panel-section kart-section">
