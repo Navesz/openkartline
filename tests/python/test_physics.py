@@ -12,7 +12,14 @@ from openkartline_engine.physics import (
     integrate_lap_time,
     solve_speed_profile,
 )
-from openkartline_engine.schemas import KartV1
+from openkartline_engine.schemas import (
+    KartV1,
+    Point2D,
+    SimulationRequestV1,
+    SimulationSettingsV1,
+    TrackV1,
+)
+from openkartline_engine.simulation import simulate
 
 #: Straight-line layout: a long constant-radius-free straight into a tight corner.
 _STRAIGHT_NODES = 360
@@ -194,3 +201,73 @@ def test_speed_profile_brakes_for_tight_section_and_respects_limits(kart) -> Non
 def test_invalid_numeric_inputs_fail_cleanly(curvature, lengths, message, kart) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(ValueError, match=message):
         solve_speed_profile(curvature, lengths, kart, friction_exponent=2)
+
+
+@pytest.mark.parametrize(
+    ("speed", "lengths", "reason"),
+    [
+        ([10.0, 10.0], [1.0], "mismatched lengths"),
+        ([10.0, -1.0], [1.0, 1.0], "negative speed"),
+        ([10.0, float("nan")], [1.0, 1.0], "non-finite speed"),
+        ([10.0, 10.0], [1.0, float("inf")], "non-finite length"),
+    ],
+)
+def test_integrate_lap_time_rejects_unusable_input(
+    speed: list[float], lengths: list[float], reason: str
+) -> None:
+    """The guard's four branches, which had no test on this side.
+
+    `speedProfile.test.ts` parametrises all four for the TypeScript port, so the
+    engine was the less-covered half of a pair held to numerical agreement.
+    """
+
+    with pytest.raises(ValueError):
+        integrate_lap_time(np.asarray(speed), np.asarray(lengths))
+
+
+def test_integrate_lap_time_rejects_a_stationary_segment() -> None:
+    """Time over a segment the kart never crosses is not a number to round."""
+
+    with pytest.raises(ArithmeticError):
+        integrate_lap_time(np.asarray([0.0, 0.0, 10.0]), np.asarray([1.0, 1.0, 1.0]))
+
+
+def test_a_track_with_no_grip_fails_numerically_rather_than_returning_a_lap() -> None:
+    """Reach the failure through the solver, not by injecting the exception.
+
+    `test_simulation.py` only ever raises `ArithmeticError` itself, so nothing
+    checked that a real kart configuration can still drive the engine into that
+    state and be reported honestly.
+    """
+
+    theta = np.linspace(0, 2 * np.pi, 240, endpoint=False)
+
+    def ring(radius: float) -> list[Point2D]:
+        return [
+            Point2D(x_m=float(radius * np.cos(angle)), y_m=float(radius * np.sin(angle)))
+            for angle in theta
+        ]
+
+    result = simulate(
+        SimulationRequestV1(
+            track=TrackV1(
+                name="No grip",
+                direction="counterclockwise",
+                left_boundary=ring(18.0),
+                right_boundary=ring(22.0),
+            ),
+            kart=KartV1(
+                name="No grip",
+                total_mass_kg=175,
+                power_hp=13,
+                top_speed_mps=24,
+                max_accel_mps2=3,
+                max_brake_mps2=7,
+                max_lateral_accel_mps2=1e-14,
+            ),
+            settings=SimulationSettingsV1(sample_count=200),
+        )
+    )
+
+    assert result.status.state == "numerical_failure"
+    assert result.summary is None

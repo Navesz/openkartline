@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from starlette.testclient import TestClient
 
 from openkartline_api import main
@@ -92,3 +93,64 @@ def test_non_local_cors_origin_is_not_allowed() -> None:
         headers={"Origin": "https://example.com", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in response.headers
+
+
+def _chunks(payload: bytes, size: int = 64 * 1024):
+    """Yield the body in pieces so httpx streams it without a Content-Length."""
+
+    for start in range(0, len(payload), size):
+        yield payload[start : start + size]
+
+
+def test_oversized_chunked_request_is_rejected_without_a_content_length() -> None:
+    """The declared-size check is the easy half; this is the half that matters.
+
+    A client that streams the body sends `Transfer-Encoding: chunked` and no
+    `Content-Length`, so the header check never fires and only the accumulator
+    stands between the process and an unbounded read. Deleting that loop keeps
+    every other test in this suite green, which is why it needs its own.
+    """
+
+    oversized = b"x" * (main.MAX_REQUEST_BODY_BYTES + 1)
+    response = client.post(
+        "/v1/simulations",
+        content=_chunks(oversized),
+        headers={"Content-Type": "application/json"},
+    )
+
+    # Pins the premise: if httpx ever starts declaring a length here, this test
+    # would silently go back to exercising the header branch instead.
+    assert "content-length" not in {name.lower() for name in response.request.headers}
+    assert response.status_code == 413
+    assert "2 MiB" in response.json()["detail"]
+
+
+def test_streamed_request_within_the_limit_still_reaches_the_engine(
+    circle_request: SimulationRequestV1,
+) -> None:
+    """The accumulator has to replay what it buffered, not swallow it."""
+
+    body = circle_request.model_dump_json().encode("utf-8")
+    response = client.post(
+        "/v1/simulations",
+        content=_chunks(body, size=1024),
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"]["state"] == "success"
+
+
+@pytest.mark.parametrize("declared", ["not-a-number", "-1", ""])
+def test_malformed_content_length_is_rejected(declared: str) -> None:
+    """`-1` is the case a two-value test misses: it parses, then trips `< 0`."""
+
+    response = client.request(
+        "POST",
+        "/v1/simulations",
+        content=b"{}",
+        headers={"Content-Type": "application/json", "Content-Length": declared},
+    )
+
+    assert response.status_code == 413
+    assert "Content-Length" in response.json()["detail"]
