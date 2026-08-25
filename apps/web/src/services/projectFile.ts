@@ -43,6 +43,9 @@ export function toProject(
         coordinate_system: 'local_cartesian_m',
         direction: track.direction,
         width_m: track.widthM,
+        // The licence travels with the geometry: saving an OpenStreetMap-derived
+        // circuit and sharing the file redistributes ODbL data.
+        ...(track.attribution ? { attribution: track.attribution } : {}),
         raw_centerline: track.centerline.map((point) => [point.x, point.y]),
         ...(background ? { background } : {}),
       },
@@ -187,6 +190,11 @@ export function parseProject(
           y: finite(pair[1], t('project.field.pointY', { index: index + 1 }), t),
         }
       }),
+      // Degraded to absent rather than rejected: a malformed credit line is not
+      // a reason to refuse a project the user can still work on.
+      ...(typeof project.track.attribution === 'string' && project.track.attribution.trim()
+        ? { attribution: project.track.attribution }
+        : {}),
       ...parseBackground(project.track.background, t),
     },
     kart: {
