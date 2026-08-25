@@ -47,7 +47,7 @@ flowchart TB
     Project <--> Form
 ```
 
-The Vite development server proxies `/api` to a loopback-only FastAPI service. The endpoint runs a bounded synchronous MVP calculation. The static GitHub Pages demo cannot host Python, so it runs a TypeScript port of the engine (`apps/web/src/domain/engine/`): the same corridor preparation, minimum-bending optimizer, and iterative speed solver, held to roundoff-level parity with the Python engine by the committed fixture gate (`engineParity.test.ts` + `scripts/export_parity_fixtures.py`). The original anchor heuristic survives only as a defensive fallback so the demo never breaks.
+The Vite development server proxies `/api` to a loopback-only FastAPI service. The endpoint runs a bounded synchronous MVP calculation. The static GitHub Pages demo cannot host Python, so it runs a TypeScript port of the engine (`apps/web/src/domain/engine/`): the same corridor preparation, minimum-bending optimizer, and iterative speed solver, held to roundoff-level parity with the Python engine by a committed fixture gate that runs in both directions (`engineParity.test.ts` checks the port against the fixtures, `tests/python/test_parity_fixtures.py` checks the engine against the same ones, and `scripts/export_parity_fixtures.py` regenerates them). The original anchor heuristic survives only as a defensive fallback so the demo never breaks.
 
 ### Current HTTP contract
 
