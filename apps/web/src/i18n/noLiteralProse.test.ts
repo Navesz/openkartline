@@ -31,6 +31,9 @@ describe('the no-literal-prose rule catches', () => {
     ['image alt text', '<img src="x.png" alt="Diagram of the racing line" />'],
     ['a string in child position', "<p>{'Ready to simulate'}</p>"],
     ['a template in child position', '<p>{`Lap ${n} is ready`}</p>'],
+    ['a title written as an expression', "<button title={'Start the simulation'} />"],
+    ['an aria-label written as an expression', "<div aria-label={'Racing line editor'} />"],
+    ['alt text built from a template', '<img src="x.png" alt={`Lap ${n} diagram`} />'],
   ])('%s', async (_name, jsx) => {
     expect(await proseErrorsIn(`export const C = (n: number) => ${jsx}\nvoid 0`)).toBeGreaterThan(0)
   })
