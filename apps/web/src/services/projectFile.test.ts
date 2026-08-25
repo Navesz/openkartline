@@ -20,7 +20,7 @@ const BACKGROUND = {
 describe('.okl.json project files', () => {
   it('round-trips canonical meters and kart parameters', () => {
     const settings = { safetyMarginM: 0.65, sampleCount: 240 }
-    const { project } = toProject(PRESETS.hairpin, DEFAULT_KART, settings, t)
+    const { project } = toProject(PRESETS.hairpin, DEFAULT_KART, settings)
     const parsed = parseProject(JSON.stringify(project), t)
     expect(parsed.track).toEqual(PRESETS.hairpin)
     expect(parsed.kart).toEqual(DEFAULT_KART)
@@ -29,7 +29,7 @@ describe('.okl.json project files', () => {
 
   it('writes schema 0.2.0 and round-trips a calibrated background', () => {
     const track = { ...PRESETS.oval, background: BACKGROUND }
-    const { project, warnings } = toProject(track, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 }, t)
+    const { project, warnings } = toProject(track, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     expect(project.schema_version).toBe('0.2.0')
     expect(warnings).toEqual([])
     const parsed = parseProject(JSON.stringify(project), t)
@@ -37,7 +37,7 @@ describe('.okl.json project files', () => {
   })
 
   it('still reads 0.1.0 projects', () => {
-    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 }, t)
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     const legacy = JSON.stringify({ ...project, schema_version: '0.1.0' })
     expect(parseProject(legacy, t).track.name).toBe(PRESETS.oval.name)
   })
@@ -45,8 +45,10 @@ describe('.okl.json project files', () => {
   it('drops an over-budget image but keeps the calibration, with a warning', () => {
     const huge = `data:image/jpeg;base64,${'A'.repeat(TRACK_IMAGE_LIMITS.targetBytes * 1.4)}`
     const track = { ...PRESETS.oval, background: { ...BACKGROUND, imageDataUrl: huge } }
-    const { project, warnings } = toProject(track, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 }, t)
-    expect(warnings[0]).toMatch(/background image/i)
+    const { project, warnings } = toProject(track, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
+    // Kept as a key so the run bar can render it in whatever locale is
+    // current, not the one that happened to be active when the file was built.
+    expect(warnings[0]).toEqual({ key: 'project.backgroundTooLarge' })
     expect(project.track.background?.image_data_url).toBeUndefined()
     expect(project.track.background?.scale_m_per_px).toBe(BACKGROUND.scaleMPerPx)
     // Dimensions without a picture cannot render; the reader degrades to none.
@@ -54,7 +56,7 @@ describe('.okl.json project files', () => {
   })
 
   it('rejects a malformed background block', () => {
-    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 }, t)
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     const malformed = {
       ...project,
       track: {
@@ -71,26 +73,16 @@ describe('.okl.json project files', () => {
 
   it('rejects oversized and out-of-contract project input', () => {
     expect(() => parseProject(' '.repeat(1024 * 1024 + 1), t)).toThrow(/1 MiB/)
-    const { project: invalid } = toProject(
-      PRESETS.oval,
-      DEFAULT_KART,
-      {
-        safetyMarginM: 0.5,
-        sampleCount: 240,
-      },
-      t,
-    )
+    const { project: invalid } = toProject(PRESETS.oval, DEFAULT_KART, {
+      safetyMarginM: 0.5,
+      sampleCount: 240,
+    })
     invalid.simulation.settings.sample_count = 32.5
     expect(() => parseProject(JSON.stringify(invalid), t)).toThrow(/integer/)
   })
 
   it('rejects incompatible project constants and inconsistent derived values', () => {
-    const { project: valid } = toProject(
-      PRESETS.oval,
-      DEFAULT_KART,
-      { safetyMarginM: 0.5, sampleCount: 240 },
-      t,
-    )
+    const { project: valid } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     expect(() =>
       parseProject(JSON.stringify({ ...valid, track: { ...valid.track, direction: 'sideways' } }), t),
     ).toThrow(/clockwise or counterclockwise/i)

@@ -1,5 +1,5 @@
 import { fitsProjectBudget, isImageDataUrl } from '../domain/trackImage'
-import type { KartInput, OklProject, SimulationSettings, TrackInput } from '../domain/types'
+import type { KartInput, OklProject, ResultNote, SimulationSettings, TrackInput } from '../domain/types'
 import { INPUT_LIMITS, validateSimulationInput, validationErrorMessage } from '../domain/validation'
 import type { Translate } from '../i18n/context'
 
@@ -7,24 +7,19 @@ export const PROJECT_SCHEMA_VERSION = '0.2.0' as const
 
 export interface ProjectBuild {
   project: OklProject
-  warnings: string[]
+  warnings: ResultNote[]
 }
 
-export function toProject(
-  track: TrackInput,
-  kart: KartInput,
-  settings: SimulationSettings,
-  t: Translate,
-): ProjectBuild {
+export function toProject(track: TrackInput, kart: KartInput, settings: SimulationSettings): ProjectBuild {
   const now = new Date().toISOString()
-  const warnings: string[] = []
+  const warnings: ResultNote[] = []
   let background: OklProject['track']['background']
   if (track.background) {
     // The picture is editor chrome, not geometry: when it alone would blow the
     // project budget, persist the calibration and let the user re-attach the
     // image after reopening instead of refusing to save the lap.
     const persistImage = fitsProjectBudget(track.background.imageDataUrl)
-    if (!persistImage) warnings.push(t('project.backgroundTooLarge'))
+    if (!persistImage) warnings.push({ key: 'project.backgroundTooLarge' })
     background = {
       ...(persistImage ? { image_data_url: track.background.imageDataUrl } : {}),
       image_width_px: track.background.imageWidthPx,
