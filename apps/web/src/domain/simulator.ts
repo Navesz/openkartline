@@ -1,4 +1,3 @@
-import type { Translate } from '../i18n/context'
 import { coalesceSimulationEvents } from './events'
 import { stabiliseDriveModes } from './driveMode'
 import { curvatureAt, distance, normalAt, pathLength } from './geometry'
@@ -15,7 +14,14 @@ import { pathChannels, prepareTrackGeometry } from './engine/prepareTrack'
 import { solveSpeedProfile } from './engine/speedProfile'
 import { racingLineOffsets } from './racingLine'
 import { buildCanonicalTrackGeometry } from './trackGeometry'
-import type { KartInput, LapSample, SimulationEvent, SimulationRequest, SimulationResult } from './types'
+import type {
+  KartInput,
+  LapSample,
+  ResultNote,
+  SimulationEvent,
+  SimulationRequest,
+  SimulationResult,
+} from './types'
 
 export function availableDriveAcceleration(
   speedMps: number,
@@ -40,13 +46,12 @@ const modeOf = (brake: number, throttle: number): LapSample['mode'] =>
 const DEFAULT_PATH_SMOOTHING_ITERATIONS = 20
 
 /**
- * Map the engine's driving markers onto the UI's event kinds and labels —
+ * Map the engine's driving markers onto the UI's event kinds —
  * the same mapping `fromApiResult` applies to API results.
  */
 function eventsFromMarkers(
   markers: ReturnType<typeof buildDrivingMarkers>,
   sampleCount: number,
-  t: Translate,
 ): SimulationEvent[] {
   return coalesceSimulationEvents(
     markers
@@ -59,12 +64,8 @@ function eventsFromMarkers(
               ? ('apex' as const)
               : ('throttle' as const),
         sampleIndex: marker.sampleIndex,
-        label:
-          marker.kind === 'brake_start'
-            ? t('project.eventBrake', { distance: marker.sM.toFixed(0) })
-            : marker.kind === 'apex'
-              ? t('project.eventApex', { speed: (marker.speedMps * 3.6).toFixed(0) })
-              : t('project.eventThrottle', { distance: marker.sM.toFixed(0) }),
+        sM: marker.sM,
+        speedMps: marker.speedMps,
       })),
     sampleCount,
   )
@@ -79,7 +80,7 @@ function eventsFromMarkers(
  * API, so the demo and the engine solve identical geometry; the parity gate in
  * `engine/engineParity.test.ts` holds the two implementations together.
  */
-function simulateWithMinimumBending(request: SimulationRequest, t: Translate): SimulationResult {
+function simulateWithMinimumBending(request: SimulationRequest): SimulationResult {
   const { track, kart, settings } = request
   const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
   // The engine constrains the line's centre, so the margin it receives has to
@@ -121,10 +122,10 @@ function simulateWithMinimumBending(request: SimulationRequest, t: Translate): S
     samples[index].mode = mode
   })
 
-  const warnings = [
-    t('project.warningMvpEstimate'),
-    ...(track.widthM < 5 ? [t('project.warningNarrowTrack')] : []),
-    ...(diagnostics.converged ? [] : [t('project.warningNotConverged')]),
+  const warnings: ResultNote[] = [
+    { key: 'project.warningMvpEstimate' },
+    ...(track.widthM < 5 ? [{ key: 'project.warningNarrowTrack' } as const] : []),
+    ...(diagnostics.converged ? [] : [{ key: 'project.warningNotConverged' } as const]),
   ]
   // The apex spacing rule wraps with `trackLengthM - gap`, so this has to be
   // the length of the racing line the stations sit on -- `simulation.py:233`
@@ -142,13 +143,12 @@ function simulateWithMinimumBending(request: SimulationRequest, t: Translate): S
     events: eventsFromMarkers(
       buildDrivingMarkers(station, path, curvature, profile, pathLengthM),
       samples.length,
-      t,
     ),
     warnings,
   }
 }
 
-function buildEvents(samples: LapSample[], t: Translate): SimulationEvent[] {
+function buildEvents(samples: LapSample[]): SimulationEvent[] {
   const events: SimulationEvent[] = []
   samples.forEach((sample, index) => {
     const previous = samples[(index - 1 + samples.length) % samples.length]
@@ -156,7 +156,8 @@ function buildEvents(samples: LapSample[], t: Translate): SimulationEvent[] {
       events.push({
         kind: 'brake',
         sampleIndex: index,
-        label: t('project.eventBrake', { distance: sample.distanceM.toFixed(0) }),
+        sM: sample.distanceM,
+        speedMps: sample.speedMps,
       })
     }
     let isApex = Math.abs(sample.curvature) > 0.012
@@ -173,14 +174,16 @@ function buildEvents(samples: LapSample[], t: Translate): SimulationEvent[] {
       events.push({
         kind: 'apex',
         sampleIndex: index,
-        label: t('project.eventApex', { speed: (sample.speedMps * 3.6).toFixed(0) }),
+        sM: sample.distanceM,
+        speedMps: sample.speedMps,
       })
     }
     if (sample.throttle > 0.35 && previous.throttle <= 0.35) {
       events.push({
         kind: 'throttle',
         sampleIndex: index,
-        label: t('project.eventThrottle', { distance: sample.distanceM.toFixed(0) }),
+        sM: sample.distanceM,
+        speedMps: sample.speedMps,
       })
     }
   })
@@ -192,7 +195,7 @@ function buildEvents(samples: LapSample[], t: Translate): SimulationEvent[] {
  * the ported engine ever rejects a corridor the editor itself accepted, the
  * demo still answers with a driveable baseline instead of an error screen.
  */
-function simulateWithAnchorHeuristic(request: SimulationRequest, t: Translate): SimulationResult {
+function simulateWithAnchorHeuristic(request: SimulationRequest): SimulationResult {
   const { track, kart, settings } = request
   const canonical = buildCanonicalTrackGeometry(track, settings.sampleCount)
   const center = canonical.center
@@ -284,9 +287,9 @@ function simulateWithAnchorHeuristic(request: SimulationRequest, t: Translate): 
   })
 
   const lapTimeS = segmentTimes.reduce((sum, time) => sum + time, 0)
-  const warnings = [
-    t('project.warningMvpEstimate'),
-    ...(track.widthM < 5 ? [t('project.warningNarrowTrack')] : []),
+  const warnings: ResultNote[] = [
+    { key: 'project.warningMvpEstimate' },
+    ...(track.widthM < 5 ? [{ key: 'project.warningNarrowTrack' } as const] : []),
   ]
   return {
     source: 'browser',
@@ -296,14 +299,14 @@ function simulateWithAnchorHeuristic(request: SimulationRequest, t: Translate): 
     maxSpeedMps: Math.max(...speeds),
     minSpeedMps: Math.min(...speeds),
     samples,
-    events: buildEvents(samples, t),
+    events: buildEvents(samples),
     warnings,
   }
 }
 
-export function simulateInBrowser(request: SimulationRequest, t: Translate): SimulationResult {
+export function simulateInBrowser(request: SimulationRequest): SimulationResult {
   try {
-    return simulateWithMinimumBending(request, t)
+    return simulateWithMinimumBending(request)
   } catch (error) {
     // The ported engine mirrors the API's strictness; the demo must still
     // answer when an edge case slips past client-side validation. But the
@@ -311,7 +314,10 @@ export function simulateInBrowser(request: SimulationRequest, t: Translate): Sim
     // presets -- so it is marked here, at the failure, rather than inside the
     // heuristic, which is a legitimate solver in its own right.
     console.warn('Minimum-bending engine unavailable, using anchor heuristic:', error)
-    const fallback = simulateWithAnchorHeuristic(request, t)
-    return { ...fallback, warnings: [t('project.warningSolverFallback'), ...fallback.warnings] }
+    const fallback = simulateWithAnchorHeuristic(request)
+    return {
+      ...fallback,
+      warnings: [{ key: 'project.warningSolverFallback' }, ...fallback.warnings],
+    }
   }
 }

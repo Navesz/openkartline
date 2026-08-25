@@ -50,7 +50,7 @@ export default function App() {
   const [kart, setKart] = useState<KartInput>(DEFAULT_KART)
   const [settings, setSettings] = useState<SimulationSettings>(DEFAULT_SETTINGS)
   const [result, setResult] = useState<SimulationResult>(() =>
-    simulateInBrowser({ track: freshPreset('technical'), kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }, t),
+    simulateInBrowser({ track: freshPreset('technical'), kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }),
   )
   const [selectedSample, setSelectedSample] = useState<number | null>(null)
   const [tool, setTool] = useState<EditorTool>('edit')
@@ -362,7 +362,7 @@ export default function App() {
     trackHistory.reset(track)
     setKart(DEFAULT_KART)
     setSettings(DEFAULT_SETTINGS)
-    setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }, t))
+    setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
     setDirty(false)
     setSelectedSample(null)
     setFitRequest((value) => value + 1)

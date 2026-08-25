@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import { DEFAULT_KART, PRESETS } from './presets'
 import { clampSelectedSample } from './selection'
 import { simulateInBrowser } from './simulator'
 
-const t: Translate = (key, params) => translate('en', key, params)
-
 describe('sample selection', () => {
-  const result = simulateInBrowser(
-    {
-      track: PRESETS.oval,
-      kart: DEFAULT_KART,
-      settings: { safetyMarginM: 0.5, sampleCount: 32 },
-    },
-    t,
-  )
+  const result = simulateInBrowser({
+    track: PRESETS.oval,
+    kart: DEFAULT_KART,
+    settings: { safetyMarginM: 0.5, sampleCount: 32 },
+  })
 
   it('clears missing selections and clamps stale indexes', () => {
     expect(clampSelectedSample(99, result)).toBe(31)

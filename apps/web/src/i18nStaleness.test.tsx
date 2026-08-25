@@ -1,0 +1,53 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import App from './App'
+import { I18nProvider } from './i18n/I18nProvider'
+
+/**
+ * A solved lap outlives a language switch.
+ *
+ * Event labels and result notes used to be rendered to strings when the lap was
+ * computed, so switching to Portuguese left the panel half translated: the
+ * headings followed the toggle while the values under them stayed English.
+ *
+ * `I18nProvider` persists the locale, so this lives in its own file with an
+ * explicit reset rather than sharing App.test.tsx's module state.
+ */
+describe('a solved lap follows the language toggle', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  })
+
+  const renderApp = () =>
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    )
+
+  it('translates event labels that were computed in the other locale', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+    expect(document.body.textContent).toMatch(/Brake at|Throttle at|Apex ·/)
+
+    await user.click(screen.getByRole('button', { name: /^PT$/ }))
+
+    const body = document.body.textContent ?? ''
+    expect(body).toMatch(/Frear em|Acelerar em|Ápice ·/)
+    expect(body).not.toMatch(/Brake at|Throttle at/)
+  })
+
+  it('translates the result notes too', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+    await user.click(screen.getByRole('button', { name: /^PT$/ }))
+
+    const body = document.body.textContent ?? ''
+    expect(body).toMatch(/Estimativa do motor físico MVP/)
+    expect(body).not.toMatch(/MVP physics-engine estimate/)
+  })
+})
