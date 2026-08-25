@@ -77,6 +77,15 @@ export default function App() {
    * would always compare equal to itself and never detect the edit.
    */
   const inputVersion = useRef(0)
+  /**
+   * The `inputVersion` the result on screen was computed for.
+   *
+   * A solve that resolves after a newer result is already displayed must not
+   * install itself over it. "Restore example" computes its result
+   * synchronously, so without this an in-flight request for the discarded
+   * track landed afterwards and replaced it.
+   */
+  const resultVersion = useRef(0)
   const markDirty = useCallback(() => {
     inputVersion.current += 1
     setDirty(true)
@@ -222,7 +231,12 @@ export default function App() {
         apiAvailable === true,
         t,
       )
+      // Something newer is already on screen -- "Restore example" installs a
+      // result synchronously -- so this one describes inputs that no longer
+      // exist and has nothing to add.
+      if (solvedVersion < resultVersion.current) return
       setResult(next)
+      resultVersion.current = solvedVersion
       setStatus('success')
       // The track can be edited while the request is in flight. Clearing the
       // stale flag then hid the "Recalculate" affordance while the lap time on
@@ -369,7 +383,11 @@ export default function App() {
     trackHistory.reset(track)
     setKart(DEFAULT_KART)
     setSettings(DEFAULT_SETTINGS)
+    // Every input just changed, so anything already in flight is answering a
+    // question about a track that no longer exists.
+    inputVersion.current += 1
     setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
+    resultVersion.current = inputVersion.current
     setDirty(false)
     setSelectedSample(null)
     setFitRequest((value) => value + 1)
