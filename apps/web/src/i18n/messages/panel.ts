@@ -36,6 +36,18 @@ export const panel = defineMessages({
     en: ' · no scale (use the Calibrate tool on the map)',
     'pt-BR': ' · sem escala (use a ferramenta Calibrar no mapa)',
   },
+  // Deliberately not the canvas overlay's 'Apply scale': two buttons sharing
+  // an accessible name is ambiguous for anyone navigating by name, and it
+  // breaks Playwright's strict-mode locators outright.
+  'panel.calibrationApply': { en: 'Set scale', 'pt-BR': 'Definir escala' },
+  'panel.calibrationPixels': {
+    en: 'Known distance on the image',
+    'pt-BR': 'Distância conhecida na imagem',
+  },
+  'panel.calibrationMeters': {
+    en: 'That distance in real metres',
+    'pt-BR': 'Essa distância em metros reais',
+  },
   'panel.removeButton': { en: 'remove', 'pt-BR': 'remover' },
   'panel.editPointSummary': { en: 'Edit point by coordinates', 'pt-BR': 'Editar ponto por coordenadas' },
   'panel.previousPointAria': { en: 'Previous point', 'pt-BR': 'Ponto anterior' },
