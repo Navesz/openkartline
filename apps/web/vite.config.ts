@@ -28,11 +28,18 @@ export default defineConfig({
       exclude: ['src/main.tsx', 'src/vite-env.d.ts', 'src/domain/types.ts', 'src/test/**'],
       // Matches the intent of the Python `fail_under` gate so both workspaces
       // are held to a comparable standard.
+      //
+      // Set just under what the suite actually reaches -- 91.57 / 83.27 / 78.75
+      // / 91.57 -- leaving a couple of points for the wobble between platforms.
+      // The functions gate had been sitting at 55 against an actual 78.75, so
+      // a change could have deleted a quarter of the covered functions without
+      // the gate noticing. A threshold that far below reality records a past
+      // ambition rather than defending the present one.
       thresholds: {
-        statements: 85,
-        branches: 78,
-        functions: 55,
-        lines: 85,
+        statements: 90,
+        branches: 82,
+        functions: 76,
+        lines: 90,
       },
     },
   },
