@@ -3,7 +3,7 @@ import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import { TRACK_IMAGE_LIMITS } from '../domain/trackImage'
 import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
-import { parseProject, toProject } from './projectFile'
+import { ATTRIBUTION_MAX_LENGTH, parseProject, toProject } from './projectFile'
 
 const t: Translate = (key, params) => translate('en', key, params)
 
@@ -89,5 +89,57 @@ describe('.okl.json project files', () => {
     expect(() =>
       parseProject(JSON.stringify({ ...valid, kart: { ...valid.kart, total_mass_kg: 999 } }), t),
     ).toThrow(/Total mass/i)
+  })
+})
+
+describe('the attribution the app is willing to hold', () => {
+  it('drops a credit longer than the published bound rather than re-emitting it', () => {
+    // The schema caps `track.attribution` at 200 characters. Accepting a longer
+    // one on load meant the next save produced a file that fails the project's
+    // own schema.
+    const overlong = 'x'.repeat(ATTRIBUTION_MAX_LENGTH + 1)
+    const { project } = toProject({ ...PRESETS.oval, attribution: overlong }, DEFAULT_KART, {
+      safetyMarginM: 0.5,
+      sampleCount: 240,
+    })
+    expect(project.track.attribution).toBeUndefined()
+
+    const smuggled = JSON.parse(JSON.stringify(project))
+    smuggled.track.attribution = overlong
+    expect(parseProject(JSON.stringify(smuggled), t).track.attribution).toBeUndefined()
+  })
+
+  it('keeps a credit at the bound', () => {
+    const exact = 'x'.repeat(ATTRIBUTION_MAX_LENGTH)
+    const { project } = toProject({ ...PRESETS.oval, attribution: exact }, DEFAULT_KART, {
+      safetyMarginM: 0.5,
+      sampleCount: 240,
+    })
+    expect(project.track.attribution).toBe(exact)
+  })
+})
+
+describe('a GPS trace carries no borrowed credit', () => {
+  it('does not keep an OpenStreetMap attribution on geometry that replaced it', () => {
+    // Importing your own lap over one of the OSM-derived presets replaced the
+    // centreline while leaving the credit in place, so a save would have
+    // credited OpenStreetMap for a trace somebody drove themselves.
+    const osmPreset = PRESETS.voltaRedonda
+    expect(osmPreset.attribution).toBeTruthy()
+
+    // What App.importGpsFile now builds.
+    const { attribution: _replaced, ...rest } = osmPreset
+    void _replaced
+    const afterImport = {
+      ...rest,
+      centerline: PRESETS.oval.centerline,
+      direction: PRESETS.oval.direction,
+    }
+
+    const { project } = toProject(afterImport, DEFAULT_KART, {
+      safetyMarginM: 0.5,
+      sampleCount: 240,
+    })
+    expect(project.track.attribution).toBeUndefined()
   })
 })
