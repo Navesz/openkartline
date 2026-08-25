@@ -130,6 +130,31 @@ function parseBackground(background: OklProject['track']['background']): Pick<Tr
   }
 }
 
+/** How long a declared version may be before it is quoted back in full. */
+const VERSION_LABEL_MAX = 40
+
+/**
+ * What to call the version a file declared, when it is not one this app reads.
+ *
+ * `schema_version` is whatever the file said, and it reaches a message slot. A
+ * slot value shaped `{ key: … }` is a message reference, so a file declaring
+ * `{"schema_version": {"key": "app.brandTagline"}}` was answered with
+ * "Unsupported project version: RACING LINE LAB." -- the app quoting its own
+ * tagline back as the version it had supposedly found.
+ *
+ * A primitive is quoted, because naming the value is the whole point of the
+ * message, but bounded: an unbounded string is still a file choosing how much
+ * of the interface it fills.
+ */
+function versionLabel(
+  declared: unknown,
+): string | { key: 'project.missingVersion' | 'project.unreadableVersion' } {
+  if (declared === undefined || declared === null) return { key: 'project.missingVersion' }
+  if (typeof declared === 'object') return { key: 'project.unreadableVersion' }
+  const text = String(declared)
+  return text.length > VERSION_LABEL_MAX ? `${text.slice(0, VERSION_LABEL_MAX)}…` : text
+}
+
 export function parseProject(text: string): {
   track: TrackInput
   kart: KartInput
@@ -148,16 +173,7 @@ export function parseProject(text: string): {
   if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
     throw new LocalisedError({
       key: 'project.unsupportedVersion',
-      // Coerced to a string first. `schema_version` is whatever the file said,
-      // and a slot value shaped `{ key: … }` is a message reference — so a file
-      // could name one of this app's own messages and have it quoted back as
-      // though it were the version it declared.
-      params: {
-        version:
-          typeof project.schema_version === 'string'
-            ? project.schema_version
-            : { key: 'project.missingVersion' },
-      },
+      params: { version: versionLabel(project.schema_version) },
     })
   if (
     !project.project ||

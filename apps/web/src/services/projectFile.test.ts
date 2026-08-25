@@ -146,7 +146,7 @@ describe('a GPS trace carries no borrowed credit', () => {
 })
 
 describe('a project file cannot nominate a message this app owns', () => {
-  it('quotes an object version as missing rather than resolving it', () => {
+  it('will not resolve an object version as a message', () => {
     // A slot value shaped `{ key: … }` is a message reference. `schema_version`
     // is whatever the file said, so without coercion a file could name one of
     // this app's messages and have it quoted back: a crafted file produced
@@ -167,7 +167,7 @@ describe('a project file cannot nominate a message this app owns', () => {
       rendered = note && 'key' in note ? translate('en', note.key, note.params) : String(error)
     }
 
-    expect(rendered).toMatch(/missing/i)
+    expect(rendered).toMatch(/not a version/i)
     expect(rendered).not.toMatch(/racing line lab/i)
   })
 
@@ -231,5 +231,43 @@ describe('a rejected project does not freeze its wording', () => {
 
     const keys = notes.map((note) => ('key' in note ? note.key : note.text))
     expect(keys).toEqual(expect.arrayContaining(['validation.power', 'validation.sampleCount']))
+  })
+})
+
+describe('the version a rejected file declared', () => {
+  const rendered = (schemaVersion: unknown): string => {
+    try {
+      parseProject(JSON.stringify({ schema_version: schemaVersion, project: { name: 'x' } }))
+    } catch (error) {
+      const note = error instanceof LocalisedError ? error.note : undefined
+      return note && 'key' in note ? translate('en', note.key, note.params) : String(error)
+    }
+    return ''
+  }
+
+  it('quotes a primitive back, however it was written', () => {
+    // An unquoted `"schema_version": 0.2` is a plausible hand-edit. Coercing
+    // only strings reported it as *missing*, pointing the user at the wrong
+    // edit: the version is right there in the file, it is just not one we read.
+    expect(rendered('9.0')).toMatch(/version: 9\.0/)
+    expect(rendered(0.2)).toMatch(/version: 0\.2/)
+    expect(rendered(false)).toMatch(/version: false/)
+  })
+
+  it('says missing only when nothing was declared', () => {
+    expect(rendered(undefined)).toMatch(/missing/i)
+    expect(rendered(null)).toMatch(/missing/i)
+  })
+
+  it('does not let a file choose how much of the interface it fills', () => {
+    const long = rendered('9'.repeat(500))
+    expect(long.length).toBeLessThan(120)
+    expect(long).toContain('…')
+  })
+
+  it('will not quote an object, whatever it holds', () => {
+    expect(rendered({ key: 'app.brandTagline' })).not.toMatch(/racing line lab/i)
+    expect(rendered({ key: 'app.brandTagline' })).toMatch(/not a version/i)
+    expect(rendered(['0.2.0'])).toMatch(/not a version/i)
   })
 })

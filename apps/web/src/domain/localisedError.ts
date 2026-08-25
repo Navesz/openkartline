@@ -31,15 +31,18 @@ export class LocalisedError extends Error {
     this.notes = notes
   }
 
-  /** The first message, for callers that can only show one. */
-  get note(): ResultNote {
+  /** The first message, or `undefined` when there is none. */
+  get note(): ResultNote | undefined {
     return this.notes[0]
   }
 }
 
 /** The note to show for a caught value, whatever it turns out to be. */
 export function noteForError(error: unknown, fallback: ResultNote): ResultNote {
-  if (error instanceof LocalisedError) return error.note
+  // A `LocalisedError` is answered from its notes or from the fallback, never
+  // from `message`: it carries a key there, or the class name when it names no
+  // message at all, and both are for a developer reading a stack trace.
+  if (error instanceof LocalisedError) return error.note ?? fallback
   if (error instanceof Error && error.message) return { text: error.message }
   return fallback
 }

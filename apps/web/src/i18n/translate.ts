@@ -46,7 +46,14 @@ export function translate(locale: Locale, key: MessageKey, params?: MessageParam
       // echoing the key itself, which would print an unrecognised string --
       // file content, in the case that motivated this -- as the app's own
       // prose. Defence in depth: the callers coerce untrusted values too.
-      return value.key in MESSAGES ? translate(locale, value.key, value.params) : match
+      // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `constructor`,
+      // `toString` and `__proto__` passed the allowlist and were echoed as this
+      // app's prose -- the exact hole this check was added to close.
+      //
+      // An unrecognised key renders as nothing rather than as `match`, which is
+      // the matched text including its braces: a literal `{version}` in a
+      // sentence is a developer artefact, not something a reader can act on.
+      return Object.hasOwn(MESSAGES, value.key) ? translate(locale, value.key, value.params) : ''
     }
     return String(value)
   })

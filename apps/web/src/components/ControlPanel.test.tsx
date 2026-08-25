@@ -1,11 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_KART, KART_PRESETS, PRESETS, REAL_TRACK_KEYS, toKartInput } from '../domain/presets'
 import type { KartInput, TrackInput, ValidationIssue } from '../domain/types'
 import { I18nProvider } from '../i18n/I18nProvider'
+import { useI18n } from '../i18n/context'
 import { LocalisedError } from '../domain/localisedError'
 import { ControlPanel } from './ControlPanel'
+
+// `I18nProvider` persists the locale, so a test that switches language leaves
+// every test after it running in that language. One below does.
+beforeEach(() => localStorage.clear())
 
 const BACKGROUND = {
   imageDataUrl: 'data:image/jpeg;base64,/9j/',
@@ -124,6 +129,56 @@ describe('ControlPanel accessibility', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/farther apart/i)
     expect(alert).not.toHaveTextContent(/imports\./)
+  })
+
+  it('translates that reason when the language changes afterwards', async () => {
+    // The reason was rendered into state at the moment the calibration was
+    // rejected, so it stayed English while the button beside it turned into
+    // "Definir escala" -- the staleness removed from the canvas overlay,
+    // surviving in the keyboard path beside it.
+    const user = userEvent.setup()
+
+    function Harness() {
+      const { setLocale } = useI18n()
+      return (
+        <>
+          <button onClick={() => setLocale('pt-BR')}>switch</button>
+          <ControlPanel
+            track={{ ...PRESETS.oval, background: BACKGROUND }}
+            kart={DEFAULT_KART}
+            settings={{ safetyMarginM: 0.5, sampleCount: 200 }}
+            issues={[]}
+            onTrack={vi.fn()}
+            onKart={vi.fn()}
+            onSettings={vi.fn()}
+            onPreset={vi.fn()}
+            onPointChange={vi.fn()}
+            onPointRemove={vi.fn()}
+            onImageFile={vi.fn()}
+            onRemoveImage={vi.fn()}
+            onGpsFile={vi.fn()}
+            trackPresetKey="technical"
+            onCalibrate={() => {
+              throw new LocalisedError({ key: 'imports.calibrationPointsTooClose' })
+            }}
+          />
+        </>
+      )
+    }
+
+    render(
+      <I18nProvider>
+        <Harness />
+      </I18nProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /set scale/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/farther apart/i)
+
+    await user.click(screen.getByRole('button', { name: 'switch' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/mais afastados/i)
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/farther apart/i)
   })
 })
 
