@@ -150,6 +150,21 @@ export default function App() {
     }
   }, [])
 
+  /**
+   * Stepping through history changes the track, so it has to bump the input
+   * version like any other edit. The keyboard path did; the toolbar buttons
+   * called `trackHistory.undo` straight through, leaving a result for the
+   * other track presented as current and an in-flight solve uninvalidated.
+   */
+  const undoEdit = useCallback(() => {
+    trackHistory.undo()
+    markDirty()
+  }, [markDirty, trackHistory])
+  const redoEdit = useCallback(() => {
+    trackHistory.redo()
+    markDirty()
+  }, [markDirty, trackHistory])
+
   useEffect(() => {
     if (!playbackFrame && selectedSample !== safeSelectedSample) setSelectedSample(safeSelectedSample)
   }, [playbackFrame, safeSelectedSample, selectedSample])
@@ -165,15 +180,13 @@ export default function App() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
-        if (event.shiftKey) trackHistory.redo()
-        else trackHistory.undo()
-        markDirty()
+        if (event.shiftKey) redoEdit()
+        else undoEdit()
         return
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
         event.preventDefault()
-        trackHistory.redo()
-        markDirty()
+        redoEdit()
         return
       }
       // The single-letter tool shortcuts are unmodified keys only. Without this
@@ -187,7 +200,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [markDirty, trackHistory])
+  }, [markDirty, redoEdit, trackHistory, undoEdit])
 
   const updateTrack = useCallback(
     (patch: Partial<TrackInput>) => {
@@ -470,10 +483,10 @@ export default function App() {
             <p>{t('app.introSubtitle')}</p>
           </div>
           <div className="project-actions">
-            <button onClick={trackHistory.undo} disabled={!trackHistory.canUndo} title={t('app.undo')}>
+            <button onClick={undoEdit} disabled={!trackHistory.canUndo} title={t('app.undo')}>
               <Undo2 size={16} />
             </button>
-            <button onClick={trackHistory.redo} disabled={!trackHistory.canRedo} title={t('app.redo')}>
+            <button onClick={redoEdit} disabled={!trackHistory.canRedo} title={t('app.redo')}>
               <Redo2 size={16} />
             </button>
             <button onClick={reset} title={t('app.restoreExample')}>

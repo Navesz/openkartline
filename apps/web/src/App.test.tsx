@@ -179,3 +179,29 @@ describe('restoring the example while a solve is in flight', () => {
     expect(document.body.textContent).not.toContain('0:10.00')
   })
 })
+
+describe('stepping through history', () => {
+  it('marks the project stale from the toolbar, as Ctrl+Z does', async () => {
+    // The keyboard path called `markDirty`; the toolbar buttons called
+    // `trackHistory.undo` straight through. Undoing from the toolbar therefore
+    // changed the track while the panel still claimed the lap on screen was
+    // current for it. The Simulate button's own label is that claim: it reads
+    // "Simulate again" when current and "Recalculate lap" when stale.
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByText(/edit point by coordinates/i))
+    const xInput = screen.getByLabelText(/point 1 · x/i)
+    await user.clear(xInput)
+    await user.type(xInput, '12')
+
+    await user.click(screen.getByRole('button', { name: /recalculate lap/i }))
+    expect(await screen.findByRole('button', { name: /simulate again/i })).toBeInTheDocument()
+
+    const undo = screen.getByTitle(/undo/i)
+    expect(undo).toBeEnabled()
+    await user.click(undo)
+
+    expect(screen.getByRole('button', { name: /recalculate lap/i })).toBeInTheDocument()
+  })
+})
