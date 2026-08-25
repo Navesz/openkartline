@@ -223,13 +223,18 @@ class TestStartIndexSensitivity:
     winding and its geometry are identical, and only the index a reader would
     call "first" moves. A converged solver would return the same lap.
 
-    This one does not. The projected-gradient path solver reports
-    `iteration_limit` on every shipped circuit at every allowed iteration
-    count, so where it stops depends on the parameterisation it started from,
-    and the lap time moves with it. Measured: 6.31% on the serpentine fixture,
-    0.92% on Adria (674 ms of a 73.8 s lap), 0.81% on Castelo Branco, 0.53% on
-    Baltar, and exactly 0 on the circle, whose symmetry makes every shift an
-    exact one.
+    This one does not. Measured: 6.31% on the serpentine fixture, 0.92% on Adria
+    (674 ms of a 73.8 s lap), 0.81% on Castelo Branco, 0.53% on Baltar, and
+    exactly 0 on the circle, whose symmetry makes every shift an exact one.
+
+    Not the path solver, which an earlier version of this docstring blamed.
+    Setting `path_smoothing_iterations` to 0 skips it entirely and the spread is
+    still there -- 1.05% on Adria, 1.26% on Aurora -- larger without the solver
+    than with it on three of the five shipped circuits. Rotating the control
+    points re-lands the periodic spline resample, so the prepared corridor
+    differs slightly (centreline length by 3.5e-4 to 5.1e-4 relative) and the
+    discrete curvature and speed pipeline amplifies that into the lap. The
+    ownership is `prepare_track` and the discretisation.
 
     The ceilings below are measurements, not guesses, and they are ceilings on
     purpose: this fails if the sensitivity gets worse. It will also fail if the
@@ -239,6 +244,11 @@ class TestStartIndexSensitivity:
 
     Characterised rather than hidden. Pinning the anchor would make the number
     stable without making it right.
+
+    `test_the_geometry_itself_is_not_disturbed` below is the reason the wrong
+    attribution survived: track length does hold to 2e-3 under rotation, which
+    reads like "the geometry is fine" and is not the same claim. 2e-3 on the
+    length is loose enough to contain the 3.5e-4 shift that drives this.
     """
 
     SERPENTINE_SPREAD_CEILING = 0.07
@@ -281,6 +291,34 @@ class TestStartIndexSensitivity:
         # And it is genuinely there: a test that would also pass on a converged
         # solver would not be pinning anything.
         assert spread > 0.0
+
+    def test_the_spread_survives_turning_the_solver_off(
+        self, serpentine_track: TrackV1, kart: KartV1
+    ) -> None:
+        """The control that decides who owns this, and the one that was missing.
+
+        `path_smoothing_iterations=0` skips `minimum_bending_path` entirely. If
+        the solver were the cause, the spread would collapse here. It does not:
+        on the shipped circuits it is 1.05% (Adria) and 1.26% (Aurora) with the
+        solver off, against 0.92% and 2.18% with it on -- larger without it on
+        three of the five. What moves is the prepared corridor: rotating the
+        control points re-lands the periodic spline resample.
+
+        Without this control, "track length holds to 2e-3 under rotation" reads
+        like "the geometry is fine", and an earlier revision of this file drew
+        exactly that conclusion. It is a different claim: 2e-3 on the length is
+        loose enough to contain the 3.5e-4 shift that drives the lap.
+        """
+        settings = SimulationSettingsV1(path_smoothing_iterations=0)
+        request = SimulationRequestV1(track=serpentine_track, kart=kart, settings=settings)
+
+        laps = self._laps(request, 8)
+        spread = (max(laps) - min(laps)) / min(laps)
+
+        assert spread > 0.005, (
+            f"solver-free spread {spread:.4%} collapsed -- if the discretisation "
+            "stopped owning this, the attribution in the docstring above is stale"
+        )
 
     def test_the_geometry_itself_is_not_disturbed(
         self, serpentine_track: TrackV1, kart: KartV1
