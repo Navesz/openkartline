@@ -485,6 +485,7 @@ export default function App() {
             onImageFile={importBackgroundImage}
             onRemoveImage={removeBackgroundImage}
             onGpsFile={(file) => void importGpsFile(file)}
+            onCalibrate={applyCalibration}
           />
           <div className="visual-workspace">
             <TrackCanvas
@@ -523,8 +524,12 @@ export default function App() {
               onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}
               onCalibrate={applyCalibration}
             />
-            <div className={`run-bar ${status}`} role="status" aria-live="polite">
-              <span className="run-message">
+            {/* The live region is the message alone. Wrapping the whole bar
+                included the Simulate button, whose label flips on the first
+                edit, so a screen reader re-announced the region mid-typing and
+                the actual result was lost in the noise. */}
+            <div className={`run-bar ${status}`}>
+              <span className="run-message" role="status" aria-live="polite">
                 {status === 'running' ? (
                   <LoaderCircle className="spin" size={17} />
                 ) : status === 'error' ? (
