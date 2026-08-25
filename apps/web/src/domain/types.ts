@@ -1,3 +1,4 @@
+import type { MessageParams } from '../i18n/context'
 import type { MessageKey } from '../i18n/messages'
 export type Point = { x: number; y: number }
 
@@ -101,7 +102,7 @@ export interface SimulationEvent {
  * re-translated in the browser -- the union says so rather than pretending
  * every note is translatable.
  */
-export type ResultNote = { key: MessageKey; params?: Record<string, string | number> } | { text: string }
+export type ResultNote = { key: MessageKey; params?: MessageParams } | { text: string }
 
 export interface SimulationResult {
   source: 'api' | 'browser'

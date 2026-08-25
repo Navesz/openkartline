@@ -5,6 +5,7 @@ import { pathLength } from '../domain/geometry'
 import { useI18n } from '../i18n/context'
 import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
+import { noteForError } from '../domain/localisedError'
 import { imagePixelsFromWorld, scaleFromCalibration } from '../domain/trackImage'
 import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
@@ -257,13 +258,16 @@ export function TrackCanvas({
       )
       const realMeters = Number(calibrationMeters.replace(',', '.'))
       // Validates here so the App only ever receives a sane scale.
-      scaleFromCalibration(pixelDistance, realMeters, t)
+      scaleFromCalibration(pixelDistance, realMeters)
       onCalibrate(pixelDistance, realMeters)
       setCalibrationStart(null)
       setCalibrationEnd(null)
       setCalibrationError(null)
     } catch (error) {
-      setCalibrationError(error instanceof Error ? error.message : t('canvas.calibrationInvalid'))
+      // The domain names its failure; render it here so the overlay follows a
+      // later language switch like everything else does.
+      const note = noteForError(error, { key: 'canvas.calibrationInvalid' })
+      setCalibrationError('key' in note ? t(note.key, note.params) : note.text)
     }
   }
 

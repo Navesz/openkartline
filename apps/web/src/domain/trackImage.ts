@@ -1,5 +1,5 @@
-import type { Translate } from '../i18n/context'
 import type { TrackBackground, TrackInput } from './types'
+import { LocalisedError } from './localisedError'
 
 export const TRACK_IMAGE_LIMITS = {
   /** Raw upload ceiling; the stored copy is always re-encoded below. */
@@ -40,14 +40,17 @@ export function fitsProjectBudget(dataUrl: string): boolean {
   return dataUrlBytes(dataUrl) <= TRACK_IMAGE_LIMITS.targetBytes
 }
 
-export function readImageFile(file: File, t: Translate): Promise<HTMLImageElement> {
+export function readImageFile(file: File): Promise<HTMLImageElement> {
   if (file.size > TRACK_IMAGE_LIMITS.uploadBytes) {
     return Promise.reject(
-      new Error(t('imports.imageTooLarge', { limit: TRACK_IMAGE_LIMITS.uploadBytes / 1024 / 1024 })),
+      new LocalisedError({
+        key: 'imports.imageTooLarge',
+        params: { limit: TRACK_IMAGE_LIMITS.uploadBytes / 1024 / 1024 },
+      }),
     )
   }
   if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-    return Promise.reject(new Error(t('imports.imageWrongFormat')))
+    return Promise.reject(new LocalisedError({ key: 'imports.imageWrongFormat' }))
   }
   return new Promise((resolvePromise, rejectPromise) => {
     const url = URL.createObjectURL(file)
@@ -58,7 +61,7 @@ export function readImageFile(file: File, t: Translate): Promise<HTMLImageElemen
     }
     image.onerror = () => {
       URL.revokeObjectURL(url)
-      rejectPromise(new Error(t('imports.imageReadFailed')))
+      rejectPromise(new LocalisedError({ key: 'imports.imageReadFailed' }))
     }
     image.src = url
   })
@@ -69,7 +72,7 @@ export function readImageFile(file: File, t: Translate): Promise<HTMLImageElemen
  * legible, not print quality, so quality steps down until the payload fits the
  * project budget (or the floor where a trace is still readable).
  */
-export function downscaleTrackImage(image: HTMLImageElement, t: Translate): TrackBackground {
+export function downscaleTrackImage(image: HTMLImageElement): TrackBackground {
   const scale = Math.min(
     1,
     TRACK_IMAGE_LIMITS.maxDimensionPx / Math.max(image.naturalWidth, image.naturalHeight),
@@ -79,7 +82,7 @@ export function downscaleTrackImage(image: HTMLImageElement, t: Translate): Trac
 
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  if (!context) throw new Error(t('imports.imageCanvasUnsupported'))
+  if (!context) throw new LocalisedError({ key: 'imports.imageCanvasUnsupported' })
 
   let dataUrl = ''
   // The dimensions that produced `dataUrl`. They must be reported rather than
@@ -132,14 +135,17 @@ export function imagePixelsFromWorld(worldDistance: number, scaleMPerPx: number 
   return worldDistance / (scaleMPerPx ?? 1)
 }
 
-export function scaleFromCalibration(pixelDistance: number, realMeters: number, t: Translate): number {
+export function scaleFromCalibration(pixelDistance: number, realMeters: number): number {
   if (!Number.isFinite(realMeters) || realMeters <= 0)
-    throw new Error(t('imports.calibrationDistanceRequired'))
+    throw new LocalisedError({ key: 'imports.calibrationDistanceRequired' })
   if (!Number.isFinite(pixelDistance) || pixelDistance < 3)
-    throw new Error(t('imports.calibrationPointsTooClose'))
+    throw new LocalisedError({ key: 'imports.calibrationPointsTooClose' })
   const scale = realMeters / pixelDistance
   if (scale < TRACK_IMAGE_LIMITS.scaleMPerPxMin || scale > TRACK_IMAGE_LIMITS.scaleMPerPxMax) {
-    throw new Error(t('imports.calibrationScaleImplausible', { scale: scale.toFixed(4) }))
+    throw new LocalisedError({
+      key: 'imports.calibrationScaleImplausible',
+      params: { scale: scale.toFixed(4) },
+    })
   }
   return scale
 }

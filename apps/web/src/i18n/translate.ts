@@ -35,7 +35,15 @@ export function translate(locale: Locale, key: MessageKey, params?: MessageParam
   const entry = MESSAGES[key]
   const template = entry?.[locale] ?? entry?.en ?? key
   if (!params) return template
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in params ? String(params[name]) : match,
-  )
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    if (!(name in params)) return match
+    const value = params[name]
+    // A slot may name another message, so a field label inside an error
+    // sentence follows the toggle like the sentence does. One level only: a
+    // label is a noun, not a template with slots of its own.
+    if (value && typeof value === 'object' && 'key' in value) {
+      return translate(locale, value.key, value.params)
+    }
+    return String(value)
+  })
 }

@@ -2,7 +2,22 @@ import { createContext, useContext } from 'react'
 import type { Locale } from './locales'
 import type { MessageKey } from './messages'
 
-export type MessageParams = Record<string, string | number>
+/**
+ * A slot value.
+ *
+ * `{ key }` lets a message name another message for one of its slots, so a
+ * sentence like "The engine rejected {field}" can carry a field label that is
+ * itself translated at render. Without it the label would be rendered when the
+ * failure happened and would sit in the run bar in the previous language after
+ * a switch — the sentence around it following the toggle while the noun inside
+ * did not.
+ *
+ * The nested form takes scalar params only, so `Point {index} x` works and
+ * the nesting cannot recurse.
+ */
+export type MessageParam = string | number | { key: MessageKey; params?: Record<string, string | number> }
+
+export type MessageParams = Record<string, MessageParam>
 
 /** Looks a key up in the active locale and fills `{placeholder}` slots. */
 export type Translate = (key: MessageKey, params?: MessageParams) => string

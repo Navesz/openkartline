@@ -36,6 +36,7 @@ import { useI18n } from './i18n/context'
 import { LOCALES, LOCALE_LABEL } from './i18n/locales'
 import { checkApiHealth, runSimulation } from './services/api'
 import { downloadProject, parseProject, toProject } from './services/projectFile'
+import { noteForError } from './domain/localisedError'
 
 const DEFAULT_SETTINGS: SimulationSettings = { safetyMarginM: 0.15, sampleCount: 200 }
 
@@ -277,7 +278,7 @@ export default function App() {
       }
     } catch (error) {
       setStatus('error')
-      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusSolveFailed' }])
+      setMessage([noteForError(error, { key: 'app.statusSolveFailed' })])
     }
   }
 
@@ -322,14 +323,14 @@ export default function App() {
       ])
     } catch (error) {
       setStatus('error')
-      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusInvalidFile' }])
+      setMessage([noteForError(error, { key: 'app.statusInvalidFile' })])
     }
   }
 
   const importBackgroundImage = async (file: File) => {
     try {
-      const image = await readImageFile(file, t)
-      const background = downscaleTrackImage(image, t)
+      const image = await readImageFile(file)
+      const background = downscaleTrackImage(image)
       trackHistory.set((current) => ({ ...current, background }))
       setFitRequest((value) => value + 1)
       markDirty()
@@ -338,7 +339,7 @@ export default function App() {
       setTool('calibrate')
     } catch (error) {
       setStatus('error')
-      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusImageFailed' }])
+      setMessage([noteForError(error, { key: 'app.statusImageFailed' })])
     }
   }
 
@@ -354,7 +355,7 @@ export default function App() {
   }
 
   const applyCalibration = (pixelDistance: number, realMeters: number) => {
-    const newScale = scaleFromCalibration(pixelDistance, realMeters, t)
+    const newScale = scaleFromCalibration(pixelDistance, realMeters)
     trackHistory.set((current) => calibratedTrack(current, newScale))
     markDirty()
     setFitRequest((value) => value + 1)
@@ -365,7 +366,7 @@ export default function App() {
 
   const importGpsFile = async (file: File) => {
     try {
-      const imported = parseGpsFile(file.name, await file.text(), t)
+      const imported = parseGpsFile(file.name, await file.text())
       trackHistory.set((current) => {
         // The user's own trace replaces the geometry, so any credit carried by
         // what it replaced no longer describes it. Keeping it would credit
@@ -390,7 +391,7 @@ export default function App() {
       ])
     } catch (error) {
       setStatus('error')
-      setMessage([error instanceof Error ? { text: error.message } : { key: 'app.statusGpsFailed' }])
+      setMessage([noteForError(error, { key: 'app.statusGpsFailed' })])
     }
   }
 

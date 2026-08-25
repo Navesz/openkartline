@@ -68,11 +68,11 @@ describe('.okl.json project files', () => {
   })
 
   it('rejects unsupported versions with an actionable error', () => {
-    expect(() => parseProject('{"schema_version":"9.0"}', t)).toThrow(/Unsupported project version/i)
+    expect(() => parseProject('{"schema_version":"9.0"}', t)).toThrow('project.unsupportedVersion')
   })
 
   it('rejects oversized and out-of-contract project input', () => {
-    expect(() => parseProject(' '.repeat(1024 * 1024 + 1), t)).toThrow(/1 MiB/)
+    expect(() => parseProject(' '.repeat(1024 * 1024 + 1), t)).toThrow('project.exceedsSizeLimit')
     const { project: invalid } = toProject(PRESETS.oval, DEFAULT_KART, {
       safetyMarginM: 0.5,
       sampleCount: 240,
@@ -85,10 +85,10 @@ describe('.okl.json project files', () => {
     const { project: valid } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     expect(() =>
       parseProject(JSON.stringify({ ...valid, track: { ...valid.track, direction: 'sideways' } }), t),
-    ).toThrow(/clockwise or counterclockwise/i)
+    ).toThrow('project.invalidDirection')
     expect(() =>
       parseProject(JSON.stringify({ ...valid, kart: { ...valid.kart, total_mass_kg: 999 } }), t),
-    ).toThrow(/Total mass/i)
+    ).toThrow('project.massMismatch')
   })
 })
 
