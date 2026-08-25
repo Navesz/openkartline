@@ -1,4 +1,3 @@
-import type { Translate } from '../i18n/context'
 import type { Point, ValidationIssue } from './types'
 
 const EPSILON = 1e-8
@@ -22,16 +21,16 @@ function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
   return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d)
 }
 
-export function validateTrack(points: Point[], widthM: number, t: Translate): ValidationIssue[] {
+export function validateTrack(points: Point[], widthM: number): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  if (points.length < 4) issues.push({ level: 'error', message: t('validation.minPoints') })
+  if (points.length < 4) issues.push({ level: 'error', note: { key: 'validation.minPoints' } })
   if (!Number.isFinite(widthM) || widthM <= 0)
-    issues.push({ level: 'error', message: t('validation.widthPositive') })
+    issues.push({ level: 'error', note: { key: 'validation.widthPositive' } })
   if (points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
-    issues.push({ level: 'error', message: t('validation.invalidCoordinates') })
+    issues.push({ level: 'error', note: { key: 'validation.invalidCoordinates' } })
   }
   if (points.length >= 4 && Math.abs(signedArea(points)) < 10) {
-    issues.push({ level: 'error', message: t('validation.noUsableArea') })
+    issues.push({ level: 'error', note: { key: 'validation.noUsableArea' } })
   }
   // Report the first close pair once, but keep scanning: a short segment is a
   // warning, and stopping here let a genuinely self-crossing lap through as
@@ -43,7 +42,7 @@ export function validateTrack(points: Point[], widthM: number, t: Translate): Va
     if (!reportedClosePair && distance(a, b) < 1) {
       issues.push({
         level: 'warning',
-        message: t('validation.pointsTooClose', { a: i + 1, b: ((i + 1) % points.length) + 1 }),
+        note: { key: 'validation.pointsTooClose', params: { a: i + 1, b: ((i + 1) % points.length) + 1 } },
       })
       reportedClosePair = true
     }
@@ -52,7 +51,7 @@ export function validateTrack(points: Point[], widthM: number, t: Translate): Va
       const c = points[j]
       const d = points[(j + 1) % points.length]
       if (segmentsIntersect(a, b, c, d)) {
-        issues.push({ level: 'error', message: t('validation.selfIntersecting') })
+        issues.push({ level: 'error', note: { key: 'validation.selfIntersecting' } })
         return issues
       }
     }

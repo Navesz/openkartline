@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import { TRACK_IMAGE_LIMITS } from '../domain/trackImage'
-import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
 import { LocalisedError } from '../domain/localisedError'
+import type { ResultNote } from '../domain/types'
 import { ATTRIBUTION_MAX_LENGTH, parseProject, toProject } from './projectFile'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 const TINY_JPEG =
   'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAa//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ISP/2gAMAwEAAgADAAAAEB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ECP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ECP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ECP/2Q=='
@@ -22,7 +20,7 @@ describe('.okl.json project files', () => {
   it('round-trips canonical meters and kart parameters', () => {
     const settings = { safetyMarginM: 0.65, sampleCount: 240 }
     const { project } = toProject(PRESETS.hairpin, DEFAULT_KART, settings)
-    const parsed = parseProject(JSON.stringify(project), t)
+    const parsed = parseProject(JSON.stringify(project))
     expect(parsed.track).toEqual(PRESETS.hairpin)
     expect(parsed.kart).toEqual(DEFAULT_KART)
     expect(parsed.settings).toEqual(settings)
@@ -33,14 +31,14 @@ describe('.okl.json project files', () => {
     const { project, warnings } = toProject(track, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     expect(project.schema_version).toBe('0.2.0')
     expect(warnings).toEqual([])
-    const parsed = parseProject(JSON.stringify(project), t)
+    const parsed = parseProject(JSON.stringify(project))
     expect(parsed.track.background).toEqual(BACKGROUND)
   })
 
   it('still reads 0.1.0 projects', () => {
     const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     const legacy = JSON.stringify({ ...project, schema_version: '0.1.0' })
-    expect(parseProject(legacy, t).track.name).toBe(PRESETS.oval.name)
+    expect(parseProject(legacy).track.name).toBe(PRESETS.oval.name)
   })
 
   it('drops an over-budget image but keeps the calibration, with a warning', () => {
@@ -53,7 +51,7 @@ describe('.okl.json project files', () => {
     expect(project.track.background?.image_data_url).toBeUndefined()
     expect(project.track.background?.scale_m_per_px).toBe(BACKGROUND.scaleMPerPx)
     // Dimensions without a picture cannot render; the reader degrades to none.
-    expect(parseProject(JSON.stringify(project), t).track.background).toBeUndefined()
+    expect(parseProject(JSON.stringify(project)).track.background).toBeUndefined()
   })
 
   it('rejects a malformed background block', () => {
@@ -65,30 +63,32 @@ describe('.okl.json project files', () => {
         background: { image_data_url: TINY_JPEG, image_width_px: 0, image_height_px: 10 },
       },
     }
-    expect(() => parseProject(JSON.stringify(malformed), t)).toThrow(/dimensions/i)
+    expect(() => parseProject(JSON.stringify(malformed))).toThrow(/dimensions/i)
   })
 
   it('rejects unsupported versions with an actionable error', () => {
-    expect(() => parseProject('{"schema_version":"9.0"}', t)).toThrow('project.unsupportedVersion')
+    expect(() => parseProject('{"schema_version":"9.0"}')).toThrow('project.unsupportedVersion')
   })
 
   it('rejects oversized and out-of-contract project input', () => {
-    expect(() => parseProject(' '.repeat(1024 * 1024 + 1), t)).toThrow('project.exceedsSizeLimit')
+    expect(() => parseProject(' '.repeat(1024 * 1024 + 1))).toThrow('project.exceedsSizeLimit')
     const { project: invalid } = toProject(PRESETS.oval, DEFAULT_KART, {
       safetyMarginM: 0.5,
       sampleCount: 240,
     })
     invalid.simulation.settings.sample_count = 32.5
-    expect(() => parseProject(JSON.stringify(invalid), t)).toThrow(/integer/)
+    // The validation failure names its message rather than rendering it, so
+    // this asserts the key. `parseProject` no longer takes a translator at all.
+    expect(() => parseProject(JSON.stringify(invalid))).toThrow('validation.sampleCount')
   })
 
   it('rejects incompatible project constants and inconsistent derived values', () => {
     const { project: valid } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
     expect(() =>
-      parseProject(JSON.stringify({ ...valid, track: { ...valid.track, direction: 'sideways' } }), t),
+      parseProject(JSON.stringify({ ...valid, track: { ...valid.track, direction: 'sideways' } })),
     ).toThrow('project.invalidDirection')
     expect(() =>
-      parseProject(JSON.stringify({ ...valid, kart: { ...valid.kart, total_mass_kg: 999 } }), t),
+      parseProject(JSON.stringify({ ...valid, kart: { ...valid.kart, total_mass_kg: 999 } })),
     ).toThrow('project.massMismatch')
   })
 })
@@ -107,7 +107,7 @@ describe('the attribution the app is willing to hold', () => {
 
     const smuggled = JSON.parse(JSON.stringify(project))
     smuggled.track.attribution = overlong
-    expect(parseProject(JSON.stringify(smuggled), t).track.attribution).toBeUndefined()
+    expect(parseProject(JSON.stringify(smuggled)).track.attribution).toBeUndefined()
   })
 
   it('keeps a credit at the bound', () => {
@@ -161,7 +161,7 @@ describe('a project file cannot nominate a message this app owns', () => {
 
     let rendered = ''
     try {
-      parseProject(hostile, t)
+      parseProject(hostile)
     } catch (error) {
       const note = error instanceof LocalisedError ? error.note : null
       rendered = note && 'key' in note ? translate('en', note.key, note.params) : String(error)
@@ -182,12 +182,54 @@ describe('a project file cannot nominate a message this app owns', () => {
 
     let rendered = ''
     try {
-      parseProject(injected, t)
+      parseProject(injected)
     } catch (error) {
       const note = error instanceof LocalisedError ? error.note : null
       rendered = note && 'key' in note ? translate('en', note.key, note.params) : String(error)
     }
 
     expect(rendered).not.toMatch(/not-a-real-key-just-file-content/)
+  })
+})
+
+describe('a rejected project does not freeze its wording', () => {
+  it('names its failures instead of rendering them', () => {
+    // `parseProject` used to take a translator and throw the rendered sentence.
+    // A project rejected while the app was in English kept the English text in
+    // the run bar after a switch to Portuguese -- the staleness #81 removed
+    // everywhere else, surviving in the one path that went through
+    // `validationErrorMessage`.
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
+    project.simulation.settings.sample_count = 32.5
+
+    let notes: ResultNote[] = []
+    try {
+      parseProject(JSON.stringify(project))
+    } catch (error) {
+      notes = error instanceof LocalisedError ? error.notes : []
+    }
+
+    expect(notes).toEqual([expect.objectContaining({ key: 'validation.sampleCount' })])
+
+    const render = (locale: 'en' | 'pt-BR') =>
+      notes.map((note) => ('key' in note ? translate(locale, note.key, note.params) : note.text)).join(' ')
+    expect(render('en')).not.toBe(render('pt-BR'))
+    expect(render('en')).toMatch(/integer/i)
+  })
+
+  it('carries every reason a project was rejected, not just the first', () => {
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
+    project.simulation.settings.sample_count = 32.5
+    project.kart.parameters.power_hp = 0
+
+    let notes: ResultNote[] = []
+    try {
+      parseProject(JSON.stringify(project))
+    } catch (error) {
+      notes = error instanceof LocalisedError ? error.notes : []
+    }
+
+    const keys = notes.map((note) => ('key' in note ? note.key : note.text))
+    expect(keys).toEqual(expect.arrayContaining(['validation.power', 'validation.sampleCount']))
   })
 })

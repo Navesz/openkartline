@@ -3,8 +3,6 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { toApiRequest } from '../../services/api'
 import { parseProject } from '../../services/projectFile'
-import type { Translate } from '../../i18n/context'
-import { translate } from '../../i18n/translate'
 import { DRAG_AREA_M2, DRIVETRAIN_EFFICIENCY, FRICTION_EXPONENT, HP_TO_WATTS } from '../kartModel'
 import { DEFAULT_KART, KART_PRESETS, toKartInput } from '../presets'
 import type { KartInput, Point } from '../types'
@@ -12,8 +10,6 @@ import { buildDrivingMarkers } from './markers'
 import { minimumBendingPath } from './minimumBending'
 import { pathChannels, prepareTrackGeometry } from './prepareTrack'
 import { solveSpeedProfile } from './speedProfile'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 /**
  * Cross-engine parity gate between the ported TypeScript engine and the Python
@@ -77,7 +73,7 @@ function loadExampleProjects(): { slug: string; request: ReturnType<typeof parse
     .sort()
     .map((name) => ({
       slug: name.replace(/\.okl\.json$/, ''),
-      request: parseProject(readFileSync(resolve(EXAMPLES_DIR, name), 'utf-8'), t),
+      request: parseProject(readFileSync(resolve(EXAMPLES_DIR, name), 'utf-8')),
     }))
 }
 

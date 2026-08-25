@@ -36,7 +36,7 @@ import { useI18n } from './i18n/context'
 import { LOCALES, LOCALE_LABEL } from './i18n/locales'
 import { checkApiHealth, runSimulation } from './services/api'
 import { downloadProject, parseProject, toProject } from './services/projectFile'
-import { noteForError } from './domain/localisedError'
+import { noteForError, notesForError } from './domain/localisedError'
 
 const DEFAULT_SETTINGS: SimulationSettings = { safetyMarginM: 0.15, sampleCount: 200 }
 
@@ -99,9 +99,11 @@ export default function App() {
     setDirty(true)
   }, [])
   const fileInput = useRef<HTMLInputElement>(null)
+  // Validation names its messages rather than rendering them, so it no longer
+  // depends on the locale and no longer re-runs on a language switch.
   const issues = useMemo(
-    () => validateSimulationInput(trackHistory.value, kart, settings, t),
-    [trackHistory.value, kart, settings, t],
+    () => validateSimulationInput(trackHistory.value, kart, settings),
+    [trackHistory.value, kart, settings],
   )
   const hasErrors = issues.some((issue) => issue.level === 'error')
   const playbackFrame = useMemo(
@@ -311,7 +313,7 @@ export default function App() {
       return
     }
     try {
-      const imported = parseProject(await file.text(), t)
+      const imported = parseProject(await file.text())
       trackHistory.reset(imported.track)
       setKart(imported.kart)
       setSettings(imported.settings)
@@ -330,7 +332,9 @@ export default function App() {
       ])
     } catch (error) {
       setStatus('error')
-      setMessage([noteForError(error, { key: 'app.statusInvalidFile' })])
+      // A project can fail validation for several reasons at once, and the
+      // run bar renders a list, so show all of them rather than the first.
+      setMessage(notesForError(error, { key: 'app.statusInvalidFile' }))
     }
   }
 
