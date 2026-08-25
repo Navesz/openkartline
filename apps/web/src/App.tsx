@@ -366,11 +366,14 @@ export default function App() {
   const importGpsFile = async (file: File) => {
     try {
       const imported = parseGpsFile(file.name, await file.text(), t)
-      trackHistory.set((current) => ({
-        ...current,
-        centerline: imported.centerline,
-        direction: imported.direction,
-      }))
+      trackHistory.set((current) => {
+        // The user's own trace replaces the geometry, so any credit carried by
+        // what it replaced no longer describes it. Keeping it would credit
+        // OpenStreetMap for a lap somebody drove themselves.
+        const { attribution: _replaced, ...rest } = current
+        void _replaced
+        return { ...rest, centerline: imported.centerline, direction: imported.direction }
+      })
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
       markDirty()
