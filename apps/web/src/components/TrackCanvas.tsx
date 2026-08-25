@@ -466,7 +466,12 @@ export function TrackCanvas({
             </g>
           )}
           {startLeft && startRight && (
-            <g aria-label={t('canvas.startLine')}>
+            // No label: this sits inside the `role="img"` surface above, whose
+            // subtree is presentational, so nothing here is announced. The
+            // `aria-label` that used to be on this group read as accessibility
+            // work while being both prohibited on a bare <g> and unreachable.
+            // What the picture conveys is said once, in the surface's own label.
+            <g>
               <line
                 x1={startLeft.x}
                 y1={startLeft.y}
