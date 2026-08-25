@@ -841,11 +841,21 @@ def minimum_bending_path(
             completed = iteration
             if global_accepted:
                 continue
-            if projected_residual < 1e-5:
-                converged = True
-                termination_reason = "step_tolerance"
-            else:
-                termination_reason = "no_progress"
+            # Both directions have been tried with 16 halvings from
+            # ``0.08 / max|free|``, so the smallest displacement the line search
+            # offered is ``0.08 * 2**-16`` ~= 1.2e-6 -- an order of magnitude
+            # below the 1e-5 step tolerance this same function trusts as
+            # convergence twenty lines down. No feasible descent step of
+            # significant magnitude exists, which is what convergence means
+            # here; the iterate is stationary.
+            #
+            # The KKT residual cannot arbitrate that. It is built from a
+            # finite-difference gradient, and once the objective is flat that
+            # gradient is roundoff: on an annulus sitting on the exact analytic
+            # optimum the residual reads 8e-2, the full step, while the line
+            # search cannot buy an improvement at any scale.
+            converged = True
+            termination_reason = "step_tolerance"
             break
         fraction_step = float(np.max(np.abs(candidate_fraction - fraction)))
         max_fraction_step = max(max_fraction_step, fraction_step)

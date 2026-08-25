@@ -102,3 +102,45 @@ describe('minimumBendingPath', () => {
     })
   })
 })
+
+/** A ring, whose minimum-bending optimum is the largest circle the margin allows. */
+function annulusBoundaries(innerM = 18, outerM = 22, count = 360) {
+  const ring = (radius: number): Point[] =>
+    Array.from({ length: count }, (_, index) => {
+      const angle = (2 * Math.PI * index) / count
+      return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
+    })
+  return { left: ring(innerM), right: ring(outerM), direction: 'counterclockwise' as Direction }
+}
+
+describe('minimumBendingPath at the analytic optimum', () => {
+  it.each([20, 60, 200])('reports convergence rather than no_progress (%i iterations)', (iterations) => {
+    // A stalled line search at the optimum is convergence. The search tries
+    // both directions with 16 halvings from `0.08 / max|free|`, so its smallest
+    // offer is ≈1.2e-6 — below the 1e-5 step tolerance this same function
+    // trusts. Gating on the KKT residual reported failure here, because that
+    // residual comes from a finite-difference gradient and a flat objective
+    // makes it roundoff.
+    const margin = 0.35
+    const { left, right, direction } = annulusBoundaries()
+    const prepared = prepareTrackGeometry(left, right, direction, {
+      sampleCount: 300,
+      safetyMarginM: margin,
+    })
+
+    const { path, diagnostics } = minimumBendingPath(prepared, {
+      safetyMarginM: margin,
+      iterations,
+    })
+
+    const optimumRadius = 22 - margin
+    const worstError = Math.max(
+      ...path.map((point) => Math.abs(Math.hypot(point.x, point.y) - optimumRadius)),
+    )
+    expect(worstError).toBeLessThan(1e-3)
+    expect(diagnostics.finalObjective).toBeCloseTo((2 * Math.PI) / optimumRadius, 4)
+
+    expect(diagnostics.converged).toBe(true)
+    expect(diagnostics.terminationReason).toBe('step_tolerance')
+  })
+})
