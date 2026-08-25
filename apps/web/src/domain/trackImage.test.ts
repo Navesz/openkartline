@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Translate } from '../i18n/context'
 import { translate } from '../i18n/translate'
+import type { TrackInput } from './types'
 import {
+  calibratedTrack,
   dataUrlBytes,
   downscaleTrackImage,
   fitsProjectBudget,
@@ -154,5 +156,65 @@ describe('downscaleTrackImage', () => {
       TRACK_IMAGE_LIMITS.minDimensionPx,
     )
     expect(encodes.length).toBeLessThan(50)
+  })
+})
+
+const BACKGROUND = { imageDataUrl: TINY_JPEG, imageWidthPx: 1200, imageHeightPx: 800 }
+
+const metricTrack: TrackInput = {
+  name: 'Preset in metres',
+  direction: 'clockwise',
+  widthM: 8,
+  centerline: [
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 150 },
+    { x: 0, y: 150 },
+  ],
+  background: BACKGROUND,
+}
+
+describe('calibratedTrack', () => {
+  it('leaves a centerline that is already in metres alone', () => {
+    // Load a preset, drop a satellite photo behind it, calibrate at 0.4 m/px:
+    // this used to multiply the whole circuit by 0.4, so a 900 m lap became
+    // 360 m and an 8 m track became 3.2 m wide.
+    const calibrated = calibratedTrack(metricTrack, 0.4)
+
+    expect(calibrated.centerline).toEqual(metricTrack.centerline)
+    expect(calibrated.widthM).toBe(8)
+    expect(calibrated.background?.scaleMPerPx).toBe(0.4)
+  })
+
+  it('converts a trace drawn over an uncalibrated image', () => {
+    const traced = { ...metricTrack, tracedOverBackground: true }
+
+    const calibrated = calibratedTrack(traced, 0.4)
+
+    expect(calibrated.centerline[1]).toEqual({ x: 120, y: 0 })
+    expect(calibrated.background?.scaleMPerPx).toBe(0.4)
+  })
+
+  it('corrects a traced centerline by the ratio when recalibrated', () => {
+    const traced: TrackInput = {
+      ...metricTrack,
+      tracedOverBackground: true,
+      background: { ...BACKGROUND, scaleMPerPx: 0.4 },
+    }
+
+    const calibrated = calibratedTrack(traced, 0.5)
+
+    expect(calibrated.centerline[1]).toEqual({ x: 375, y: 0 })
+  })
+
+  it('never rescales the track width', () => {
+    const traced = { ...metricTrack, tracedOverBackground: true }
+    expect(calibratedTrack(traced, 0.4).widthM).toBe(8)
+    expect(calibratedTrack(traced, 3).widthM).toBe(8)
+  })
+
+  it('is a no-op without a background', () => {
+    const noImage: TrackInput = { ...metricTrack, background: undefined }
+    expect(calibratedTrack(noImage, 0.4)).toBe(noImage)
   })
 })

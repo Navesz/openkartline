@@ -1,5 +1,5 @@
 import type { Translate } from '../i18n/context'
-import type { TrackBackground } from './types'
+import type { TrackBackground, TrackInput } from './types'
 
 export const TRACK_IMAGE_LIMITS = {
   /** Raw upload ceiling; the stored copy is always re-encoded below. */
@@ -128,4 +128,30 @@ export function scaleFromCalibration(pixelDistance: number, realMeters: number, 
     throw new Error(t('imports.calibrationScaleImplausible', { scale: scale.toFixed(4) }))
   }
   return scale
+}
+
+/**
+ * Apply a newly measured image scale to a track.
+ *
+ * Only a centerline traced over this image lives in its pixel frame. The first
+ * calibration converts those pixels to metres; a later one corrects the factor
+ * already applied. A preset, a GPS import, or a project loaded in metres is
+ * independent geometry — calibrating the picture behind it says how to draw the
+ * picture, not how big the circuit is — so it passes through untouched.
+ *
+ * `widthM` is never converted. It is bounded by `INPUT_LIMITS.trackWidthMaxM`
+ * and rendered with `unit="m"`, so it is a metre value in every frame.
+ */
+export function calibratedTrack(track: TrackInput, scaleMPerPx: number): TrackInput {
+  if (!track.background) return track
+  const previousScale = track.background.scaleMPerPx
+  const factor = track.tracedOverBackground ? (previousScale ? scaleMPerPx / previousScale : scaleMPerPx) : 1
+  return {
+    ...track,
+    centerline:
+      factor === 1
+        ? track.centerline
+        : track.centerline.map((point) => ({ x: point.x * factor, y: point.y * factor })),
+    background: { ...track.background, scaleMPerPx },
+  }
 }
