@@ -277,13 +277,7 @@ export default function App() {
     }
     try {
       const imported = parseProject(await file.text(), t)
-      trackHistory.reset({
-        ...imported.track,
-        // An uncalibrated background means the stored trace is still in pixels
-        // and its first calibration has to convert it. Anything else is metres.
-        tracedOverBackground:
-          imported.track.background !== undefined && imported.track.background.scaleMPerPx === undefined,
-      })
+      trackHistory.reset(imported.track)
       setKart(imported.kart)
       setSettings(imported.settings)
       setFitRequest((value) => value + 1)
@@ -349,8 +343,6 @@ export default function App() {
         ...current,
         centerline: imported.centerline,
         direction: imported.direction,
-        // Projected from GPS, so already metres regardless of any image behind.
-        tracedOverBackground: false,
       }))
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
@@ -522,18 +514,7 @@ export default function App() {
               }}
               onToolChange={setTool}
               onPointsChange={(centerline, checkpoint = true) => {
-                trackHistory.set(
-                  (current) => ({
-                    ...current,
-                    centerline,
-                    // Points moved while the image has no scale yet are being
-                    // drawn in its pixels, so calibration must convert them.
-                    tracedOverBackground:
-                      current.tracedOverBackground ??
-                      (current.background !== undefined && current.background.scaleMPerPx === undefined),
-                  }),
-                  checkpoint,
-                )
+                trackHistory.set((current) => ({ ...current, centerline }), checkpoint)
                 markDirty()
               }}
               onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}

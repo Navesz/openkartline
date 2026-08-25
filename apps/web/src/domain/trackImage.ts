@@ -131,27 +131,23 @@ export function scaleFromCalibration(pixelDistance: number, realMeters: number, 
 }
 
 /**
- * Apply a newly measured image scale to a track.
+ * Record a newly measured image scale.
  *
- * Only a centerline traced over this image lives in its pixel frame. The first
- * calibration converts those pixels to metres; a later one corrects the factor
- * already applied. A preset, a GPS import, or a project loaded in metres is
- * independent geometry — calibrating the picture behind it says how to draw the
- * picture, not how big the circuit is — so it passes through untouched.
+ * Calibration says how many metres one image pixel covers, which is what sizes
+ * the picture: `TrackCanvas` draws it `imageWidthPx * scaleMPerPx` metres wide,
+ * falling back to 1 m/px while no scale is set. The centreline is not touched,
+ * because there is nothing to convert -- every track in this app is already in
+ * metres. A preset is authored in metres, a GPS import is projected to metres,
+ * and a loaded project stores metres; the app has no way to start a track in
+ * any other frame.
  *
- * `widthM` is never converted. It is bounded by `INPUT_LIMITS.trackWidthMaxM`
- * and rendered with `unit="m"`, so it is a metre value in every frame.
+ * Scaling it here is what turned a 900 m circuit into 360 m the moment a photo
+ * was calibrated behind it, and then -- once that was guarded by a flag saying
+ * the trace belonged to the image -- turned a 319 m circuit into 128 m as soon
+ * as the user nudged one control point before calibrating, which armed the
+ * flag. The flag had no state it could correctly be true in, so it is gone.
  */
 export function calibratedTrack(track: TrackInput, scaleMPerPx: number): TrackInput {
   if (!track.background) return track
-  const previousScale = track.background.scaleMPerPx
-  const factor = track.tracedOverBackground ? (previousScale ? scaleMPerPx / previousScale : scaleMPerPx) : 1
-  return {
-    ...track,
-    centerline:
-      factor === 1
-        ? track.centerline
-        : track.centerline.map((point) => ({ x: point.x * factor, y: point.y * factor })),
-    background: { ...track.background, scaleMPerPx },
-  }
+  return { ...track, background: { ...track.background, scaleMPerPx } }
 }

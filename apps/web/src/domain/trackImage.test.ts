@@ -175,10 +175,9 @@ const metricTrack: TrackInput = {
 }
 
 describe('calibratedTrack', () => {
-  it('leaves a centerline that is already in metres alone', () => {
-    // Load a preset, drop a satellite photo behind it, calibrate at 0.4 m/px:
-    // this used to multiply the whole circuit by 0.4, so a 900 m lap became
-    // 360 m and an 8 m track became 3.2 m wide.
+  it('records the scale without touching the geometry', () => {
+    // Calibration says how many metres a pixel covers, which is what sizes the
+    // picture. The track is already in metres and has nothing to convert.
     const calibrated = calibratedTrack(metricTrack, 0.4)
 
     expect(calibrated.centerline).toEqual(metricTrack.centerline)
@@ -186,31 +185,31 @@ describe('calibratedTrack', () => {
     expect(calibrated.background?.scaleMPerPx).toBe(0.4)
   })
 
-  it('converts a trace drawn over an uncalibrated image', () => {
-    const traced = { ...metricTrack, tracedOverBackground: true }
+  it('leaves the geometry alone on recalibration too', () => {
+    const calibrated = calibratedTrack(
+      { ...metricTrack, background: { ...BACKGROUND, scaleMPerPx: 0.4 } },
+      0.5,
+    )
 
-    const calibrated = calibratedTrack(traced, 0.4)
-
-    expect(calibrated.centerline[1]).toEqual({ x: 120, y: 0 })
-    expect(calibrated.background?.scaleMPerPx).toBe(0.4)
+    expect(calibrated.centerline).toEqual(metricTrack.centerline)
+    expect(calibrated.background?.scaleMPerPx).toBe(0.5)
   })
 
-  it('corrects a traced centerline by the ratio when recalibrated', () => {
-    const traced: TrackInput = {
+  it('survives an edit made before the scale was set', () => {
+    // This is the case that reopened the bug. A metre preset with an
+    // uncalibrated photo behind it used to be marked as "traced over the
+    // background" by a single point edit, and calibrating then shrank a 319 m
+    // circuit to 128 m -- the same corruption, through the editing path.
+    const edited: TrackInput = {
       ...metricTrack,
-      tracedOverBackground: true,
-      background: { ...BACKGROUND, scaleMPerPx: 0.4 },
+      centerline: metricTrack.centerline.map((point, index) =>
+        index === 1 ? { x: point.x + 5, y: point.y } : point,
+      ),
     }
 
-    const calibrated = calibratedTrack(traced, 0.5)
+    const calibrated = calibratedTrack(edited, 0.4)
 
-    expect(calibrated.centerline[1]).toEqual({ x: 375, y: 0 })
-  })
-
-  it('never rescales the track width', () => {
-    const traced = { ...metricTrack, tracedOverBackground: true }
-    expect(calibratedTrack(traced, 0.4).widthM).toBe(8)
-    expect(calibratedTrack(traced, 3).widthM).toBe(8)
+    expect(calibrated.centerline).toEqual(edited.centerline)
   })
 
   it('is a no-op without a background', () => {
