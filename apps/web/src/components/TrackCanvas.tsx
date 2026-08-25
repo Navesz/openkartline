@@ -5,7 +5,7 @@ import { pathLength } from '../domain/geometry'
 import { useI18n } from '../i18n/context'
 import type { PlaybackFrame } from '../domain/playback'
 import { buildCanonicalTrackGeometry } from '../domain/trackGeometry'
-import { scaleFromCalibration } from '../domain/trackImage'
+import { imagePixelsFromWorld, scaleFromCalibration } from '../domain/trackImage'
 import type { DriveMode, LapSample, Point, SimulationResult, TrackInput } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 
@@ -249,9 +249,11 @@ export function TrackCanvas({
   const confirmCalibration = () => {
     if (!calibrationStart || !calibrationEnd) return
     try {
-      const pixelDistance = Math.hypot(
-        calibrationEnd.x - calibrationStart.x,
-        calibrationEnd.y - calibrationStart.y,
+      // The marks are in world units; `scaleFromCalibration` is defined in
+      // image pixels. See `imagePixelsFromWorld` for why they differ.
+      const pixelDistance = imagePixelsFromWorld(
+        Math.hypot(calibrationEnd.x - calibrationStart.x, calibrationEnd.y - calibrationStart.y),
+        background?.scaleMPerPx,
       )
       const realMeters = Number(calibrationMeters.replace(',', '.'))
       // Validates here so the App only ever receives a sane scale.
