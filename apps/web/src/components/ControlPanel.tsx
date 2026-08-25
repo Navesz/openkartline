@@ -18,6 +18,7 @@ import {
 import { KART_PRESETS, PRESETS, REAL_TRACK_KEYS, kartPresetKeyFor, toKartInput } from '../domain/presets'
 import type { KartInput, Point, SimulationSettings, TrackInput, ValidationIssue } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
+import { noteForError } from '../domain/localisedError'
 import { useI18n } from '../i18n/context'
 
 interface NumberFieldProps {
@@ -134,7 +135,11 @@ function KeyboardCalibration({
           } catch (failure) {
             // `applyCalibration` validates; surface its reason rather than a
             // generic one, and keep the fields so the value can be corrected.
-            setError(failure instanceof Error ? failure.message : t('canvas.calibrationInvalid'))
+            // Rendered through the note, not through `Error.message`: a
+            // `LocalisedError` carries its key there, so reading the message
+            // put `imports.calibrationPointsTooClose` in front of the user.
+            const note = noteForError(failure, { key: 'canvas.calibrationInvalid' })
+            setError('key' in note ? t(note.key, note.params) : note.text)
           }
         }}
       >
