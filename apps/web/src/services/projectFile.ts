@@ -2,6 +2,8 @@ import { fitsProjectBudget, isImageDataUrl } from '../domain/trackImage'
 import type { KartInput, OklProject, ResultNote, SimulationSettings, TrackInput } from '../domain/types'
 import { INPUT_LIMITS, validateSimulationInput, validationErrorMessage } from '../domain/validation'
 import type { Translate } from '../i18n/context'
+import { LocalisedError } from '../domain/localisedError'
+import type { MessageKey } from '../i18n/messages'
 
 export const PROJECT_SCHEMA_VERSION = '0.2.0' as const
 
@@ -92,9 +94,12 @@ export function downloadProject(project: OklProject): void {
   }, 0)
 }
 
-function finite(value: unknown, field: string, t: Translate): number {
+function finite(value: unknown, field: MessageKey, fieldParams?: Record<string, string | number>): number {
   if (typeof value !== 'number' || !Number.isFinite(value))
-    throw new Error(t('project.invalidNumber', { field }))
+    throw new LocalisedError({
+      key: 'project.invalidNumber',
+      params: { field: { key: field, params: fieldParams } },
+    })
   return value
 }
 
@@ -104,20 +109,18 @@ function finite(value: unknown, field: string, t: Translate): number {
  * anything, and the calibration is only meaningful alongside the picture it
  * was measured on.
  */
-function parseBackground(
-  background: OklProject['track']['background'],
-  t: Translate,
-): Pick<TrackInput, 'background'> {
+function parseBackground(background: OklProject['track']['background']): Pick<TrackInput, 'background'> {
   if (background === undefined) return {}
-  if (typeof background !== 'object' || background === null) throw new Error(t('project.malformedBackground'))
+  if (typeof background !== 'object' || background === null)
+    throw new LocalisedError({ key: 'project.malformedBackground' })
   if (!isImageDataUrl(background.image_data_url)) return {}
-  const widthPx = finite(background.image_width_px, t('project.field.imageWidth'), t)
-  const heightPx = finite(background.image_height_px, t('project.field.imageHeight'), t)
+  const widthPx = finite(background.image_width_px, 'project.field.imageWidth')
+  const heightPx = finite(background.image_height_px, 'project.field.imageHeight')
   if (widthPx < 8 || widthPx > 4096 || heightPx < 8 || heightPx > 4096)
-    throw new Error(t('project.invalidBackgroundDimensions'))
+    throw new LocalisedError({ key: 'project.invalidBackgroundDimensions' })
   const scale = background.scale_m_per_px
   if (scale !== undefined && (!(scale > 0) || scale > 10))
-    throw new Error(t('project.invalidBackgroundScale'))
+    throw new LocalisedError({ key: 'project.invalidBackgroundScale' })
   return {
     background: {
       imageDataUrl: background.image_data_url,
@@ -137,21 +140,20 @@ export function parseProject(
   settings: SimulationSettings
 } {
   if (new TextEncoder().encode(text).byteLength > INPUT_LIMITS.projectBytes) {
-    throw new Error(t('project.exceedsSizeLimit'))
+    throw new LocalisedError({ key: 'project.exceedsSizeLimit' })
   }
   let input: unknown
   try {
     input = JSON.parse(text)
   } catch {
-    throw new Error(t('project.invalidJson'))
+    throw new LocalisedError({ key: 'project.invalidJson' })
   }
   const project = input as Partial<OklProject>
   if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
-    throw new Error(
-      t('project.unsupportedVersion', {
-        version: project.schema_version ?? t('project.missingVersion'),
-      }),
-    )
+    throw new LocalisedError({
+      key: 'project.unsupportedVersion',
+      params: { version: project.schema_version ?? { key: 'project.missingVersion' } },
+    })
   if (
     !project.project ||
     typeof project.project.name !== 'string' ||
@@ -160,34 +162,35 @@ export function parseProject(
     Number.isNaN(Date.parse(project.project.created_at)) ||
     Number.isNaN(Date.parse(project.project.updated_at))
   ) {
-    throw new Error(t('project.invalidMetadata'))
+    throw new LocalisedError({ key: 'project.invalidMetadata' })
   }
   if (
     !project.track ||
     !Array.isArray(project.track.raw_centerline) ||
     project.track.raw_centerline.length < 4
   ) {
-    throw new Error(t('project.missingCenterline'))
+    throw new LocalisedError({ key: 'project.missingCenterline' })
   }
-  if (!project.kart?.parameters || !project.simulation) throw new Error(t('project.missingKartOrSimulation'))
+  if (!project.kart?.parameters || !project.simulation)
+    throw new LocalisedError({ key: 'project.missingKartOrSimulation' })
   if (project.track.coordinate_system !== 'local_cartesian_m')
-    throw new Error(t('project.unsupportedCoordinateSystem'))
+    throw new LocalisedError({ key: 'project.unsupportedCoordinateSystem' })
   if (project.track.direction !== 'clockwise' && project.track.direction !== 'counterclockwise')
-    throw new Error(t('project.invalidDirection'))
+    throw new LocalisedError({ key: 'project.invalidDirection' })
   if (project.kart.model !== 'point_mass_v1' || project.simulation.solver !== 'speed_profile_v1')
-    throw new Error(t('project.unsupportedModel'))
+    throw new LocalisedError({ key: 'project.unsupportedModel' })
   const p = project.kart.parameters
   const parsed: { track: TrackInput; kart: KartInput; settings: SimulationSettings } = {
     track: {
       name: project.project.name,
       direction: project.track.direction,
-      widthM: finite(project.track.width_m, t('project.field.width'), t),
+      widthM: finite(project.track.width_m, 'project.field.width'),
       centerline: project.track.raw_centerline.map((pair, index) => {
         if (!Array.isArray(pair) || pair.length !== 2)
-          throw new Error(t('project.invalidPoint', { index: index + 1 }))
+          throw new LocalisedError({ key: 'project.invalidPoint', params: { index: index + 1 } })
         return {
-          x: finite(pair[0], t('project.field.pointX', { index: index + 1 }), t),
-          y: finite(pair[1], t('project.field.pointY', { index: index + 1 }), t),
+          x: finite(pair[0], 'project.field.pointX', { index: index + 1 }),
+          y: finite(pair[1], 'project.field.pointY', { index: index + 1 }),
         }
       }),
       // Degraded to absent rather than rejected: a malformed credit line is not
@@ -199,26 +202,27 @@ export function parseProject(
       project.track.attribution.length <= ATTRIBUTION_MAX_LENGTH
         ? { attribution: project.track.attribution }
         : {}),
-      ...parseBackground(project.track.background, t),
+      ...parseBackground(project.track.background),
     },
     kart: {
-      powerHp: finite(p.power_hp, t('project.field.power'), t),
-      kartMassKg: finite(p.kart_mass_kg, t('project.field.kartMass'), t),
-      driverMassKg: finite(p.driver_mass_kg, t('project.field.driverMass'), t),
-      topSpeedKph: finite(p.top_speed_kph, t('project.field.topSpeed'), t),
-      gripCoefficient: finite(p.grip_coefficient, t('project.field.grip'), t),
-      brakeDecelMps2: finite(p.brake_decel_mps2, t('project.field.braking'), t),
+      powerHp: finite(p.power_hp, 'project.field.power'),
+      kartMassKg: finite(p.kart_mass_kg, 'project.field.kartMass'),
+      driverMassKg: finite(p.driver_mass_kg, 'project.field.driverMass'),
+      topSpeedKph: finite(p.top_speed_kph, 'project.field.topSpeed'),
+      gripCoefficient: finite(p.grip_coefficient, 'project.field.grip'),
+      brakeDecelMps2: finite(p.brake_decel_mps2, 'project.field.braking'),
     },
     settings: {
-      safetyMarginM: finite(project.simulation.safety_margin_m, t('project.field.safetyMargin'), t),
-      sampleCount: finite(project.simulation.settings?.sample_count, t('project.field.sampleCount'), t),
+      safetyMarginM: finite(project.simulation.safety_margin_m, 'project.field.safetyMargin'),
+      sampleCount: finite(project.simulation.settings?.sample_count, 'project.field.sampleCount'),
     },
   }
   const issues = validateSimulationInput(parsed.track, parsed.kart, parsed.settings, t)
   const validationMessage = validationErrorMessage(issues)
   if (validationMessage) throw new Error(validationMessage)
-  const declaredTotalMass = finite(project.kart.total_mass_kg, t('project.field.totalMass'), t)
+  const declaredTotalMass = finite(project.kart.total_mass_kg, 'project.field.totalMass')
   const calculatedTotalMass = parsed.kart.kartMassKg + parsed.kart.driverMassKg
-  if (Math.abs(declaredTotalMass - calculatedTotalMass) > 1e-6) throw new Error(t('project.massMismatch'))
+  if (Math.abs(declaredTotalMass - calculatedTotalMass) > 1e-6)
+    throw new LocalisedError({ key: 'project.massMismatch' })
   return parsed
 }

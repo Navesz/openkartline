@@ -63,4 +63,25 @@ describe('a solved lap follows the language toggle', () => {
     expect(runBar).toMatch(/localmente|navegador/i)
     expect(runBar).not.toMatch(/Solved|locally/i)
   })
+
+  it('translates an import failure written before the switch', async () => {
+    // Domain code used to throw `new Error(t('imports.gpxNoPoints'))`, which
+    // renders the wording when the failure happens. Switching afterwards left
+    // the English sentence in the run bar -- the same staleness, reaching the
+    // interface through a thrown error rather than through a result.
+    const user = userEvent.setup()
+    renderApp()
+
+    const gpsInput = document.querySelector('input[type="file"][accept*="gpx"]') as HTMLInputElement
+    const file = new File(['not a gpx document at all'], 'lap.gpx', { type: 'application/gpx+xml' })
+    await user.upload(gpsInput, file)
+
+    await screen.findByText(/has no track points/i)
+
+    await user.click(screen.getByRole('button', { name: /^PT$/ }))
+
+    const runBar = document.querySelector('.run-message')?.textContent ?? ''
+    expect(runBar).toMatch(/não contém pontos de trajeto/i)
+    expect(runBar).not.toMatch(/has no track points/i)
+  })
 })
