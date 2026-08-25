@@ -22,8 +22,13 @@ const t: Translate = (key, params) => translate('en', key, params)
  * Request fixtures are exported here through the exact `toApiRequest` adapter
  * the client uses, so both engines are compared on byte-identical inputs.
  * Result fixtures are produced by `scripts/export_parity_fixtures.py`, which
- * runs the Python engine over those requests. Both are committed, so CI fails
- * whenever either engine drifts.
+ * runs the Python engine over those requests. Both are committed.
+ *
+ * This file only catches drift on the browser side: it compares the port
+ * against the committed numbers, and a Python-only change with the export step
+ * skipped would leave it green. `tests/python/test_parity_fixtures.py` closes
+ * the other direction, holding the engine to the same fixtures and the same
+ * tolerances.
  *
  * Regenerate after any intentional engine change:
  *   OKL_UPDATE_PARITY=1 pnpm --filter @openkartline/web exec vitest run src/domain/engine/engineParity.test.ts
