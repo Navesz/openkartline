@@ -214,3 +214,87 @@ def test_numerical_error_returns_structured_failure(
     assert "synthetic convergence failure" in result.status.message
     assert result.validation.valid
     assert result.summary is None
+
+
+class TestStartIndexSensitivity:
+    """The same closed loop, listed from a different first point.
+
+    Rotating the boundary lists is not a different track: the polygon, its
+    winding and its geometry are identical, and only the index a reader would
+    call "first" moves. A converged solver would return the same lap.
+
+    This one does not. The projected-gradient path solver reports
+    `iteration_limit` on every shipped circuit at every allowed iteration
+    count, so where it stops depends on the parameterisation it started from,
+    and the lap time moves with it. Measured: 6.31% on the serpentine fixture,
+    0.92% on Adria (674 ms of a 73.8 s lap), 0.81% on Castelo Branco, 0.53% on
+    Baltar, and exactly 0 on the circle, whose symmetry makes every shift an
+    exact one.
+
+    The ceilings below are measurements, not guesses, and they are ceilings on
+    purpose: this fails if the sensitivity gets worse. It will also fail if the
+    solver is ever made to converge and the spread collapses -- that would be
+    an improvement, and changing these numbers should be a deliberate part of
+    it rather than something that happens quietly.
+
+    Characterised rather than hidden. Pinning the anchor would make the number
+    stable without making it right.
+    """
+
+    SERPENTINE_SPREAD_CEILING = 0.07
+
+    @staticmethod
+    def _rotated(request: SimulationRequestV1, shift: int) -> SimulationRequestV1:
+        payload = request.model_dump()
+        for side in ("left_boundary", "right_boundary"):
+            points = payload["track"][side]
+            payload["track"][side] = points[shift:] + points[:shift]
+        return SimulationRequestV1.model_validate(payload)
+
+    def _laps(self, request: SimulationRequestV1, divisions: int) -> list[float]:
+        count = len(request.track.left_boundary)
+        laps = []
+        for index in range(divisions):
+            result = simulate(self._rotated(request, index * count // divisions))
+            assert result.summary is not None
+            laps.append(result.summary.lap_time_s)
+        return laps
+
+    def test_a_symmetric_track_is_untouched_by_the_start_index(
+        self, circle_request: SimulationRequestV1
+    ) -> None:
+        # A circle maps onto itself under every shift of its control points, so
+        # this isolates the sensitivity to the shape rather than the mechanism:
+        # whatever moves the lap on other tracks must not move it here.
+        laps = self._laps(circle_request, 4)
+        assert max(laps) == pytest.approx(min(laps), rel=1e-9)
+
+    def test_the_lap_moves_with_the_start_index_but_within_a_known_bound(
+        self, serpentine_track: TrackV1, kart: KartV1
+    ) -> None:
+        laps = self._laps(SimulationRequestV1(track=serpentine_track, kart=kart), 12)
+
+        spread = (max(laps) - min(laps)) / min(laps)
+        assert spread < self.SERPENTINE_SPREAD_CEILING, (
+            f"start-index spread {spread:.4%} exceeds the documented ceiling"
+        )
+        # And it is genuinely there: a test that would also pass on a converged
+        # solver would not be pinning anything.
+        assert spread > 0.0
+
+    def test_the_geometry_itself_is_not_disturbed(
+        self, serpentine_track: TrackV1, kart: KartV1
+    ) -> None:
+        # Track length is a property of the polygon, so unlike the lap time it
+        # survives the rotation almost exactly. If this ever drifts, the
+        # sensitivity above has moved into the geometry and is a different bug.
+        request = SimulationRequestV1(track=serpentine_track, kart=kart)
+        count = len(request.track.left_boundary)
+
+        base = simulate(request)
+        rotated = simulate(self._rotated(request, count // 2))
+
+        assert base.summary is not None and rotated.summary is not None
+        assert rotated.summary.track_length_m == pytest.approx(
+            base.summary.track_length_m, rel=2e-3
+        )

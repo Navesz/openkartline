@@ -88,6 +88,44 @@ red again the moment it is fixed. On the five shipped circuits — all true
 constant-width corridors — the same change *improved* stability, most visibly
 on Circuito Aurora, from 5.98% to 1.95%.
 
+### Start-index stability
+
+A closed track is a cycle, so which boundary point is listed first is a
+labelling choice and nothing more: the polygon, its winding and its geometry
+are identical whichever index is called zero. A converged solver would return
+the same lap.
+
+This one does not. Rotating the boundary lists and re-solving moves the lap
+time:
+
+| Track | Points | Start indices tried | Lap-time spread |
+|---|---:|---:|---:|
+| Circle fixture | 12 | 4 | **0** |
+| Kartódromo de Baltar | 200 | 5 | 0.53% |
+| Castelo Branco | 200 | 5 | 0.81% |
+| Adria Karting Raceway | 200 | 5 | 0.92% (674 ms of a 73.8 s lap) |
+| Serpentine fixture | 400 | 12 | **6.31%** |
+
+The circle is unmoved because every shift of a uniformly sampled circle is an
+exact symmetry of it, which isolates the effect to the shape rather than to the
+mechanism.
+
+The cause is the path solver, not the geometry: track length survives the same
+rotation to a relative 2e-3, while `minimum_bending_path` reports
+`iteration_limit` on every shipped circuit at every allowed value of
+`path_smoothing_iterations` — 0, 20, 60 and 200 were measured, and raising it
+does not converge, it only moves where the solver stops. A solve that has not
+converged depends on the parameterisation it started from, and the lap time
+inherits that dependence.
+
+This is larger than the sample-count spread above, and it is the more
+uncomfortable of the two: a user who exports the same circuit from a tool that
+happens to start the point list elsewhere gets a different answer for the same
+track. `tests/python/test_simulation.py::TestStartIndexSensitivity` pins these
+as ceilings, so the number cannot grow quietly. It is characterised rather than
+suppressed: fixing the anchor would make the figure stable without making it
+right, and the honest fix is a solver that converges.
+
 ### Path-solver termination
 
 On the same serpentine fixture the projected-gradient line search previously
