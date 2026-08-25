@@ -50,4 +50,17 @@ describe('a solved lap follows the language toggle', () => {
     expect(body).toMatch(/Estimativa do motor físico MVP/)
     expect(body).not.toMatch(/MVP physics-engine estimate/)
   })
+
+  it('translates the run-bar status written before the switch', async () => {
+    const user = userEvent.setup()
+    renderApp()
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+    expect(document.body.textContent).toMatch(/Solved locally|computed locally/i)
+
+    await user.click(screen.getByRole('button', { name: /^PT$/ }))
+
+    const runBar = document.querySelector('.run-message')?.textContent ?? ''
+    expect(runBar).toMatch(/localmente|navegador/i)
+    expect(runBar).not.toMatch(/Solved|locally/i)
+  })
 })

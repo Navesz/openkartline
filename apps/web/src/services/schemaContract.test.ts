@@ -84,12 +84,10 @@ describe('licence attribution survives a save', () => {
     const track = PRESETS.voltaRedonda
     expect(track.attribution).toBeTruthy()
 
-    const { project } = toProject(
-      track,
-      toKartInput(KART_PRESETS.rentalIndoor),
-      { safetyMarginM: 0.5, sampleCount: 200 },
-      t,
-    )
+    const { project } = toProject(track, toKartInput(KART_PRESETS.rentalIndoor), {
+      safetyMarginM: 0.5,
+      sampleCount: 200,
+    })
 
     // Sharing the file redistributes ODbL-derived geometry; dropping the credit
     // here is the part that is not ours to drop.
