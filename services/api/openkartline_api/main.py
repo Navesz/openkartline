@@ -162,6 +162,12 @@ app.add_middleware(
     summary="Check API readiness",
 )
 def health() -> HealthResponse:
+    """Report that the service is up and which contract version it speaks.
+
+    No computation is performed, so this answers while the solver slots are
+    busy. The editor polls it to decide between the API and its browser port.
+    """
+
     return HealthResponse()
 
 
@@ -177,6 +183,22 @@ def health() -> HealthResponse:
     },
 )
 async def validate_track(request: TrackValidationRequest) -> TrackValidationResult:
+    """Measure a closed corridor and report whether it can be simulated.
+
+    The corridor is given as two boundaries in the track-local metric frame,
+    ordered along the direction of travel. Both are resampled to `sample_count`
+    stations at equal arc length, and the width at each station is measured
+    across the centreline normal rather than between same-index boundary
+    samples, which a corner would skew.
+
+    `valid` is false when an error would stop a simulation: fewer than four
+    points on a boundary, a self-crossing edge, or a corridor narrower than the
+    kart plus twice `safety_margin_m`. Warnings do not block a run.
+
+    The response is the same shape whether the track passes or fails; there is
+    no error status to branch on.
+    """
+
     outcome = await _run_bounded(
         partial(
             prepare_track,
@@ -201,6 +223,23 @@ async def validate_track(request: TrackValidationRequest) -> TrackValidationResu
     },
 )
 async def create_simulation(request: SimulationRequestV1) -> SimulationResultV1:
+    """Solve a racing line for the corridor and integrate a lap around it.
+
+    Two stages. A minimum-bending line is fitted inside the corridor, inset by
+    the kart half-width plus `safety_margin_m`; then a cyclic point-mass speed
+    profile is integrated over it, bounded by grip, power, braking and drag.
+
+    The result always carries a `status`, and a solver that did not converge
+    says so there rather than by failing the request: a lap that hit the
+    iteration limit is returned with `iteration_limit` and its samples intact,
+    so a caller can decide whether to trust it. Read `status.state` before
+    reading `summary`.
+
+    Determinism is part of the contract: identical input yields identical
+    output, and the browser port in `apps/web/src/domain/` is held to the same
+    numbers by committed fixtures.
+    """
+
     result = await _run_bounded(partial(simulate, request))
     return result
 
