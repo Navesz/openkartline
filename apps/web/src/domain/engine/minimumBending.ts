@@ -1,4 +1,5 @@
 import type { Point } from '../types'
+import { SMOOTHING_REFERENCE_SAMPLES, smoothPeriodic } from './prepareTrack'
 import type { PreparedTrack } from './prepareTrack'
 
 /**
@@ -13,7 +14,6 @@ import type { PreparedTrack } from './prepareTrack'
  */
 
 const EPS = 1e-9
-const GRADIENT_SMOOTHING_REFERENCE_SAMPLES = 300
 const GRADIENT_SMOOTHING_PASSES = 24
 /** Central-difference step of the fraction gradient, in fraction units (times corridor). */
 const GRADIENT_EPSILON = 1e-5
@@ -127,29 +127,6 @@ function fractionGradient(path: Point[], corridor: Point[], epsilon = GRADIENT_E
 }
 
 /**
- * Apply the `[1, 2, 1]/4` circular filter `passes` times.
- *
- * One pass scales Fourier mode `f` (in cycles per sample) by `cos(pi f)**2`,
- * so `passes` of them scale it by `cos(pi f)**(2 * passes)`. numpy evaluates
- * that multiplier in one FFT pair; applying the kernel directly is the same
- * circular convolution and costs O(n * passes), trivial at this app's sizes.
- */
-function smoothPeriodic(values: number[], passes: number): number[] {
-  if (passes <= 0) return values
-  let current = values
-  for (let pass = 0; pass < passes; pass += 1) {
-    const count = current.length
-    const next = new Array<number>(count)
-    for (let index = 0; index < count; index += 1) {
-      next[index] =
-        (current[(index - 1 + count) % count] + 2 * current[index] + current[(index + 1) % count]) / 4
-    }
-    current = next
-  }
-  return current
-}
-
-/**
  * Keep the gradient filter's width constant in arc length, not in samples.
  *
  * The filter behaves like diffusion, so its width grows with the square root of
@@ -159,7 +136,7 @@ function smoothPeriodic(values: number[], passes: number): number[] {
  * measurably different line.
  */
 function smoothingPasses(sampleCount: number): number {
-  const scale = sampleCount / GRADIENT_SMOOTHING_REFERENCE_SAMPLES
+  const scale = sampleCount / SMOOTHING_REFERENCE_SAMPLES
   return Math.max(1, Math.round(GRADIENT_SMOOTHING_PASSES * scale * scale))
 }
 

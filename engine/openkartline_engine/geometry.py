@@ -24,6 +24,17 @@ _MAX_TRACK_SPAN_M = 100_000.0
 _MAX_BOUNDARY_LENGTH_M = 1_000_000.0
 _GRADIENT_SMOOTHING_PASSES = 24
 _GRADIENT_SMOOTHING_REFERENCE_SAMPLES = 300
+#: Centering passes before the corridor is measured. The seed is a chord
+#: midpoint, which sits off-center in a corner; two passes put it back.
+_CORRIDOR_CENTERING_PASSES = 2
+#: Stations measured per batch, bounding the station x segment work array.
+_CORRIDOR_STATION_BATCH = 256
+#: Low-pass width for the measured clearances, in passes at the reference
+#: resolution. Point-to-polyline distance is only piecewise smooth: its
+#: slope jumps at every facet, and while the amplitude of that noise is
+#: sub-millimetre, its curvature rivals the track's own -- which is exactly
+#: what the bending objective integrates.
+_CORRIDOR_SMOOTHING_PASSES = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +310,95 @@ def _align_samples(reference: FloatArray, candidate: FloatArray) -> FloatArray:
     return np.roll(candidate, -offset, axis=0)
 
 
+def _unit_normals(curve: FloatArray) -> FloatArray:
+    """Left-hand unit normals of a closed curve, from central differences."""
+
+    tangent = np.roll(curve, -1, axis=0) - np.roll(curve, 1, axis=0)
+    length = np.hypot(tangent[:, 0], tangent[:, 1])
+    safe = np.where(length < _EPS, 1.0, length)
+    return np.column_stack((-tangent[:, 1] / safe, tangent[:, 0] / safe))
+
+
+def _boundary_clearance(points: FloatArray, boundary: FloatArray) -> FloatArray:
+    """Distance from each point to the nearest point of a closed boundary.
+
+    This is the quantity a safety margin is about -- how far the wall is -- and
+    unlike casting a ray along the normal it stays defined when the reference
+    has drifted outside the corridor, which is precisely when a ray escapes and
+    answers with a hit from the far side of the track.
+    """
+
+    starts = boundary
+    edges = np.roll(boundary, -1, axis=0) - boundary
+    lengths_sq = np.sum(edges * edges, axis=1)
+    lengths_sq = np.where(lengths_sq < _EPS, 1.0, lengths_sq)
+
+    clearances = np.empty(len(points), dtype=np.float64)
+    for begin in range(0, len(points), _CORRIDOR_STATION_BATCH):
+        end = min(begin + _CORRIDOR_STATION_BATCH, len(points))
+        offset = points[begin:end, None, :] - starts[None, :, :]
+        projection = np.clip(
+            np.sum(offset * edges[None, :, :], axis=2) / lengths_sq[None, :], 0.0, 1.0
+        )
+        delta = offset - projection[:, :, None] * edges[None, :, :]
+        clearances[begin:end] = np.min(np.hypot(delta[:, :, 0], delta[:, :, 1]), axis=1)
+    return clearances
+
+
+def _corridor_smoothing_passes(sample_count: int) -> int:
+    """Hold the clearance filter's width fixed in arc length, not in samples.
+
+    Same square-law scaling as the gradient filter: the filter diffuses, so its
+    width grows with the square root of the pass count. Without this the
+    corridor is measured differently at every resolution and the lap estimate
+    drifts with ``sample_count``.
+    """
+
+    scale = sample_count / _GRADIENT_SMOOTHING_REFERENCE_SAMPLES
+    return max(1, round(_CORRIDOR_SMOOTHING_PASSES * scale * scale))
+
+
+def _perpendicular_corridor(
+    seed: FloatArray,
+    left_boundary: FloatArray,
+    right_boundary: FloatArray,
+    sample_count: int,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Measure the corridor from a centered reference instead of by paired index.
+
+    Equal-arc resampling walks the inner and outer edge at different rates, so
+    station ``i`` of one does not face station ``i`` of the other. The chord
+    between them is the hypotenuse of a skewed pair: longer than the width the
+    driver has, and in a tight corner it leaves the corridor entirely, so no
+    fraction of it is safe. Measuring each wall's clearance from a centered
+    reference restores the invariant the solver depends on -- ``left - right``
+    spans the corridor, and a fraction of it is a real distance from the edge.
+    """
+
+    passes = _corridor_smoothing_passes(sample_count)
+
+    def clearances(curve: FloatArray) -> tuple[FloatArray, FloatArray]:
+        return (
+            _smooth_periodic(_boundary_clearance(curve, left_boundary), passes),
+            _smooth_periodic(_boundary_clearance(curve, right_boundary), passes),
+        )
+
+    reference = resample_closed(seed, sample_count)
+    to_left, to_right = clearances(reference)
+
+    for _ in range(_CORRIDOR_CENTERING_PASSES):
+        normals = _unit_normals(reference)
+        reference = resample_closed(
+            reference + normals * ((to_left - to_right) * 0.5)[:, None], sample_count
+        )
+        to_left, to_right = clearances(reference)
+
+    normals = _unit_normals(reference)
+    left = reference + normals * to_left[:, None]
+    right = reference - normals * to_right[:, None]
+    return left, right, (left + right) * 0.5, to_left + to_right
+
+
 def prepare_track(
     track: TrackV1,
     *,
@@ -457,11 +557,14 @@ def prepare_track(
             prepared=None,
         )
 
-    left = resample_closed(normalized_left, sample_count)
-    right = resample_closed(normalized_right, sample_count)
-    right = _align_samples(left, right)
-    widths = np.linalg.norm(left - right, axis=1)
-    center = (left + right) * 0.5
+    paired_left = resample_closed(normalized_left, sample_count)
+    paired_right = _align_samples(paired_left, resample_closed(normalized_right, sample_count))
+    left, right, center, widths = _perpendicular_corridor(
+        (paired_left + paired_right) * 0.5,
+        left_dense,
+        right_dense,
+        sample_count,
+    )
     center_length = _closed_length(center)
 
     if float(np.min(widths)) <= 2 * safety_margin_m + 0.05:

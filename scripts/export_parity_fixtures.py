@@ -8,6 +8,9 @@
 #   pnpm --filter @openkartline/web exec vitest run src/domain/engine/engineParity.test.ts
 #     (with OKL_UPDATE_PARITY=1 in the environment to rewrite the request fixtures)
 #   uv run python scripts/export_parity_fixtures.py
+#   pnpm --filter @openkartline/web exec prettier --write src/domain/engine/__fixtures__
+#     (json.dumps writes exponents as `e-05`; prettier stores them as `e-5`, and
+#      `pnpm check` runs prettier --check over this directory)
 #
 # Commit the regenerated `__fixtures__` directory together with any engine change.
 """Run every parity request fixture through the Python engine and record the result."""
@@ -43,10 +46,11 @@ def main() -> int:
         request = SimulationRequestV1.model_validate_json(request_path.read_text(encoding="utf-8"))
         result = simulate(request)
         result_path = FIXTURES_DIR / f"parity-result-{slug}.json"
-        result_path.write_text(
-            json.dumps(result.model_dump(mode="json"), indent=2) + "\n",
-            encoding="utf-8",
-        )
+        # newline="" keeps the LF the repo stores (.gitattributes pins eol=lf).
+        # The default translation emits CRLF on Windows, so regenerating there
+        # rewrote all ten fixtures and failed `prettier --check`.
+        with result_path.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(json.dumps(result.model_dump(mode="json"), indent=2) + "\n")
         summary = result.summary
         lap = f"{summary.lap_time_s:.4f} s" if summary else "no summary"
         print(f"{slug}: {result.status.state} ({result.status.code}), lap {lap}")
