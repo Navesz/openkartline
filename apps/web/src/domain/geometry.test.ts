@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import { pathLength, resampleClosed, validateTrack } from './geometry'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 const square = [
   { x: 0, y: 0 },
@@ -21,7 +17,7 @@ describe('track geometry', () => {
   })
 
   it('finds invalid and self-intersecting centerlines', () => {
-    expect(validateTrack(square, 8, t)).toEqual([])
+    expect(validateTrack(square, 8)).toEqual([])
     expect(
       validateTrack(
         [
@@ -31,11 +27,10 @@ describe('track geometry', () => {
           { x: 20, y: 0 },
         ],
         8,
-        t,
       ),
     ).toEqual(expect.arrayContaining([expect.objectContaining({ level: 'error' })]))
-    expect(validateTrack(square, 0, t)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining('Width') })]),
+    expect(validateTrack(square, 0)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ note: { key: 'validation.widthPositive' } })]),
     )
   })
 })
@@ -54,14 +49,14 @@ describe('validateTrack keeps scanning past a close pair', () => {
   ]
 
   it('reports the close pair and the crossing together', () => {
-    const issues = validateTrack(crossingWithAClosePair, 8, t)
+    const issues = validateTrack(crossingWithAClosePair, 8)
     expect(issues).toContainEqual({
       level: 'warning',
-      message: translate('en', 'validation.pointsTooClose', { a: 1, b: 2 }),
+      note: { key: 'validation.pointsTooClose', params: { a: 1, b: 2 } },
     })
     expect(issues).toContainEqual({
       level: 'error',
-      message: translate('en', 'validation.selfIntersecting'),
+      note: { key: 'validation.selfIntersecting' },
     })
   })
 
@@ -72,7 +67,7 @@ describe('validateTrack keeps scanning past a close pair', () => {
       { x: 0.5, y: 0.5 },
       { x: 0, y: 0.5 },
     ]
-    const warnings = validateTrack(allClose, 8, t).filter((issue) => issue.level === 'warning')
+    const warnings = validateTrack(allClose, 8).filter((issue) => issue.level === 'warning')
     expect(warnings).toHaveLength(1)
   })
 })

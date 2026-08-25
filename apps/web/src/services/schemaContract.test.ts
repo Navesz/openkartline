@@ -3,11 +3,7 @@ import schema010 from '../../../../packages/schemas/okl-project-0.1.0.schema.jso
 import schema020 from '../../../../packages/schemas/okl-project-0.2.0.schema.json'
 import { KART_PRESETS, PRESETS, toKartInput } from '../domain/presets'
 import { INPUT_LIMITS, validateSimulationInput } from '../domain/validation'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import { toProject } from './projectFile'
-
-const t: Translate = (key, params) => translate('en', key, params)
 
 interface Bound {
   minimum?: number
@@ -73,7 +69,6 @@ describe('every shipped preset satisfies the contract it exports into', () => {
       PRESETS.oval,
       toKartInput(KART_PRESETS[key as keyof typeof KART_PRESETS]),
       { safetyMarginM: 0.5, sampleCount: 200 },
-      t,
     )
     expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
   })

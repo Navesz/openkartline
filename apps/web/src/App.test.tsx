@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { DEFAULT_KART, PRESETS } from './domain/presets'
+import { toProject } from './services/projectFile'
 import { I18nProvider } from './i18n/I18nProvider'
 
 function renderApp() {
@@ -241,5 +243,31 @@ describe('the track picker after undo', () => {
 
     expect(picker).toHaveValue('')
     expect(screen.getByRole('option', { name: /custom track/i })).toBeInTheDocument()
+  })
+})
+
+describe('a project rejected on import', () => {
+  it('follows a later language switch', async () => {
+    // `parseProject` used to render the failure with whichever translator it
+    // was handed, and the run bar then held that sentence as plain text. A
+    // project rejected in English stayed English after switching to
+    // Portuguese -- the staleness #81 removed everywhere else, surviving in
+    // the one path that went through `validationErrorMessage`.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
+    project.simulation.settings.sample_count = 32.5
+    const file = new File([JSON.stringify(project)], 'broken.okl.json', { type: 'application/json' })
+
+    const input = container.querySelector('input[type="file"][accept*="okl"]') as HTMLInputElement
+    await user.upload(input, file)
+
+    expect(await screen.findByText(/must be an integer between/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'PT' }))
+
+    expect(await screen.findByText(/quantidade de amostras/i)).toBeInTheDocument()
+    expect(screen.queryByText(/must be an integer between/i)).not.toBeInTheDocument()
   })
 })

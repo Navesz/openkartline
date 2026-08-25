@@ -14,14 +14,26 @@ import type { ResultNote } from './types'
  * as a message the engine returned in its own words.
  */
 export class LocalisedError extends Error {
-  readonly note: ResultNote
+  /**
+   * Every message this failure names. Validating an imported project can fail
+   * for several reasons at once, and the run bar already renders a list, so
+   * collapsing them into one string would lose what it can show.
+   */
+  readonly notes: ResultNote[]
 
-  constructor(note: ResultNote) {
+  constructor(note: ResultNote | ResultNote[]) {
+    const notes = Array.isArray(note) ? note : [note]
+    const first = notes[0]
     // `message` is for a developer reading a stack trace, never for the
-    // interface — the interface reads `note`.
-    super('key' in note ? note.key : note.text)
+    // interface — the interface reads `notes`.
+    super(first === undefined ? 'LocalisedError' : 'key' in first ? first.key : first.text)
     this.name = 'LocalisedError'
-    this.note = note
+    this.notes = notes
+  }
+
+  /** The first message, for callers that can only show one. */
+  get note(): ResultNote {
+    return this.notes[0]
   }
 }
 
@@ -30,4 +42,10 @@ export function noteForError(error: unknown, fallback: ResultNote): ResultNote {
   if (error instanceof LocalisedError) return error.note
   if (error instanceof Error && error.message) return { text: error.message }
   return fallback
+}
+
+/** Every note a caught value names, for a caller that can show a list. */
+export function notesForError(error: unknown, fallback: ResultNote): ResultNote[] {
+  if (error instanceof LocalisedError && error.notes.length) return error.notes
+  return [noteForError(error, fallback)]
 }
