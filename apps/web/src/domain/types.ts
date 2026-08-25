@@ -1,3 +1,4 @@
+import type { MessageKey } from '../i18n/messages'
 export type Point = { x: number; y: number }
 
 export type DriveMode = 'brake' | 'coast' | 'throttle'
@@ -96,8 +97,23 @@ export interface LapSample {
 export interface SimulationEvent {
   kind: 'brake' | 'apex' | 'throttle'
   sampleIndex: number
-  label: string
+  /** Station along the racing line, in metres. */
+  sM: number
+  /** Speed at that station, in m/s. */
+  speedMps: number
 }
+
+/**
+ * A note attached to a result: either a message this app owns, or text made
+ * somewhere else.
+ *
+ * Results outlive a locale switch, so anything rendered from them has to be
+ * translated at render rather than when it was computed. The Python engine
+ * writes its own prose, though, and that half genuinely cannot be
+ * re-translated in the browser -- the union says so rather than pretending
+ * every note is translatable.
+ */
+export type ResultNote = { key: MessageKey; params?: Record<string, string | number> } | { text: string }
 
 export interface SimulationResult {
   source: 'api' | 'browser'
@@ -108,7 +124,7 @@ export interface SimulationResult {
   minSpeedMps: number
   samples: LapSample[]
   events: SimulationEvent[]
-  warnings: string[]
+  warnings: ResultNote[]
 }
 
 export interface OklProject {

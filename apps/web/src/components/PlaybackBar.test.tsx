@@ -4,21 +4,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { frameAtElapsed } from '../domain/playback'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import { simulateInBrowser } from '../domain/simulator'
-import type { Translate } from '../i18n/context'
 import { I18nProvider } from '../i18n/I18nProvider'
-import { translate } from '../i18n/translate'
 import { PlaybackBar } from './PlaybackBar'
 
-const t: Translate = (key, params) => translate('en', key, params)
-
-const result = simulateInBrowser(
-  {
-    track: PRESETS.technical,
-    kart: DEFAULT_KART,
-    settings: { safetyMarginM: 0.15, sampleCount: 200 },
-  },
-  t,
-)
+const result = simulateInBrowser({
+  track: PRESETS.technical,
+  kart: DEFAULT_KART,
+  settings: { safetyMarginM: 0.15, sampleCount: 200 },
+})
 
 function renderBar(overrides: Partial<Parameters<typeof PlaybackBar>[0]> = {}) {
   const props = {

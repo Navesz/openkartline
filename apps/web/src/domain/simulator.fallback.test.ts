@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Translate } from '../i18n/context'
-import { translate } from '../i18n/translate'
 import { DEFAULT_KART, PRESETS } from './presets'
 
 // Force the ported engine to fail so the defensive fallback is exercised end
@@ -13,19 +11,14 @@ vi.mock('./engine/minimumBending', () => ({
 
 import { simulateInBrowser } from './simulator'
 
-const t: Translate = (key, params) => translate('en', key, params)
-
 describe('simulateInBrowser defensive fallback', () => {
   it('answers with the anchor heuristic when the ported engine throws', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = simulateInBrowser(
-      {
-        track: PRESETS.oval,
-        kart: DEFAULT_KART,
-        settings: { safetyMarginM: 0.5, sampleCount: 120 },
-      },
-      t,
-    )
+    const result = simulateInBrowser({
+      track: PRESETS.oval,
+      kart: DEFAULT_KART,
+      settings: { safetyMarginM: 0.5, sampleCount: 120 },
+    })
     expect(result.solver).toBe('browser-point-mass-v1')
     expect(result.samples).toHaveLength(120)
     expect(result.lapTimeS).toBeGreaterThan(5)
@@ -38,7 +31,9 @@ describe('simulateInBrowser defensive fallback', () => {
     // different model -- measured 6.7% from the primary engine on the shipped
     // presets -- and it lands in the same hero slot, so the degradation has to
     // be visible in the result itself.
-    expect(result.warnings[0]).toBe(translate('en', 'project.warningSolverFallback'))
+    // Stored as a key, not as rendered text: the note has to follow a later
+    // language switch rather than freeze in the locale that solved the lap.
+    expect(result.warnings[0]).toEqual({ key: 'project.warningSolverFallback' })
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })
