@@ -7,7 +7,10 @@ name = "openkartline"
 version = "0.1.0"
 description = "Open-source kart racing line and lap simulation engine"
 readme = "README.md"
-requires-python = ">=3.11"
+# Upper bound because it is a claim, not a wish: CI tests 3.11, 3.12 and 3.13,
+# and the README says 3.11-3.13. Unbounded, `uv sync` installed cleanly into a
+# 3.14 nobody had run the suite on.
+requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "OpenKartLine contributors" }]
