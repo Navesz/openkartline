@@ -48,6 +48,30 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 }
 
+interface ValidationEntry {
+  loc?: unknown
+  msg?: unknown
+}
+
+/**
+ * Render a FastAPI validation body into one line naming the field that was
+ * rejected. `loc` is a path like `["body", "kart", "max_accel_mps2"]`; the
+ * leading `body` carries no meaning for a user, and the message that follows
+ * comes from the server, so it stays in the server's language.
+ */
+function validationDetail(detail: unknown, t: Translate): string {
+  if (!Array.isArray(detail)) return ''
+  const parts = (detail as ValidationEntry[])
+    .map((entry) => {
+      const path = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== 'body').join('.') : ''
+      const message = typeof entry.msg === 'string' ? entry.msg : ''
+      if (!path && !message) return ''
+      return path ? t('app.engineFieldRejected', { field: path, reason: message }) : message
+    })
+    .filter(Boolean)
+  return parts.join(' ')
+}
+
 export async function runSimulation(
   request: SimulationRequest,
   preferApi: boolean,
@@ -75,7 +99,11 @@ export async function runSimulation(
     let detail = ''
     try {
       const payload = (await response.json()) as { detail?: unknown }
-      detail = typeof payload.detail === 'string' ? payload.detail : ''
+      // A FastAPI validation body is a list of {type, loc, msg, input}; only the
+      // request-size middleware answers with a plain string. Reading just the
+      // string meant every 422 reached the user as a bare "HTTP 422" with no
+      // field and no bound.
+      detail = typeof payload.detail === 'string' ? payload.detail : validationDetail(payload.detail, t)
     } catch {
       // The HTTP status remains the authoritative error when the body is not JSON.
     }

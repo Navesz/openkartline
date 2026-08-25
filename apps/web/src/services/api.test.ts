@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
+import { INPUT_LIMITS } from '../domain/validation'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import type { SimulationRequest } from '../domain/types'
 import type { Translate } from '../i18n/context'
@@ -148,5 +149,87 @@ describe('engine API adapter', () => {
         frictionUtilization: 0.42,
       }),
     )
+  })
+})
+
+describe('engine validation errors reach the user', () => {
+  // A FastAPI 422 body is a list of {type, loc, msg, input}, never a string.
+  // The client read only the string branch, so the reason was always dropped
+  // and the user saw a bare "HTTP 422" with no field and no bound. A mock that
+  // sends a string passes either way and proves nothing about this branch.
+  const validationBody = {
+    detail: [
+      {
+        type: 'less_than_equal',
+        loc: ['body', 'kart', 'max_accel_mps2'],
+        msg: 'Input should be less than or equal to 50',
+        input: 62.4,
+      },
+    ],
+  }
+
+  it('names the field the engine rejected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(validationBody), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    await expect(runSimulation(request, true, t)).rejects.toThrow(/kart\.max_accel_mps2/)
+  })
+
+  it('still carries the plain-string detail the size middleware sends', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'Request body is too large.' }), {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    await expect(runSimulation(request, true, t)).rejects.toThrow(/too large/)
+  })
+})
+
+describe('every kart the editor accepts fits the engine contract', () => {
+  // Checked as a class rather than per-field: `max_accel_mps2` was capped at 30
+  // while its siblings allowed 50, and the editor's own extremes derive 42.53
+  // through `tractionCeilingMps2`, so Simulate returned 422 on inputs the
+  // browser solved happily and `validateSimulationInput` reported as fine.
+  // [low, high, lowIsInclusive] -- mirrors the `ge`/`gt` split in KartV1.
+  const KART_FIELD_BOUNDS = {
+    total_mass_kg: [40, 600, true],
+    power_hp: [0, 250, false],
+    top_speed_mps: [1, 120, false],
+    max_accel_mps2: [0, 50, false],
+    max_brake_mps2: [0, 50, false],
+    max_lateral_accel_mps2: [0, 50, false],
+  } as const
+
+  const corners = [
+    { kartMassKg: 'kartMassKgMin', driverMassKg: 'driverMassKgMin' },
+    { kartMassKg: 'kartMassKgMax', driverMassKg: 'driverMassKgMax' },
+  ] as const
+
+  it.each(corners)('holds at the mass extremes (%o)', (corner) => {
+    const extreme = {
+      powerHp: INPUT_LIMITS.powerHpMax,
+      kartMassKg: INPUT_LIMITS[corner.kartMassKg],
+      driverMassKg: INPUT_LIMITS[corner.driverMassKg],
+      topSpeedKph: INPUT_LIMITS.topSpeedKphMax,
+      gripCoefficient: INPUT_LIMITS.gripCoefficientMax,
+      brakeDecelMps2: INPUT_LIMITS.brakeDecelMaxMps2,
+    }
+    const { kart } = toApiRequest({ ...request, kart: extreme })
+    for (const [field, [low, high, lowInclusive]] of Object.entries(KART_FIELD_BOUNDS)) {
+      const value = kart[field as keyof typeof kart] as number
+      if (lowInclusive) expect(value, `${field} = ${value}`).toBeGreaterThanOrEqual(low)
+      else expect(value, `${field} = ${value}`).toBeGreaterThan(low)
+      expect(value, `${field} = ${value}`).toBeLessThanOrEqual(high)
+    }
   })
 })
