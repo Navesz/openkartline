@@ -20,7 +20,7 @@ import { ResultsPanel } from './components/ResultsPanel'
 import { TrackCanvas, type EditorTool } from './components/TrackCanvas'
 import { parseGpsFile } from './domain/gpx'
 import { frameAtElapsed, wrapElapsed, type PlaybackRate } from './domain/playback'
-import { clonePoints, DEFAULT_KART, PRESETS } from './domain/presets'
+import { clonePoints, DEFAULT_KART, PRESETS, trackPresetKeyFor } from './domain/presets'
 import { clampSelectedSample } from './domain/selection'
 import { simulateInBrowser } from './domain/simulator'
 import {
@@ -48,6 +48,13 @@ function freshPreset(key: string): TrackInput {
 export default function App() {
   const { t, locale, setLocale } = useI18n()
   const trackHistory = useHistory<TrackInput>(freshPreset('technical'))
+  /**
+   * Read off the track rather than remembered. Undo and redo move the track
+   * without going through any of the loaders, so a remembered key drifted:
+   * loading Technical, loading Sprint, then undoing left the picker naming
+   * Sprint over Technical's geometry.
+   */
+  const trackPresetKey = useMemo(() => trackPresetKeyFor(trackHistory.value), [trackHistory.value])
   const [kart, setKart] = useState<KartInput>(DEFAULT_KART)
   const [settings, setSettings] = useState<SimulationSettings>(DEFAULT_SETTINGS)
   const [result, setResult] = useState<SimulationResult>(() =>
@@ -70,12 +77,6 @@ export default function App() {
    */
   const [message, setMessage] = useState<ResultNote[]>([{ key: 'app.statusReady' }])
   const [dirty, setDirty] = useState(false)
-  /**
-   * Which preset the track is, or `''` once it came from a file or a GPS
-   * trace. The picker reads this rather than remembering its own last
-   * click, so it cannot go on naming a circuit that has been replaced.
-   */
-  const [trackPresetKey, setTrackPresetKey] = useState('technical')
   const unmounted = useRef(false)
   const [fitRequest, setFitRequest] = useState(0)
   /**
@@ -232,7 +233,6 @@ export default function App() {
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
-    setTrackPresetKey(key)
     setMessage([{ key: 'app.statusPresetLoaded', params: { name: next.name } }])
   }
 
@@ -313,8 +313,6 @@ export default function App() {
     try {
       const imported = parseProject(await file.text(), t)
       trackHistory.reset(imported.track)
-      // The track came from a file, so no preset names it any more.
-      setTrackPresetKey('')
       setKart(imported.kart)
       setSettings(imported.settings)
       setFitRequest((value) => value + 1)
@@ -384,7 +382,6 @@ export default function App() {
         void _replaced
         return { ...rest, centerline: imported.centerline, direction: imported.direction }
       })
-      setTrackPresetKey('')
       setFitRequest((value) => value + 1)
       setSelectedSample(null)
       markDirty()
@@ -413,7 +410,6 @@ export default function App() {
     // Every input just changed, so anything already in flight is answering a
     // question about a track that no longer exists.
     inputVersion.current += 1
-    setTrackPresetKey('technical')
     setResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
     resultVersion.current = inputVersion.current
     setDirty(false)
