@@ -94,3 +94,52 @@ describe('licence attribution survives a save', () => {
     expect(project.track.attribution).toBe(track.attribution)
   })
 })
+
+describe('the compatibility ADR 0004 actually claims', () => {
+  const parameters = kartParameters(schema020)
+
+  /** The bounds published before ADR 0004 relaxed them. */
+  const PREVIOUS_BOUNDS: Record<string, [number, number]> = {
+    power_hp: [1, 80],
+    kart_mass_kg: [20, 250],
+    driver_mass_kg: [20, 180],
+    top_speed_kph: [10, 180],
+    grip_coefficient: [0.2, 2],
+    brake_decel_mps2: [0.5, 15],
+  }
+
+  it.each(Object.entries(PREVIOUS_BOUNDS))(
+    '%s accepts everything the previous schema did',
+    (field, [low, high]) => {
+      // The relaxation direction is the half of the ADR's claim that holds: a
+      // kart valid under the old bounds is still valid. Tightening either end
+      // would break files already in the wild, which is why this is pinned
+      // rather than left to review.
+      expect(parameters[field].minimum!).toBeLessThanOrEqual(low)
+      expect(parameters[field].maximum!).toBeGreaterThanOrEqual(high)
+    },
+  )
+
+  it('publishes exactly the background fields the reader consumes', () => {
+    // The other half of the claim does NOT hold, and the ADR now says so:
+    // `origin_x_px` / `origin_y_px` were removed from a schema with
+    // `additionalProperties: false`, so a hand-authored file carrying them
+    // stops validating. Nothing this app wrote can be in that position --
+    // `toProject` never emitted them. This pins the set so the schema cannot
+    // drift back into advertising a field no reader honours.
+    const background = (
+      schema020 as {
+        properties: {
+          track: { properties: { background: { properties: Record<string, unknown> } } }
+        }
+      }
+    ).properties.track.properties.background.properties
+
+    expect(Object.keys(background).sort()).toEqual([
+      'image_data_url',
+      'image_height_px',
+      'image_width_px',
+      'scale_m_per_px',
+    ])
+  })
+})
