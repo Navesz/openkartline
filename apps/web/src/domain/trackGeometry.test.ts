@@ -4,7 +4,8 @@ import { KART_HALF_WIDTH_M } from './kartModel'
 import { DEFAULT_KART, PRESETS } from './presets'
 import { simulateInBrowser } from './simulator'
 import { buildCanonicalTrackGeometry, matchCenterlineIndices } from './trackGeometry'
-import type { SimulationRequest } from './types'
+import { pathLength } from './geometry'
+import type { SimulationRequest, TrackInput } from './types'
 import { toApiRequest } from '../services/api'
 
 describe('canonical track geometry', () => {
@@ -51,5 +52,49 @@ describe('canonical track geometry', () => {
     const canonical = buildCanonicalTrackGeometry(PRESETS.oval, 4)
     const matched = matchCenterlineIndices(canonical.center, canonical.center)
     expect(matched.every((index) => index >= 0 && index < 4)).toBe(true)
+  })
+})
+
+/** Largest gap between consecutive drawn points, in metres. */
+function maxChordM(points: { x: number; y: number }[]): number {
+  let worst = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const from = points[index]
+    const to = points[(index + 1) % points.length]
+    worst = Math.max(worst, Math.hypot(to.x - from.x, to.y - from.y))
+  }
+  return worst
+}
+
+describe('drawing resolution scales with the lap', () => {
+  // TrackCanvas drew every corridor with 180 stations regardless of length. On
+  // the shipped circuits that put up to 9.56 m between consecutive boundary
+  // points -- more than the track is wide -- and the corridor read as a polygon
+  // rather than a curve.
+  const stationsFor = (track: TrackInput) =>
+    Math.min(900, Math.max(180, Math.round(pathLength(track.centerline) / 1.5)))
+
+  it.each(['voltaRedonda', 'adria', 'casteloBranco', 'baltar'] as const)(
+    'keeps %s under 3 m between drawn boundary points',
+    (key) => {
+      const track = PRESETS[key]
+      expect(maxChordM(buildCanonicalTrackGeometry(track, 180).left)).toBeGreaterThan(6)
+
+      const drawn = buildCanonicalTrackGeometry(track, stationsFor(track))
+      expect(maxChordM(drawn.left)).toBeLessThan(3)
+      expect(maxChordM(drawn.right)).toBeLessThan(3)
+    },
+  )
+
+  it('leaves a short track at the floor', () => {
+    expect(stationsFor(PRESETS.oval)).toBe(180)
+  })
+
+  it('caps the count so a long import cannot make it unbounded', () => {
+    const huge = {
+      ...PRESETS.oval,
+      centerline: PRESETS.oval.centerline.map((point) => ({ x: point.x * 40, y: point.y * 40 })),
+    }
+    expect(stationsFor(huge)).toBe(900)
   })
 })
