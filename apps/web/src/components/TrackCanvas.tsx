@@ -64,7 +64,8 @@ function fitPoints(points: Point[]): ViewBox {
 
 const pathOf = (points: Point[], close = true) =>
   points.length
-    ? `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')}${close ? ' Z' : ''}`
+    ? // Path data, not display: never localised, see i18n/formatNumber.ts.
+      `M ${points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')}${close ? ' Z' : ''}`
     : ''
 
 interface ModeRun {
@@ -104,7 +105,7 @@ export function TrackCanvas({
   onSelectedSample,
   onCalibrate,
 }: TrackCanvasProps) {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
   const svgRef = useRef<SVGSVGElement>(null)
   const latestPoints = useRef(track.centerline)
   latestPoints.current = track.centerline
@@ -367,7 +368,7 @@ export function TrackCanvas({
             ? t('canvas.hintAdd')
             : tool === 'calibrate'
               ? background?.scaleMPerPx
-                ? t('canvas.hintCalibrateScale', { scale: background.scaleMPerPx.toFixed(3) })
+                ? t('canvas.hintCalibrateScale', { scale: n(background.scaleMPerPx, 3) })
                 : t('canvas.hintCalibrateStart')
               : t('canvas.hintPan')}
       </div>

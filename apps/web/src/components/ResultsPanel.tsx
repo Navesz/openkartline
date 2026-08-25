@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowRight, CircleGauge, Clock3, Gauge, Route } from 'lucide-react'
 import type { SimulationResult } from '../domain/types'
 import { useI18n } from '../i18n/context'
-import { formatLapTime } from '../domain/lapTime'
+import { formatLapTime } from '../i18n/formatNumber'
 import type { SimulationEvent } from '../domain/types'
 import type { Translate } from '../i18n/context'
 
@@ -35,7 +35,7 @@ function eventDetail(event: SimulationEvent, t: Translate): string {
 }
 
 export function ResultsPanel({ result, dirty, selectedSample, onSelect }: ResultsPanelProps) {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
 
   if (!result)
     return (
@@ -75,24 +75,24 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
         <div>
           <Route size={16} />
           <span>{t('results.trackLength')}</span>
-          <strong>{result.trackLengthM.toFixed(0)} m</strong>
+          <strong>{n(result.trackLengthM)} m</strong>
         </div>
         <div>
           <Gauge size={16} />
           <span>{t('results.maxSpeed')}</span>
-          <strong>{(result.maxSpeedMps * 3.6).toFixed(0)} km/h</strong>
+          <strong>{n(result.maxSpeedMps * 3.6)} km/h</strong>
         </div>
         <div>
           <Clock3 size={16} />
           <span>{t('results.minSpeed')}</span>
-          <strong>{(result.minSpeedMps * 3.6).toFixed(0)} km/h</strong>
+          <strong>{n(result.minSpeedMps * 3.6)} km/h</strong>
         </div>
       </div>
       {selected && (
         <div className="selected-readout">
           <span>{t('results.pointLabel', { index: selected.index + 1 })}</span>
-          <strong>{(selected.speedMps * 3.6).toFixed(0)} km/h</strong>
-          <small>{t('results.distanceAfterStart', { distance: selected.distanceM.toFixed(0) })}</small>
+          <strong>{n(selected.speedMps * 3.6)} km/h</strong>
+          <small>{t('results.distanceAfterStart', { distance: n(selected.distanceM) })}</small>
         </div>
       )}
       <div className="events-heading">
@@ -121,7 +121,7 @@ export function ResultsPanel({ result, dirty, selectedSample, onSelect }: Result
                 <span>
                   <small>{t(eventLabelKey[event.kind])}</small>
                   <strong>{eventDetail(event, t)}</strong>
-                  <em>{t('results.distanceFromStart', { distance: sample?.distanceM.toFixed(0) ?? '' })}</em>
+                  <em>{t('results.distanceFromStart', { distance: sample ? n(sample.distanceM) : '' })}</em>
                 </span>
                 <ArrowRight size={15} />
               </button>

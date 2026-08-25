@@ -163,7 +163,7 @@ export function ControlPanel({
   onGpsFile,
   onCalibrate,
 }: ControlPanelProps) {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
   const [pointIndex, setPointIndex] = useState(0)
   const imageInput = useRef<HTMLInputElement>(null)
   const gpsInput = useRef<HTMLInputElement>(null)
@@ -299,7 +299,7 @@ export function ControlPanel({
                 height: track.background.imageHeightPx,
               })}
               {track.background.scaleMPerPx
-                ? t('panel.imageScale', { scale: track.background.scaleMPerPx.toFixed(3) })
+                ? t('panel.imageScale', { scale: n(track.background.scaleMPerPx, 3) })
                 : t('panel.imageNoScale')}
               {' · '}
               <button type="button" className="link-button" onClick={onRemoveImage}>

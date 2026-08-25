@@ -7,10 +7,14 @@ export type MessageParams = Record<string, string | number>
 /** Looks a key up in the active locale and fills `{placeholder}` slots. */
 export type Translate = (key: MessageKey, params?: MessageParams) => string
 
+/** Formats a figure for display in the active locale. Never for SVG data. */
+export type FormatNumber = (value: number, digits?: number) => string
+
 export interface I18nValue {
   locale: Locale
   setLocale: (locale: Locale) => void
   t: Translate
+  n: FormatNumber
 }
 
 export const I18nContext = createContext<I18nValue | null>(null)
