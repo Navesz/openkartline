@@ -139,6 +139,13 @@ the same Adria request returns 74.01 s at 20 iterations, 73.35 s at 60 and
 72.63 s at 200. Fixing it would remove that dependence; it would *not* remove
 the spread in this section, which is why the two must not be sold as one.
 
+A quasi-Newton replacement closes that gap — projected L-BFGS cuts the objective
+excess from +1.97% to +0.004% on Adria at the same budget — and is nevertheless
+ruled out, because its iteration map amplifies roundoff by a decade every
+fourteen iterations and the two engines cannot then agree to 1e-5 m.
+[ADR 0005](adr/0005-parity-constrains-the-solver.md) records the measurement and
+what a future fix would have to attack instead.
+
 This is larger than the sample-count spread above, and it is the more
 uncomfortable of the two: a user who exports the same circuit from a tool that
 happens to start the point list elsewhere gets a different answer for the same
