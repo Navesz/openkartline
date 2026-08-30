@@ -1,14 +1,22 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { frameAtElapsed } from './domain/playback'
 import { DEFAULT_KART, PRESETS } from './domain/presets'
+import { simulateInBrowser } from './domain/simulator'
 import { toProject } from './services/projectFile'
 import type { TrackInput } from './domain/types'
 import { I18nProvider } from './i18n/I18nProvider'
 
-// The chosen locale is persisted, so a test that switches language leaves every
-// test after it running in that language. One of them does.
+/*
+ * The chosen locale is persisted, so a test that switches language leaves every
+ * test declared after it running in that language, and one of them does.
+ *
+ * Load-bearing, not hygiene: delete this line and 16 of the 26 tests in this
+ * file fail. The number is written down because one line guarding most of a
+ * file is exactly the shape somebody tidies away.
+ */
 beforeEach(() => window.localStorage.clear())
 
 const TINY_JPEG =
@@ -402,5 +410,425 @@ describe('removing the last control point', () => {
     expect(container.querySelector('details.point-editor')).toBe(editor)
     expect(editor.open).toBe(true)
     expect(document.activeElement).toBe(container.querySelector('#control-point'))
+  })
+})
+
+/**
+ * The lap the app opens on, recomputed here so a test can name the sample it
+ * expects rather than whichever one happens to be selected. `App` seeds itself
+ * from exactly these inputs, and the browser solver is deterministic.
+ */
+const DEMO = simulateInBrowser({
+  track: PRESETS.technical,
+  kart: DEFAULT_KART,
+  settings: { safetyMarginM: 0.15, sampleCount: 200 },
+})
+
+/** `POINT n` in the results panel, which is the selection every panel reads. */
+const selectedPoint = (container: HTMLElement) =>
+  container.querySelector('.selected-readout')?.textContent ?? ''
+
+/** The simulated clock, as `elapsed / lap s`. */
+const playbackClock = (container: HTMLElement) =>
+  container.querySelector('.playback-clock strong')?.textContent ?? ''
+
+const kph = (sampleIndex: number) => (DEMO.samples[sampleIndex].speedMps * 3.6).toFixed(0)
+
+/**
+ * Drive the replay by hand.
+ *
+ * The loop is `requestAnimationFrame`, so waiting on the wall clock would make
+ * the distance covered depend on how busy the machine is. Every step here is
+ * 400 ms of fake wall clock, comfortably past the 0.25 s ceiling the loop
+ * clamps a delta to, so each frame advances the lap by exactly 0.25 s x rate
+ * whatever timestamp the effect started from.
+ */
+function fakeFrames() {
+  let clock = 1_000_000
+  let nextId = 0
+  const pending = new Map<number, FrameRequestCallback>()
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    nextId += 1
+    pending.set(nextId, callback)
+    return nextId
+  })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => void pending.delete(id))
+  return async (count: number) => {
+    for (let step = 0; step < count; step += 1) {
+      const due = [...pending.values()]
+      pending.clear()
+      clock += 400
+      await act(async () => {
+        due.forEach((callback) => callback(clock))
+      })
+    }
+  }
+}
+/** Simulated seconds one `fakeFrames` step covers at a given rate. */
+const perFrameS = (rate: number) => 0.25 * rate
+
+/**
+ * jsdom lays nothing out, so an SVG reports a zero-sized box and a pointer
+ * position over it means nothing until it is given one.
+ */
+function chartWithBox(): Element {
+  const svg = screen.getByRole('img', { name: /synchronized chart/i })
+  Object.defineProperty(svg, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: 0,
+      top: 0,
+      width: 720,
+      height: 176,
+      right: 720,
+      bottom: 176,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+  })
+  return svg
+}
+
+/**
+ * Stand in for the browser's download.
+ *
+ * `downloadProject` hands the file to an anchor and clicks it, and jsdom has no
+ * navigation to give it, so the object URL and the click are intercepted and
+ * the bytes read back out of the blob instead. Nothing reaches the disk.
+ */
+function captureDownload() {
+  const blobs: Blob[] = []
+  const names: string[] = []
+  vi.spyOn(URL, 'createObjectURL').mockImplementation((source: Blob | MediaSource) => {
+    blobs.push(source as Blob)
+    return 'blob:openkartline-test'
+  })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+    const link = [...document.body.querySelectorAll<HTMLAnchorElement>('a[download]')].pop()
+    if (link) names.push(link.download)
+  })
+  return {
+    count: () => names.length,
+    filename: () => names[names.length - 1],
+    project: async () => JSON.parse(await blobs[blobs.length - 1].text()),
+  }
+}
+
+describe('playing the lap back', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('opens the replay already running, and rewinds it when the toggle goes off', async () => {
+    // Turning playback off is the only thing that clears the clock -- nothing
+    // else does until a new lap is solved -- so a replay reopened after a first
+    // pass would otherwise resume from wherever it was abandoned rather than
+    // from the start line.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const toggle = screen.getByRole('button', { name: 'Animate' })
+    await user.click(toggle)
+    expect(screen.getByRole('button', { name: 'Pause playback' })).toBeInTheDocument()
+    expect(playbackClock(container)).toMatch(/^0\.00 \//)
+
+    await runFrames(8)
+    expect(playbackClock(container)).toMatch(/^2\.00 \//)
+
+    await user.click(toggle)
+    expect(container.querySelector('.playback-bar')).toBeNull()
+
+    await user.click(toggle)
+    expect(playbackClock(container)).toMatch(/^0\.00 \//)
+  })
+
+  it('stops the clock on pause and picks it up again on play', async () => {
+    // Pause has to stop the animation loop, not merely flip the icon: the
+    // scrub, the kart and every panel that follows it read one elapsed time,
+    // and a paused replay whose clock keeps running moves all of them.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    await runFrames(4)
+    expect(playbackClock(container)).toMatch(/^1\.00 \//)
+
+    await user.click(screen.getByRole('button', { name: 'Pause playback' }))
+    await runFrames(4)
+    expect(playbackClock(container)).toMatch(/^1\.00 \//)
+
+    await user.click(screen.getByRole('button', { name: 'Play lap' }))
+    await runFrames(4)
+    expect(playbackClock(container)).toMatch(/^2\.00 \//)
+  })
+
+  it('covers three times as much lap per frame at 3x, without moving the lap time', async () => {
+    // The rate scales wall-clock advance only. Applied to the solved lap
+    // instead, the same four frames would still cover 1.00 s and the lap time
+    // beside the clock would be the thing that shrank.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    await runFrames(4)
+    expect(playbackClock(container)).toMatch(/^1\.00 \//)
+
+    await user.click(screen.getByRole('button', { name: '3x' }))
+    expect(screen.getByRole('button', { name: '3x' })).toHaveAttribute('aria-pressed', 'true')
+
+    await runFrames(4)
+    expect(playbackClock(container)).toMatch(/^4\.00 \//)
+    expect(playbackClock(container)).toContain(`/ ${DEMO.lapTimeS.toFixed(2)} s`)
+  })
+
+  it('moves the whole replay to the instant that was scrubbed to', async () => {
+    // The scrub is the only control that can put the kart somewhere the clock
+    // has not reached, and it feeds the same elapsed time the animation loop
+    // does -- so the readout has to land on the sample for that instant rather
+    // than the slider just redrawing itself.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    await runFrames(4)
+
+    const scrubbed = 10
+    const landing = frameAtElapsed(DEMO, scrubbed)!.index
+    fireEvent.change(screen.getByLabelText('Position in the lap'), {
+      target: { value: String(scrubbed) },
+    })
+
+    expect(playbackClock(container)).toMatch(/^10\.00 \//)
+    expect(selectedPoint(container)).toContain(`POINT ${landing + 1}`)
+
+    // Back to start rewinds without pausing.
+    await user.click(screen.getByRole('button', { name: 'Back to start' }))
+    expect(playbackClock(container)).toMatch(/^0\.00 \//)
+    expect(screen.getByRole('button', { name: 'Pause playback' })).toBeInTheDocument()
+  })
+
+  it('hands the selection to the moving kart, and gives it back when playback stops', async () => {
+    // While the lap plays, every panel reads the kart's instant rather than the
+    // pointer, so the charts and the results panel cannot drift away from what
+    // the canvas is drawing. The pointer selection is only borrowed, though:
+    // stopping has to return the sample the user picked, and the chart must not
+    // be able to take it away in the meantime.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picked = DEMO.events[1].sampleIndex
+    await user.click(container.querySelectorAll<HTMLButtonElement>('.event-list button')[1])
+    expect(selectedPoint(container)).toContain(`POINT ${picked + 1}`)
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    await runFrames(8)
+
+    const driving = frameAtElapsed(DEMO, 8 * perFrameS(1))!.index
+    expect(driving).not.toBe(picked)
+    expect(selectedPoint(container)).toContain(`POINT ${driving + 1}`)
+    expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(driving))
+
+    // The chart hands its hover straight to the selection when the lap is
+    // still; while it plays that would fight the kart for the same state.
+    fireEvent.pointerMove(chartWithBox(), { clientX: 377, clientY: 40 })
+    expect(selectedPoint(container)).toContain(`POINT ${driving + 1}`)
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    expect(selectedPoint(container)).toContain(`POINT ${picked + 1}`)
+    expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
+      String(DEMO.samples[picked].position.x),
+    )
+  })
+})
+
+describe('picking a sample', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('moves the canvas, the charts and the results panel onto the same sample', async () => {
+    // Three panels, one index. A reference is only useful if the corner drawn
+    // on the map, the cursor on the trace and the speed in the panel are the
+    // same corner, so both entry points have to land all three together.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const fromPanel = DEMO.events[2].sampleIndex
+    await user.click(container.querySelectorAll<HTMLButtonElement>('.event-list button')[2])
+    expect(selectedPoint(container)).toContain(`POINT ${fromPanel + 1}`)
+    expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(fromPanel))
+    expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
+      String(DEMO.samples[fromPanel].position.x),
+    )
+
+    // Half a chart-width along the trace is sample 100 of 200; distinct from
+    // the panel's choice, so nothing here is satisfied by the previous state.
+    fireEvent.pointerMove(chartWithBox(), { clientX: 377, clientY: 40 })
+    expect(selectedPoint(container)).toContain('POINT 101')
+    expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(100))
+    expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
+      String(DEMO.samples[100].position.x),
+    )
+
+    // And the numbered markers on the map itself, the third way in.
+    const fromCanvas = DEMO.events[4].sampleIndex
+    expect(fromCanvas).not.toBe(fromPanel)
+    fireEvent.click(container.querySelectorAll('.event-marker')[4])
+    expect(selectedPoint(container)).toContain(`POINT ${fromCanvas + 1}`)
+    expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(fromCanvas))
+    expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
+      String(DEMO.samples[fromCanvas].position.x),
+    )
+  })
+})
+
+describe('the import button in the header', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('opens the project picker and not one of the other two hidden file inputs', async () => {
+    // Three file inputs are hidden in the page -- the project, the background
+    // image and the GPS trace -- and the header button reaches its own by ref.
+    // Reaching the wrong one would still open a picker, so the button would
+    // look like it worked while offering the wrong file types.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const opened: string[] = []
+    container.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach((input) => {
+      input.addEventListener('click', () => opened.push(input.accept))
+    })
+    expect(opened).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    expect(opened).toEqual(['.json,.okl.json,application/json'])
+  })
+})
+
+describe('saving the project', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('writes the track and kart that are on screen, not the ones it started from', async () => {
+    // Save builds the file from the live inputs at the moment it is clicked.
+    // The file is the only thing the user leaves with, so it has to carry the
+    // circuit they loaded and the edit they made, under a name taken from that
+    // same track rather than from the example the session opened on.
+    const user = userEvent.setup()
+    const saved = captureDownload()
+    renderApp()
+
+    await user.selectOptions(screen.getByLabelText(/start from an example/i), 'oval')
+    const power = screen.getByLabelText(/power/i)
+    await user.clear(power)
+    await user.type(power, '18')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(/project \.okl\.json saved/i)).toBeInTheDocument()
+
+    expect(saved.count()).toBe(1)
+    expect(saved.filename()).toBe('validation-oval.okl.json')
+    const project = await saved.project()
+    expect(project.project.name).toBe('Validation Oval')
+    expect(project.kart.parameters.power_hp).toBe(18)
+    expect(project.track.raw_centerline).toHaveLength(PRESETS.oval.centerline.length)
+  })
+
+  it('carries the warnings the build produced into the run bar', async () => {
+    // A background over the file budget is dropped from the project and kept
+    // only as its calibration. The note saying so is the user's only sign that
+    // the picture is not in the file they just saved, so it has to travel with
+    // the confirmation instead of being discarded alongside the image.
+    const user = userEvent.setup()
+    const saved = captureDownload()
+    const { container } = renderApp()
+
+    const { project } = toProject(
+      {
+        ...PRESETS.oval,
+        background: {
+          imageDataUrl: TINY_JPEG,
+          imageWidthPx: 1200,
+          imageHeightPx: 800,
+          scaleMPerPx: 0.35,
+        },
+      },
+      DEFAULT_KART,
+      { safetyMarginM: 0.5, sampleCount: 240 },
+    )
+    // Past the 500 KB image budget, inside the 1 MiB project limit: it imports
+    // and then cannot be saved back.
+    project.track.background!.image_data_url = `data:image/jpeg;base64,${'A'.repeat(700_000)}`
+    const input = container.querySelector('input[type="file"][accept*="okl"]') as HTMLInputElement
+    await user.upload(
+      input,
+      new File([JSON.stringify(project)], 'heavy.okl.json', { type: 'application/json' }),
+    )
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const runMessage = container.querySelector('.run-message')?.textContent ?? ''
+    expect(runMessage).toContain('Project .okl.json saved to your device.')
+    expect(runMessage).toContain('background image was too large for the file')
+
+    const written = await saved.project()
+    expect(written.track.background.image_data_url).toBeUndefined()
+    expect(written.track.background.scale_m_per_px).toBe(0.35)
+  })
+
+  it('refuses to save an out-of-range input, and downloads nothing', async () => {
+    // Save has its own guard: the Simulate button is disabled when the inputs
+    // are invalid, but Save is not, so without it the user would walk away with
+    // a file the app itself would reject on import.
+    const user = userEvent.setup()
+    const saved = captureDownload()
+    const { container } = renderApp()
+
+    const power = screen.getByLabelText(/power/i)
+    await user.clear(power)
+    await user.type(power, '500')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText(/fix the highlighted fields before saving/i)).toBeInTheDocument()
+    expect(container.querySelector('.run-bar')).toHaveClass('error')
+    expect(saved.count()).toBe(0)
+  })
+})
+
+describe('the language switch', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('re-renders a sentence composed before the switch, in both directions', async () => {
+    // The run bar holds its message as parts and renders it at paint, so a
+    // sentence built when the circuit was loaded follows the toggle instead of
+    // freezing in the language that was on screen when the click happened. The
+    // return trip is the half a one-way test cannot see: a switch that only
+    // ever adds the second locale looks identical to one that works.
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.selectOptions(screen.getByLabelText(/start from an example/i), 'oval')
+    expect(screen.getByText(/Validation Oval loaded\./)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'PT' }))
+    expect(await screen.findByText(/Validation Oval carregado\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'PT' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(screen.getByRole('button', { name: 'EN' }))
+    expect(await screen.findByText(/Validation Oval loaded\./)).toBeInTheDocument()
+    expect(screen.queryByText(/carregado/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
