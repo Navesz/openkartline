@@ -29,27 +29,23 @@ export default defineConfig({
       // Matches the intent of the Python `fail_under` gate so both workspaces
       // are held to a comparable standard.
       //
-      // These moved when @vitest/coverage-v8 went from 3.2.7 to 4.1.11, and the
-      // move is the meter rather than the coverage: the same 1132 tests over the
-      // same source read 92.04 / 85.06 / 79.25 / 92.04 before and
-      // 86.40 / 79.41 / 82.26 / 87.95 after. Functions went UP while the other
-      // three went down, which is not what less-covered code looks like, and the
-      // whole drop sits in App.tsx, ControlPanel.tsx and TrackCanvas.tsx -- the
-      // three JSX-heavy files, where render branches are now attributed more
-      // finely.
+      // Set just under what the suite actually reaches -- 92.23 / 86.30 / 93.79
+      // / 94.00 -- leaving a point or two for the wobble between platforms.
       //
-      // So these are lowered against the old reading and not against the old
-      // standard. What the new meter is telling us is that those three
-      // components are less covered than the previous figure implied --
-      // App.tsx 64.87%, ControlPanel.tsx 59.09%, TrackCanvas.tsx 66.66%. Raising
-      // that is real work and it is not done here; this bump only stops
-      // pretending it was already done. The functions gate goes up, 76 to 80,
-      // because that one genuinely improved.
+      // These were 85/78/80/86 for exactly one release. #103 changed the
+      // coverage provider, which attributed JSX render branches more finely and
+      // showed the three big components were far less covered than the previous
+      // meter implied; the gates were lowered to that honest reading rather
+      // than to the old standard, on the explicit condition that raising the
+      // real number was the next piece of work. #106 did it -- ControlPanel and
+      // TrackCanvas to 100% of functions -- so the gates follow it back up. A
+      // threshold left below what the suite reaches records a past ambition
+      // instead of defending the present one.
       thresholds: {
-        statements: 85,
-        branches: 78,
-        functions: 80,
-        lines: 86,
+        statements: 91,
+        branches: 85,
+        functions: 92,
+        lines: 92,
       },
     },
   },
