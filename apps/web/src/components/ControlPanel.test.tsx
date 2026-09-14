@@ -13,7 +13,7 @@ import { ControlPanel } from './ControlPanel'
  * `I18nProvider` persists the locale, so a test that switches language leaves
  * every test declared after it running in that language, and one below does.
  *
- * Load-bearing, not hygiene: delete this line and 33 of the 49 tests in this
+ * Load-bearing, not hygiene: delete this line and 34 of the 50 tests in this
  * file fail. It is one line guarding two thirds of the file, which is exactly
  * the shape somebody tidies away as noise, so the number is written down.
  */
@@ -595,12 +595,22 @@ describe('the background image status', () => {
     expect(screen.getByText(/no scale/i)).toBeInTheDocument()
   })
 
+  it('warns beside the point count that an image without a scale must be calibrated', () => {
+    // The sibling above matches the image row's "no scale" note, a different
+    // message. The warning in the track summary was only ever asserted absent,
+    // so a panel that never showed it passed both.
+    renderPanel({ track: { ...PRESETS.oval, background: BACKGROUND } })
+    expect(screen.getByText(/calibrate before simulating/i)).toBeInTheDocument()
+    expect(screen.queryByText(/coordinates in meters/i)).not.toBeInTheDocument()
+  })
+
   it('reports the scale once one has been set, in place of the warning', () => {
     renderPanel({
       track: { ...PRESETS.oval, background: { ...BACKGROUND, scaleMPerPx: 0.125 } },
     })
     expect(screen.getByText(/scale 0\.125 m\/px/i)).toBeInTheDocument()
     expect(screen.queryByText(/calibrate before simulating/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/coordinates in meters/i)).toBeInTheDocument()
   })
 
   it('removes the image on request', async () => {

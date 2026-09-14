@@ -179,11 +179,13 @@ export function parseProject(text: string): {
   // string are all valid JSON. Reading `schema_version` off `null` threw a raw
   // `TypeError`, which the run bar then showed verbatim: a file containing the
   // four characters `null` was answered with "Cannot read properties of null".
+  //
+  // Not reported as an unsupported version: that passed the whole value in as
+  // the version, so a file holding just the string "0.2.0" was told
+  // "Unsupported project version: 0.2.0." -- a version this function accepts --
+  // and `42` was blamed on a version field it never had.
   if (typeof input !== 'object' || input === null || Array.isArray(input))
-    throw new LocalisedError({
-      key: 'project.unsupportedVersion',
-      params: { version: versionLabel(input) },
-    })
+    throw new LocalisedError({ key: 'project.notAnObject' })
   const project = input as Partial<OklProject>
   if (project.schema_version !== '0.1.0' && project.schema_version !== '0.2.0')
     throw new LocalisedError({
