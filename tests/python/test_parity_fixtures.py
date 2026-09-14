@@ -8,7 +8,7 @@ while the two engines silently disagreed -- exactly the case the fixtures exist
 to prevent.
 
 The tolerances are the ones `engineParity.test.ts` uses, so both directions are
-judged by the same standard. `python-tests` runs a five-way OS and interpreter
+judged by the same standard. `python-tests` runs across an OS and interpreter
 matrix, and the engine leans on FFTs, so these also serve as the check on
 whether the committed numbers survive a change of platform.
 """
