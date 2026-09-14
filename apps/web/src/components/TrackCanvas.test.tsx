@@ -257,6 +257,11 @@ function readViewBox(svg: Element) {
  * What `fitPoints` makes of the oval on mount: xs 10..96 and ys 12..87, each
  * padded by 28 and centred. Most of the numbers below are derived from this
  * box and the 800x500 window above.
+ *
+ * The box is taller than the window's shape, so the height is what fits: one
+ * metre is 500/103 px on both axes, and the 114 m of width spans 553 px with a
+ * 123.3 px band either side. That is how a browser draws it, and the reason a
+ * client x is not simply `x / 800` of the way across.
  */
 const OVAL_VIEW = { x: -4, y: -2, width: 114, height: 103 }
 
@@ -395,10 +400,11 @@ describe('TrackCanvas tools', () => {
   })
 
   it('drags the grabbed point to the pointer, and moves nothing else', () => {
-    // Client (600, 100) is world (81.5, 80.4) in the fitted oval -- the far
+    // Client (600, 100) is world (94.2, 80.4) in the fitted oval -- the far
     // side of the circuit from point 0 at (10, 50), so a drag that moved the
     // wrong point, or one reading a stale transform, cannot land here by
-    // accident.
+    // accident. Stretching x across the whole 800 px, bands included, reads it
+    // as 81.5: 62 px left of where the pointer is.
     const onPointsChange: Mock<(points: Point[], checkpoint?: boolean) => void> = vi.fn()
     const { svg, container } = mountCanvas(canvasProps({ tool: 'edit', onPointsChange }))
     const handles = container.querySelectorAll('.control-hit')
@@ -408,7 +414,7 @@ describe('TrackCanvas tools', () => {
 
     const next = onPointsChange.mock.calls.at(-1)![0]
     expect(next).toHaveLength(PRESETS.oval.centerline.length)
-    expect(next[0].x).toBeCloseTo(81.5, 6)
+    expect(next[0].x).toBeCloseTo(94.2, 6)
     expect(next[0].y).toBeCloseTo(80.4, 6)
     expect(next.slice(1)).toEqual(PRESETS.oval.centerline.slice(1))
   })
@@ -484,13 +490,16 @@ describe('TrackCanvas viewport', () => {
   /**
    * The mapping the component documents, restated so the zoom tests can talk
    * about "the world point under the cursor". It is deliberately a restatement
-   * and not a check of the mapping itself -- the add-tool tests above pin that
-   * against numbers worked out by hand.
+   * and not a check of the mapping itself -- the add-tool and drag tests above
+   * pin that against numbers worked out by hand.
    */
-  const worldAt = (view: ReturnType<typeof readViewBox>, clientX: number, clientY: number) => ({
-    x: view.x + (clientX / 800) * view.width,
-    y: view.y + view.height - (clientY / 500) * view.height,
-  })
+  const worldAt = (view: ReturnType<typeof readViewBox>, clientX: number, clientY: number) => {
+    const scale = Math.min(800 / view.width, 500 / view.height)
+    return {
+      x: view.x + (clientX - (800 - view.width * scale) / 2) / scale,
+      y: view.y + view.height - (clientY - (500 - view.height * scale) / 2) / scale,
+    }
+  }
 
   it('zooms about the cursor rather than the centre of the view', () => {
     // Anchoring is the whole point of wheel zoom: whatever the pointer is over
@@ -536,11 +545,13 @@ describe('TrackCanvas viewport', () => {
   })
 
   it('pans with the pointer, in world terms, without touching the geometry', () => {
-    // Dragging 100 px right across an 800 px window moves the world window
-    // 114 * 100/800 = 14.25 m left, so the track follows the hand. Dragging
-    // 50 px down moves it 103 * 50/500 = 10.3 m *up* in world terms, because
-    // screen y is flipped: with that sign wrong the track runs away from the
-    // pointer vertically while following it horizontally.
+    // At 500/103 px per metre on both axes, dragging 100 px right moves the
+    // world window 100 * 103/500 = 20.6 m left, so the track follows the hand.
+    // Dragging 50 px down moves it 50 * 103/500 = 10.3 m *up* in world terms,
+    // because screen y is flipped: with that sign wrong the track runs away
+    // from the pointer vertically while following it horizontally. Dividing
+    // the 100 px by the whole 800 px width instead gives 14.25 m, and the
+    // track lags the hand.
     const onPointsChange: Mock<(points: Point[], checkpoint?: boolean) => void> = vi.fn()
     const { svg } = mountCanvas(canvasProps({ tool: 'pan', onPointsChange }))
     expect(svg.style.cursor).toBe('grab')
@@ -550,7 +561,7 @@ describe('TrackCanvas viewport', () => {
     fireEvent.pointerMove(svg, { pointerId: 4, clientX: 200, clientY: 150 })
 
     const after = readViewBox(svg)
-    expect(after.x).toBeCloseTo(OVAL_VIEW.x - 14.25, 6)
+    expect(after.x).toBeCloseTo(OVAL_VIEW.x - 20.6, 6)
     expect(after.y).toBeCloseTo(OVAL_VIEW.y + 10.3, 6)
     expect(after.width).toBe(OVAL_VIEW.width)
     expect(after.height).toBe(OVAL_VIEW.height)
@@ -605,18 +616,19 @@ describe('TrackCanvas world transform', () => {
   })
 
   it('reads a click through the viewport the user is on, not the framing it started at', () => {
-    // Panning 200 px right slides the world window 28.5 m left, so the same
-    // client point is now world 24.5 and not 53. A transform still reading the
-    // mount-time framing -- the easy mistake, since that is what the state was
-    // initialised with -- would put every added point at the offset the user
-    // had before they last moved the view.
+    // Panning 150 px right slides the world window 30.9 m left, so the same
+    // client point is now world 22.1 and not 53 -- still nearest the segment
+    // between points 1 and 2, so it lands at index 2. A transform still reading
+    // the mount-time framing -- the easy mistake, since that is what the state
+    // was initialised with -- would put every added point at the offset the
+    // user had before they last moved the view.
     const onPointsChange: Mock<(points: Point[], checkpoint?: boolean) => void> = vi.fn()
     const view = mountCanvas(canvasProps({ tool: 'pan', onPointsChange }))
 
     fireEvent.pointerDown(view.svg, { pointerId: 6, clientX: 500, clientY: 300, button: 0 })
-    fireEvent.pointerMove(view.svg, { pointerId: 6, clientX: 700, clientY: 300 })
-    fireEvent.pointerUp(view.svg, { pointerId: 6, clientX: 700, clientY: 300 })
-    expect(readViewBox(view.svg).x).toBeCloseTo(-32.5, 6)
+    fireEvent.pointerMove(view.svg, { pointerId: 6, clientX: 650, clientY: 300 })
+    fireEvent.pointerUp(view.svg, { pointerId: 6, clientX: 650, clientY: 300 })
+    expect(readViewBox(view.svg).x).toBeCloseTo(-34.9, 6)
 
     view.update({ tool: 'add' })
     fireEvent.pointerDown(view.container.querySelector('.canvas-bg')!, {
@@ -626,7 +638,7 @@ describe('TrackCanvas world transform', () => {
     })
 
     const next = onPointsChange.mock.calls[0][0]
-    expect(next[2].x).toBeCloseTo(24.5, 6)
+    expect(next[2].x).toBeCloseTo(22.1, 6)
     expect(next[2].y).toBeCloseTo(18.6, 6)
   })
 
@@ -635,7 +647,7 @@ describe('TrackCanvas world transform', () => {
     // beside it. Client (520, 440) on a canvas whose top left is (120, 40) is
     // the same (400, 400) into the surface as the add test above, and so the
     // same world (53, 18.6). Drop the offset and it reads as world
-    // (70.1, 10.4) -- 17 m away, on a different segment of the lap.
+    // (77.7, 10.4) -- 26 m away, on a different segment of the lap.
     const onPointsChange: Mock<(points: Point[], checkpoint?: boolean) => void> = vi.fn()
     const { svg, container } = mountCanvas(canvasProps({ tool: 'add', onPointsChange }))
     stubRect(svg, { left: 120, top: 40 })
@@ -724,10 +736,14 @@ describe('TrackCanvas calibration', () => {
   })
 
   it('hands the App the marked span and the distance typed for it', () => {
-    // Clients (400, 250) and (400, 100) are world (100, 50) and (100, 88.4)
-    // over the traced view, so the user marked 38.4 image pixels and called
+    // Clients (400, 250) and (400, 100) are world (100, 50) and (100, 92.75)
+    // over the traced view, so the user marked 42.75 image pixels and called
     // them 50 m. The scale is the App's to apply; what the canvas owes it is
     // the measurement, and nothing until both ends are down.
+    //
+    // This view is wider than the window's shape, so the width fits: 800/228
+    // px per metre, with 25.4 px bands above and below. Stretching y over the
+    // whole 500 px measured the same span as 38.4 -- a photo scaled 11% off.
     const onCalibrate: Mock<(pixelDistance: number, realMeters: number) => void> = vi.fn()
     const { container } = mountCanvas(canvasProps({ tool: 'calibrate', track: tracedTrack, onCalibrate }))
     const surface = container.querySelector('.canvas-bg')!
@@ -743,7 +759,7 @@ describe('TrackCanvas calibration', () => {
     fireEvent.click(screen.getByRole('button', { name: /apply scale/i }))
 
     expect(onCalibrate).toHaveBeenCalledTimes(1)
-    expect(onCalibrate.mock.calls[0][0]).toBeCloseTo(38.4, 6)
+    expect(onCalibrate.mock.calls[0][0]).toBeCloseTo(42.75, 6)
     expect(onCalibrate.mock.calls[0][1]).toBe(50)
     // The measurement is spent: leaving the marks up invites a second Apply
     // that would re-scale an already-scaled photo.
@@ -801,8 +817,8 @@ describe('TrackCanvas calibration', () => {
     const { container } = mountCanvas(canvasProps({ tool: 'calibrate', track: tracedTrack, onCalibrate }))
     const surface = container.querySelector('.canvas-bg')!
 
-    // Five pixels apart on screen is under 2 m of the picture: too close to
-    // measure anything from.
+    // Five pixels each way on screen is about 2 m of the picture, under the
+    // 3 image pixels a measurement needs: too close to measure anything from.
     fireEvent.pointerDown(surface, { clientX: 400, clientY: 250, button: 0 })
     fireEvent.pointerDown(surface, { clientX: 405, clientY: 255, button: 0 })
     fireEvent.click(screen.getByRole('button', { name: /apply scale/i }))
@@ -841,7 +857,7 @@ describe('TrackCanvas calibration', () => {
     fireEvent.keyDown(screen.getByRole('spinbutton'), { key: 'Enter' })
 
     expect(onCalibrate).toHaveBeenCalledTimes(1)
-    expect(onCalibrate.mock.calls[0][0]).toBeCloseTo(38.4, 6)
+    expect(onCalibrate.mock.calls[0][0]).toBeCloseTo(42.75, 6)
     expect(onCalibrate.mock.calls[0][1]).toBe(50)
   })
 })

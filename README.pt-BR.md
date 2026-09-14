@@ -52,11 +52,14 @@ Se você quer o melhor traçado possível para um carro de corrida, use o primei
 
 Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.13 e [uv](https://docs.astral.sh/uv/).
 
-O editor é testado em Chromium, Firefox e WebKit — cada execução ponta a ponta
-exercita os três, porque o canvas depende justamente de onde eles divergem:
-captura de ponteiro durante o arrasto de um ponto de controle,
-`getBoundingClientRect` lido sob uma transformação de espaço SVG e um listener
-de roda não passivo para o zoom.
+O editor é testado em Chromium, Firefox e WebKit, porque o canvas depende
+justamente de onde eles divergem: captura de ponteiro durante o arrasto de um
+ponto de controle, `getBoundingClientRect` lido sob uma transformação de espaço
+SVG e um listener de roda não passivo para o zoom. O `canvas-gestures.spec.ts`
+exercita cada um desses pontos nos três motores, com ponteiro e roda de verdade.
+As demais specs ponta a ponta também rodam nos três, exceto a varredura de
+acessibilidade com axe, que roda só no Chromium: as regras dela descrevem a
+página, não o motor.
 
 ```bash
 git clone https://github.com/Navesz/openkartline.git
