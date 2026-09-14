@@ -296,9 +296,19 @@ class TestPublishedExamples:
         assert simulation.json()["summary"] is None
         assert simulation.json()["samples"] == []
 
-        # Below four points the schema answers before the engine is asked.
-        short = copy.deepcopy(validation_example["track"])
-        short["left_boundary"] = short["left_boundary"][:3]
-        rejected = client.post("/v1/tracks/validate", json={**validation_example, "track": short})
-        assert rejected.status_code == 422
-        assert rejected.json()["detail"][0]["loc"] == ["body", "track", "left_boundary"]
+        # Below four points, or three distinct ones, the schema answers before
+        # the engine is asked, on both endpoints. The simulation description once
+        # promised a 200 for any invalid track, so each description must say so.
+        points = validation_example["track"]["left_boundary"]
+        for left_boundary in (points[:3], [points[0], points[1], points[0], points[1]]):
+            rejected_track = {**validation_example["track"], "left_boundary": left_boundary}
+            for path, example in (
+                ("/v1/tracks/validate", validation_example),
+                ("/v1/simulations", simulation_example),
+            ):
+                description = " ".join(spec["paths"][path]["post"]["description"].split())
+                assert "answered with HTTP 422 and a `detail` list" in description, path
+
+                rejected = client.post(path, json={**example, "track": rejected_track})
+                assert rejected.status_code == 422, (path, len(left_boundary))
+                assert rejected.json()["detail"][0]["loc"] == ["body", "track", "left_boundary"]

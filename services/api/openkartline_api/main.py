@@ -203,9 +203,9 @@ async def validate_track(request: TrackValidationRequest) -> TrackValidationResu
 
     A track that fails is still answered with HTTP 200 in this shape, with
     `metrics` null when it failed before its width was measured. A request the
-    schema rejects never reaches these checks: a boundary with fewer than four
-    points, or fewer than three distinct ones, is answered with HTTP 422 and a
-    `detail` list instead.
+    schema rejects, such as one with a boundary of fewer than four points or
+    fewer than three distinct ones, never reaches these checks: it is answered
+    with HTTP 422 and a `detail` list instead.
     """
 
     outcome = await _run_bounded(
@@ -243,16 +243,21 @@ async def create_simulation(request: SimulationRequestV1) -> SimulationResultV1:
     edges. To keep a whole kart inside the corridor, add half its width to
     `safety_margin_m`, as the web editor does for its 1.4 m kart.
 
-    An invalid track or a failed solve is still answered with HTTP 200 in this
-    shape, so read the result in two steps. `status.state` says whether there
-    is a lap: `success` carries `summary` and `samples`, while `invalid_input`
-    (reasons in `validation.errors`) and `numerical_failure` carry neither.
-    `success` means only that the speed profile converged; whether the line
-    did is in `status.code`. It is `SPEED_PROFILE_CONVERGED` when the line met
-    its convergence criterion and `PATH_NOT_CONVERGED` when it stopped short,
-    with `path_diagnostics.termination_reason` saying why. That lap keeps its
+    A track that fails validation or a solve that fails numerically is still
+    answered with HTTP 200 in this shape, so read the result in two steps.
+    `status.state` says whether there is a lap: `success` carries `summary` and
+    `samples`, while `invalid_input` (reasons in `validation.errors`) and
+    `numerical_failure` carry neither. `success` means only that the speed
+    profile converged; whether the line did is in `status.code`. It is
+    `SPEED_PROFILE_CONVERGED` when the line met its convergence criterion and
+    `PATH_NOT_CONVERGED` when it stopped short, with
+    `path_diagnostics.termination_reason` saying why. That lap keeps its
     samples, so a caller can decide whether to trust it. The published example
     is one: its 20 path smoothing iterations end at `iteration_limit`.
+
+    A request the schema rejects, such as one with a boundary of fewer than
+    four points or fewer than three distinct ones, never reaches the engine:
+    it is answered with HTTP 422 and a `detail` list instead.
 
     Determinism is part of the contract: identical input yields identical
     output, and the browser port in `apps/web/src/domain/` is held to the same
