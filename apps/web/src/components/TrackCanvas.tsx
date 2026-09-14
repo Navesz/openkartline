@@ -349,7 +349,10 @@ export function TrackCanvas({
   const startRight = result?.samples[0]?.rightBoundary ?? boundaries.right[0]
 
   return (
-    <section className="track-stage" id="workspace" aria-label={t('canvas.sectionLabel')}>
+    // `tabIndex={-1}` keeps this out of the Tab order but lets the skip link
+    // that targets it take focus. Without it, following the link moved where
+    // the next Tab starts and left focus itself on <body>.
+    <section className="track-stage" id="workspace" tabIndex={-1} aria-label={t('canvas.sectionLabel')}>
       <div className="canvas-toolbar" role="toolbar" aria-label={t('canvas.toolbarLabel')}>
         <button
           className={tool === 'edit' ? 'active' : ''}
@@ -543,8 +546,12 @@ export function TrackCanvas({
                   stroke="#101512"
                   strokeWidth=".7"
                 />
+                {/* Translated to the world position, as the circle is: the
+                    scene group negates y for both. Translating to -y as well
+                    mirrored each number across y = 0, which on the default
+                    track left them below the canvas, clipped out of sight. */}
                 <text
-                  transform={`translate(${sample.position.x} ${-sample.position.y}) scale(1, -1)`}
+                  transform={`translate(${sample.position.x} ${sample.position.y}) scale(1, -1)`}
                   y={0.85}
                   textAnchor="middle"
                 >
