@@ -20,13 +20,7 @@ import { ResultsPanel } from './components/ResultsPanel'
 import { TrackCanvas, type EditorTool } from './components/TrackCanvas'
 import { GPS_LIMITS, parseGpsFile } from './domain/gpx'
 import { frameAtElapsed, wrapElapsed, type PlaybackRate } from './domain/playback'
-import {
-  clonePoints,
-  DEFAULT_KART,
-  presetKeyForCenterline,
-  PRESETS,
-  trackPresetKeyFor,
-} from './domain/presets'
+import { clonePoints, DEFAULT_KART, PRESETS, trackPresetKeyFor } from './domain/presets'
 import { clampSelectedSample } from './domain/selection'
 import { simulateInBrowser } from './domain/simulator'
 import {
@@ -46,54 +40,25 @@ import { noteForError, notesForError } from './domain/localisedError'
 
 const DEFAULT_SETTINGS: SimulationSettings = { safetyMarginM: 0.15, sampleCount: 200 }
 
-/**
- * What undo and redo step through: the track, and which circuit it is.
- *
- * `circuit` is the `PRESETS` key the track was loaded as -- for a project file,
- * the preset whose centreline it has -- or `''` when it is none of them. Edits
- * to the track leave it alone: its points, name, width, direction, and a GPS
- * trace, which keeps the photo too. It cannot be read off the track, where
- * every one of those is editable, and it cannot be state beside the history,
- * because undo moves the track without going through a loader -- the drift
- * `trackPresetKey` below describes. It is never written to the project file.
- */
-interface EditorTrack {
-  track: TrackInput
-  circuit: string
-}
-
-function freshPreset(key: string): EditorTrack {
-  const circuit = Object.hasOwn(PRESETS, key) ? key : 'technical'
-  const preset = PRESETS[circuit]
-  return { track: { ...preset, centerline: clonePoints(preset.centerline) }, circuit }
+function freshPreset(key: string): TrackInput {
+  const preset = PRESETS[key] ?? PRESETS.technical
+  return { ...preset, centerline: clonePoints(preset.centerline) }
 }
 
 export default function App() {
   const { t, locale, setLocale } = useI18n()
-  const trackHistory = useHistory<EditorTrack>(freshPreset('technical'))
-  const track = trackHistory.value.track
-  const setHistory = trackHistory.set
-  /** Change the track and nothing else: every edit stays on the same circuit. */
-  const setTrack = useCallback(
-    (next: (current: TrackInput) => TrackInput, checkpoint = true) =>
-      setHistory((current) => ({ ...current, track: next(current.track) }), checkpoint),
-    [setHistory],
-  )
+  const trackHistory = useHistory<TrackInput>(freshPreset('technical'))
   /**
    * Read off the track rather than remembered. Undo and redo move the track
    * without going through any of the loaders, so a remembered key drifted:
    * loading Technical, loading Oval, then undoing left the picker naming Oval
    * over Technical's geometry.
    */
-  const trackPresetKey = useMemo(() => trackPresetKeyFor(track), [track])
+  const trackPresetKey = useMemo(() => trackPresetKeyFor(trackHistory.value), [trackHistory.value])
   const [kart, setKart] = useState<KartInput>(DEFAULT_KART)
   const [settings, setSettings] = useState<SimulationSettings>(DEFAULT_SETTINGS)
   const [result, setResult] = useState<SimulationResult>(() =>
-    simulateInBrowser({
-      track: freshPreset('technical').track,
-      kart: DEFAULT_KART,
-      settings: DEFAULT_SETTINGS,
-    }),
+    simulateInBrowser({ track: freshPreset('technical'), kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }),
   )
   const [selectedSample, setSelectedSample] = useState<number | null>(null)
   const [tool, setTool] = useState<EditorTool>('edit')
@@ -163,7 +128,10 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null)
   // Validation names its messages rather than rendering them, so it no longer
   // depends on the locale and no longer re-runs on a language switch.
-  const issues = useMemo(() => validateSimulationInput(track, kart, settings), [track, kart, settings])
+  const issues = useMemo(
+    () => validateSimulationInput(trackHistory.value, kart, settings),
+    [trackHistory.value, kart, settings],
+  )
   const hasErrors = issues.some((issue) => issue.level === 'error')
   const playbackFrame = useMemo(
     () => (playbackEnabled ? frameAtElapsed(result, elapsedS) : null),
@@ -263,18 +231,18 @@ export default function App() {
       if (event.key.toLowerCase() === 'v') setTool('edit')
       else if (event.key.toLowerCase() === 'a') setTool('add')
       else if (event.key.toLowerCase() === 'h') setTool('pan')
-      else if (event.key.toLowerCase() === 'c' && track.background) setTool('calibrate')
+      else if (event.key.toLowerCase() === 'c' && trackHistory.value.background) setTool('calibrate')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [markDirty, redoEdit, track.background, undoEdit])
+  }, [markDirty, redoEdit, trackHistory, undoEdit])
 
   const updateTrack = useCallback(
     (patch: Partial<TrackInput>) => {
-      setTrack((current) => ({ ...current, ...patch }))
+      trackHistory.set((current) => ({ ...current, ...patch }))
       markDirty()
     },
-    [markDirty, setTrack],
+    [markDirty, trackHistory],
   )
 
   const updateKart = (patch: Partial<KartInput>) => {
@@ -288,26 +256,28 @@ export default function App() {
 
   const selectPreset = (key: string) => {
     const next = freshPreset(key)
-    const photo = track.background
-    // A background belongs to the circuit that was loaded when it arrived.
-    // Re-selecting that circuit is the user asking for its geometry back, not
-    // asking to throw the photograph away -- and since the picker reads "Custom
-    // track" the moment a photo is attached, that click is exactly what the
-    // interface invites. Loading any other circuit leaves the photo over
-    // geometry it was never placed on, so it goes; the run bar says so rather
-    // than dropping it in silence.
+    const photo = trackHistory.value.background
+    // The photo stays, whichever circuit is loaded. What a photograph shows is
+    // known only to the person looking at it: this app never reads the picture,
+    // so a rule for when to drop it can only guess, and the run bar stated the
+    // guess as fact. It went by the track name, which is free text: a renamed
+    // Oval lost its own photo with a message blaming a different circuit, and a
+    // Hairpin saved under Oval's name kept its photo over Oval. Nothing else the
+    // app holds does better. The circuit that was open when the photo arrived
+    // is wrong for a photo of Adria attached over Technical, and an exact
+    // centreline match stops matching after one nudged point.
     //
-    // This compared track names, and the name is free text: a renamed Oval lost
-    // its own photo with a message blaming a different circuit, and a Hairpin
-    // saved under Oval's name kept its photo over Oval's geometry.
-    const sameCircuit = next.circuit === trackHistory.value.circuit
-    trackHistory.set(photo && sameCircuit ? { ...next, track: { ...next.track, background: photo } } : next)
+    // A GPS trace, the other way to replace the geometry under a photo, keeps
+    // it too. The run bar says the photo is still there, so one left over the
+    // wrong circuit is not left there in silence, and "remove" sits beside it
+    // in the panel.
+    trackHistory.set(photo ? { ...next, background: photo } : next)
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
     setMessage([
-      { key: 'app.statusPresetLoaded', params: { name: next.track.name } },
-      ...(photo && !sameCircuit ? ([{ key: 'app.statusPresetDroppedImage' }] as const) : []),
+      { key: 'app.statusPresetLoaded', params: { name: next.name } },
+      ...(photo ? ([{ key: 'app.statusPresetKeptImage' }] as const) : []),
     ])
   }
 
@@ -322,7 +292,7 @@ export default function App() {
     setSelectedSample(null)
     const solvedVersion = inputVersion.current
     try {
-      const next = await runSimulation({ track, kart, settings }, apiAvailable === true)
+      const next = await runSimulation({ track: trackHistory.value, kart, settings }, apiAvailable === true)
       // Something newer is already on screen -- "Restore example" installs a
       // result synchronously -- so this one describes inputs that no longer
       // exist and has nothing to add.
@@ -367,7 +337,7 @@ export default function App() {
       setMessage([{ key: 'app.statusFixBeforeSaving' }])
       return
     }
-    const built = toProject(track, kart, settings)
+    const built = toProject(trackHistory.value, kart, settings)
     downloadProject(built.project)
     setMessage([{ key: 'app.statusProjectSaved' }, ...built.warnings])
     setStatus('success')
@@ -384,8 +354,7 @@ export default function App() {
     }
     try {
       const imported = parseProject(await file.text())
-      // The file records no circuit, only geometry, so the geometry decides.
-      trackHistory.reset({ track: imported.track, circuit: presetKeyForCenterline(imported.track) })
+      trackHistory.reset(imported.track)
       setKart(imported.kart)
       setSettings(imported.settings)
       setFitRequest((value) => value + 1)
@@ -413,7 +382,7 @@ export default function App() {
     try {
       const image = await readImageFile(file)
       const background = downscaleTrackImage(image)
-      setTrack((current) => ({ ...current, background }))
+      trackHistory.set((current) => ({ ...current, background }))
       setFitRequest((value) => value + 1)
       markDirty()
       setStatus('success')
@@ -426,7 +395,7 @@ export default function App() {
   }
 
   const removeBackgroundImage = () => {
-    setTrack((current) => {
+    trackHistory.set((current) => {
       const next = { ...current }
       delete next.background
       return next
@@ -438,7 +407,7 @@ export default function App() {
 
   const applyCalibration = (pixelDistance: number, realMeters: number) => {
     const newScale = scaleFromCalibration(pixelDistance, realMeters)
-    setTrack((current) => calibratedTrack(current, newScale))
+    trackHistory.set((current) => calibratedTrack(current, newScale))
     markDirty()
     setFitRequest((value) => value + 1)
     setTool('edit')
@@ -457,7 +426,7 @@ export default function App() {
     }
     try {
       const imported = parseGpsFile(file.name, await file.text())
-      setTrack((current) => {
+      trackHistory.set((current) => {
         // The user's own trace replaces the geometry, so any credit carried by
         // what it replaced no longer describes it. Keeping it would credit
         // OpenStreetMap for a lap somebody drove themselves.
@@ -486,16 +455,14 @@ export default function App() {
   }
 
   const reset = () => {
-    const restored = freshPreset('technical')
-    trackHistory.reset(restored)
+    const track = freshPreset('technical')
+    trackHistory.reset(track)
     setKart(DEFAULT_KART)
     setSettings(DEFAULT_SETTINGS)
     // Every input just changed, so anything already in flight is answering a
     // question about a track that no longer exists.
     inputVersion.current += 1
-    installResult(
-      simulateInBrowser({ track: restored.track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }),
-    )
+    installResult(simulateInBrowser({ track, kart: DEFAULT_KART, settings: DEFAULT_SETTINGS }))
     resultVersion.current = inputVersion.current
     setDirty(false)
     setSelectedSample(null)
@@ -596,7 +563,7 @@ export default function App() {
         </div>
         <div className="workspace-grid">
           <ControlPanel
-            track={track}
+            track={trackHistory.value}
             kart={kart}
             settings={settings}
             issues={issues}
@@ -605,7 +572,7 @@ export default function App() {
             onSettings={updateSettings}
             onPreset={selectPreset}
             onPointChange={(index, point) => {
-              setTrack((current) => ({
+              trackHistory.set((current) => ({
                 ...current,
                 centerline: current.centerline.map((candidate, candidateIndex) =>
                   candidateIndex === index ? point : candidate,
@@ -614,7 +581,7 @@ export default function App() {
               markDirty()
             }}
             onPointRemove={(index) => {
-              setTrack((current) => ({
+              trackHistory.set((current) => ({
                 ...current,
                 centerline: current.centerline.filter((_, candidateIndex) => candidateIndex !== index),
               }))
@@ -628,7 +595,7 @@ export default function App() {
           />
           <div className="visual-workspace">
             <TrackCanvas
-              track={track}
+              track={trackHistory.value}
               result={result}
               selectedSample={safeSelectedSample}
               tool={tool}
@@ -646,7 +613,7 @@ export default function App() {
               }}
               onToolChange={setTool}
               onPointsChange={(centerline, checkpoint = true) => {
-                setTrack((current) => ({ ...current, centerline }), checkpoint)
+                trackHistory.set((current) => ({ ...current, centerline }), checkpoint)
                 markDirty()
               }}
               onSelectedSample={(index) => setSelectedSample(clampSelectedSample(index, result))}

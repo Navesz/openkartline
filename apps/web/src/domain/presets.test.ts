@@ -27,8 +27,8 @@ describe('the preset a track matches', () => {
 
   it('names none for a track carrying a background photo', () => {
     // A preset ships no image, so a track with one is not that preset. Saying
-    // it was put the picker one click from discarding the photo: re-selecting
-    // a preset loads a fresh copy, and the status line reports only the load.
+    // it was once put the picker one click from discarding the photo, when
+    // re-selecting a preset loaded a fresh copy without it.
     expect(trackPresetKeyFor({ ...PRESETS.adria, background: BACKGROUND })).toBe('')
     expect(
       trackPresetKeyFor({

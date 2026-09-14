@@ -413,9 +413,14 @@ describe('loading a circuit while a background photo is attached', () => {
     )
   }
 
+  const photoIsAttached = () => screen.queryByLabelText(/known distance on the image/i) !== null
+  const loadedWithPhoto = (name: string) =>
+    `${name} loaded. Adjust the points or run a simulation. ` +
+    'The background image is still attached: remove it if it does not show this circuit.'
+
   it('keeps the photo when the same circuit is loaded again', async () => {
     // The picker reads "Custom track" the moment a photo is attached, which is
-    // what invites the click. Before this, that click discarded the photo and
+    // what invites the click. Before #95, that click discarded the photo and
     // the run bar said only that the circuit had loaded.
     const user = userEvent.setup()
     const { container } = renderApp()
@@ -427,11 +432,20 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'oval')
 
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
-    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
   })
 
-  it('says so when a different circuit replaces it', async () => {
+  // Nothing in the app looks at the picture, so it cannot tell which circuit a
+  // photo shows. It used to guess from the track name, drop the photo when the
+  // guess said "a different circuit", and state that as fact. In each case
+  // below a guess -- by the name, by the circuit open when the photo arrived,
+  // or by matching the centreline -- either drops a photo that may well show
+  // the circuit being loaded, or keeps one without a word.
+
+  it('keeps the photo when a different circuit is loaded, says so, and it can still be removed', async () => {
+    // The app cannot tell this apart from a photo of Hairpin that was attached
+    // while Oval happened to be open, which loading Hairpin should keep.
     const user = userEvent.setup()
     const { container } = renderApp()
 
@@ -441,14 +455,13 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'hairpin')
 
-    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
-    expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.hairpin.name))
+
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+    expect(photoIsAttached()).toBe(false)
   })
 
-  // Which circuit a photo belonged to used to be read off the track name, a
-  // free-text field, so both directions went wrong: a renamed circuit lost its
-  // own photo with a message saying it belonged elsewhere, and another
-  // circuit's photo saved under this one's name stayed over this geometry.
   it('keeps the photo of a circuit that was renamed before it is loaded again', async () => {
     const user = userEvent.setup()
     const { container } = renderApp()
@@ -463,25 +476,13 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'oval')
 
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
-    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
   })
 
-  it('recognises a saved circuit by its geometry, not by the name it was saved under', async () => {
-    const user = userEvent.setup()
-    const { container } = renderApp()
-
-    const picker = screen.getByLabelText(/start from an example/i)
-    await importWithPhoto(user, container, { ...PRESETS.oval, name: 'My oval' })
-    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
-
-    await user.selectOptions(picker, 'oval')
-
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
-    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
-  })
-
-  it("drops another circuit's photo even when it was saved under this circuit's name", async () => {
+  it("says the photo is still there even when the track carried this circuit's name", async () => {
+    // Hairpin's geometry saved under Oval's name. Going by the name, loading Oval
+    // kept the photo over Oval's geometry and said nothing about it.
     const user = userEvent.setup()
     const { container } = renderApp()
 
@@ -491,29 +492,39 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'oval')
 
-    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
-    expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
   })
 
-  it('still knows which circuit the photo belongs to after an undo', async () => {
-    // Undo moves the track without going through a loader, so a circuit held
-    // beside the history rather than inside it would still name Hairpin here.
+  it('keeps the photo of a reopened project whose points were edited', async () => {
+    // A saved project records geometry and no circuit, so the only way to name
+    // its circuit is to match the centreline, and one nudged point defeats that.
+    // Tracing a photo is exactly the work that nudges points.
     const user = userEvent.setup()
     const { container } = renderApp()
 
     const picker = screen.getByLabelText(/start from an example/i)
-    await importWithPhoto(user, container, PRESETS.oval)
+    const nudged = PRESETS.adria.centerline.map((point, index) =>
+      index === 0 ? { ...point, x: point.x + 0.5 } : point,
+    )
+    await importWithPhoto(user, container, { ...PRESETS.adria, centerline: nudged })
     expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
 
-    await user.selectOptions(picker, 'hairpin')
-    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
-    await user.click(screen.getByTitle(/undo/i))
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    await user.selectOptions(picker, 'adria')
 
-    await user.selectOptions(picker, 'oval')
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.adria.name))
+  })
 
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
-    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+  it('mentions no photo when none is attached', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.selectOptions(screen.getByLabelText(/start from an example/i), 'oval')
+
+    expect(container.querySelector('.run-message')).toHaveTextContent(
+      /^Validation Oval loaded\. Adjust the points or run a simulation\.$/,
+    )
   })
 })
 

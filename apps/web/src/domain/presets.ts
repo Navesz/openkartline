@@ -606,11 +606,12 @@ export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'balta
  * still reading "Oval".
  *
  * Every field is compared, not just the geometry. A track carrying a calibrated
- * satellite photo is not the preset it started from, and saying it is put the
- * picker one click from throwing that photo away: re-selecting a preset loads
- * a fresh copy, which has no image, and the status line reports only that the
- * circuit was loaded. `attribution` likewise -- a circuit stripped of its ODbL
- * credit is not the circuit the picker would be naming.
+ * satellite photo is not the preset it started from, since no preset ships
+ * with one. Naming the preset anyway used to leave the picker one click from
+ * throwing that photo away, when re-selecting a preset loaded a fresh copy with
+ * no image; loading a preset now keeps the photo. `attribution` likewise -- a
+ * circuit stripped of its ODbL credit is not the circuit the picker would be
+ * naming.
  */
 export function trackPresetKeyFor(track: TrackInput): string {
   if (track.background) return ''
@@ -620,33 +621,12 @@ export function trackPresetKeyFor(track: TrackInput): string {
       preset.direction === track.direction &&
       preset.widthM === track.widthM &&
       preset.attribution === track.attribution &&
-      sameCenterline(preset, track),
+      preset.centerline.length === track.centerline.length &&
+      preset.centerline.every(
+        (point, index) => point.x === track.centerline[index].x && point.y === track.centerline[index].y,
+      ),
   )
   return entry ? entry[0] : ''
-}
-
-/**
- * The preset whose centreline a track has exactly, or `''` when it has none of
- * theirs.
- *
- * Looser than `trackPresetKeyFor`, which decides what the picker may name: the
- * name, width, direction, credit and photo are ignored here, because each can
- * be edited without moving to another circuit. It is what an imported project
- * has to go on to say which circuit it is, since the file records geometry and
- * no circuit.
- */
-export function presetKeyForCenterline(track: Pick<TrackInput, 'centerline'>): string {
-  const entry = Object.entries(PRESETS).find(([, preset]) => sameCenterline(preset, track))
-  return entry ? entry[0] : ''
-}
-
-function sameCenterline(a: Pick<TrackInput, 'centerline'>, b: Pick<TrackInput, 'centerline'>): boolean {
-  return (
-    a.centerline.length === b.centerline.length &&
-    a.centerline.every(
-      (point, index) => point.x === b.centerline[index].x && point.y === b.centerline[index].y,
-    )
-  )
 }
 
 /**
