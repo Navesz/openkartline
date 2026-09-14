@@ -5,25 +5,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import validation_numbers  # scripts/, on pytest's pythonpath
 
+from openkartline_engine import simulation
+from openkartline_engine.geometry import GeometryOutcome
 from openkartline_engine.schemas import (
     KartV1,
     SimulationRequestV1,
-    SimulationResultV1,
     SimulationSettingsV1,
     TrackV1,
 )
 from openkartline_engine.simulation import simulate
-
-PARITY_FIXTURES = (
-    Path(__file__).resolve().parent.parent.parent
-    / "apps"
-    / "web"
-    / "src"
-    / "domain"
-    / "engine"
-    / "__fixtures__"
-)
 
 
 def test_circle_simulation_is_successful_and_deterministic(
@@ -233,6 +225,45 @@ def test_numerical_error_returns_structured_failure(
     assert result.summary is None
 
 
+REPORT = Path(__file__).resolve().parent.parent.parent / "docs" / "VALIDATION_REPORT.md"
+
+
+@pytest.fixture(scope="module")
+def serpentine() -> validation_numbers.StartIndexRuns:
+    """The serpentine from each of its 12 start indices, with the solver and without.
+
+    The solver-on and solver-off runs of one rotation hand `prepare_track` the
+    same track, sample count and safety margin -- the iteration budget is not
+    one of its arguments -- and on the serpentine preparing is most of a
+    `simulate` call. So while these runs are made, `simulate` reuses what
+    `prepare_track` returned for an input it has already prepared instead of
+    preparing every corridor twice. The reuse is keyed on every argument
+    `simulate` passes, and `prepare_track` keeps no state between calls, so
+    each `simulate` call still runs end to end on exactly the corridor it would
+    have prepared itself. The rows these runs produce are held to ones
+    `scripts/validation_numbers.py` printed with no reuse at all.
+    """
+
+    prepare = simulation.prepare_track
+    prepared: dict[tuple[str, int, float], GeometryOutcome] = {}
+
+    def prepare_once(
+        track: TrackV1, *, sample_count: int, safety_margin_m: float
+    ) -> GeometryOutcome:
+        key = (track.model_dump_json(), sample_count, safety_margin_m)
+        if key not in prepared:
+            prepared[key] = prepare(
+                track, sample_count=sample_count, safety_margin_m=safety_margin_m
+            )
+        return prepared[key]
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(simulation, "prepare_track", prepare_once)
+        return validation_numbers.run_start_indices(
+            validation_numbers.start_index_case("Serpentine fixture"), control=True
+        )
+
+
 class TestStartIndexSensitivity:
     """The same closed loop, listed from a different first point.
 
@@ -240,13 +271,12 @@ class TestStartIndexSensitivity:
     winding and its geometry are identical, and only the index a reader would
     call "first" moves. A converged solver would return the same lap.
 
-    This one does not. Measured by these tests, over the start indices each one
-    tries (shift ``i * n // divisions``): 3.48% over 12 on the serpentine
-    fixture, 1.11% over 5 on Adria as the parity gate sends it (819 ms of a
-    73.79 s lap), and exactly 0 over 4 on the circle, whose symmetry makes every
-    shift an exact one. `scripts/validation_numbers.py` rotates the same way and
-    prints these figures, and the other shipped circuits, for
-    docs/VALIDATION_REPORT.md.
+    This one does not. Over the start indices each track is measured from --
+    shift ``i * n // divisions``, taken from `scripts/validation_numbers.py` so
+    the tests and the report cannot rotate differently -- the serpentine
+    fixture spreads by 3.48% over 12, Adria as the parity gate sends it by
+    1.11% over 5 (819 ms of a 73.79 s lap), and the circle, whose symmetry
+    makes every shift an exact one, not at all over 4.
 
     Not the path solver, which an earlier version of this docstring blamed.
     Setting `path_smoothing_iterations` to 0 skips it, and the serpentine still
@@ -255,96 +285,46 @@ class TestStartIndexSensitivity:
     hands on is not quite the same object -- on the serpentine its centreline
     length moves by 5.8e-4 relative -- and the curvature and speed pipeline
     carries that into the lap. That pipeline is not exactly start-free either:
-    rolling an already prepared serpentine corridor, with no solver, still
-    moves the lap by 5.7e-5 relative, which is small against the 2.09%. The
-    solver neither creates the spread nor removes it; stopped at its iteration
-    limit it widens it on some tracks and narrows it on others -- 2.09% to 3.48%
-    here, 0.98% to 0.28% on Baltar.
+    rolling one prepared serpentine corridor through all 300 of its samples,
+    solver skipped, moves the lap by 7.5e-4 relative, under a twentieth of the
+    2.09%. The solver neither creates the spread nor removes it; stopped at its
+    iteration limit it widens it on some tracks and narrows it on others --
+    2.09% to 3.48% here, 0.98% to 0.28% on Baltar. Every figure in this
+    paragraph and the one above is in a row the script prints into
+    docs/VALIDATION_REPORT.md.
 
-    That misattribution did not survive for want of a control. #102 measured
-    one and published it: on the API example request over 8 start indices the
-    spread was 867 ms with the solver skipped against 80 ms at the default 20,
-    and #102 still concluded that the solver was the cause.
+    That misattribution did not survive for want of a control: #102 had already
+    measured the spread with the solver skipped, found it larger than with the
+    solver running, and still blamed the solver.
 
-    Every figure is pinned from both sides. The ceiling fails if the
-    sensitivity grows; the floor fails if it shrinks, a collapse included,
-    because a fix that makes the start index matter less changes what the
-    report publishes and should move these numbers on purpose. Each margin is
-    one unit of the last digit the report prints -- 1e-4 on a spread, printed to
-    hundredths of a percent, and 1e-5 on a corridor movement, printed to two
-    significant figures -- so a figure that trips its band is one the report
-    would print differently. The margins are not there to absorb noise. Adding
-    uniform noise of up to 1e-9 m to every boundary coordinate of the
-    serpentine moved its solver-on spread by 1.0e-9 and its solver-off spread by
-    9.7e-11, and the parity gate already holds each committed shipped lap to
-    1e-6 relative on all three operating systems CI runs.
+    What these tests pin is the report's own rows. Each formats its
+    measurements with the script's row functions and fails unless
+    docs/VALIDATION_REPORT.md carries the resulting line verbatim, so any change
+    that would print a figure in one of those rows differently -- up or down, a
+    collapse included -- fails until the report is regenerated. How far a figure
+    can move before that happens depends on where it sits between two printed
+    values: at most one unit of its last printed digit, and it can be much
+    less. The rows checked are the serpentine's in the lap, control and corridor
+    tables and Adria's in the lap table. The circle is held to within 1e-9 of
+    zero rather than to its row, and the other shipped rows and the rolled
+    corridor are checked by no test. Whether a verbatim row holds on another
+    platform is settled by the python-tests matrix, which runs this class on
+    Linux, macOS and Windows.
 
     Characterised rather than hidden. Pinning the anchor would make the number
     stable without making it right.
     """
 
-    SPREAD_MARGIN = 1e-4
-    CORRIDOR_MARGIN = 1e-5
-
-    SERPENTINE_SPREAD = 0.03476
-    SERPENTINE_SPREAD_CEILING = SERPENTINE_SPREAD + SPREAD_MARGIN
-    SERPENTINE_SPREAD_FLOOR = SERPENTINE_SPREAD - SPREAD_MARGIN
-    SERPENTINE_SOLVER_OFF_SPREAD = 0.02091
-    ADRIA_SPREAD = 0.01111
-    SERPENTINE_CENTRELINE_LENGTH_MOVES = 5.764e-4
-    SERPENTINE_MEAN_WIDTH_MOVES = 7.802e-4
-
     @staticmethod
-    def _rotated(request: SimulationRequestV1, shift: int) -> SimulationRequestV1:
-        payload = request.model_dump()
-        for side in ("left_boundary", "right_boundary"):
-            points = payload["track"][side]
-            payload["track"][side] = points[shift:] + points[:shift]
-        return SimulationRequestV1.model_validate(payload)
-
-    def _rotations(self, request: SimulationRequestV1, divisions: int) -> list[SimulationRequestV1]:
-        count = len(request.track.left_boundary)
-        return [self._rotated(request, index * count // divisions) for index in range(divisions)]
-
-    def _results(self, request: SimulationRequestV1, divisions: int) -> list[SimulationResultV1]:
-        return [simulate(rotated) for rotated in self._rotations(request, divisions)]
-
-    def _laps(self, request: SimulationRequestV1, divisions: int) -> list[float]:
-        laps = []
-        for result in self._results(request, divisions):
-            assert result.summary is not None
-            laps.append(result.summary.lap_time_s)
-        return laps
-
-    @staticmethod
-    def _relative_range(values: list[float]) -> float:
-        return (max(values) - min(values)) / min(values)
-
-    @staticmethod
-    def _moved(label: str, measured: float, pinned: float, margin: float) -> list[str]:
-        """Describe a figure that left its band, or nothing if it did not.
-
-        Collected rather than asserted one at a time, so a change that moves
-        several figures reports all of them at once -- they are regenerated
-        together.
-        """
-
-        if measured >= pinned + margin:
-            return [
-                f"{label} {measured:.4e} is {margin:g} or more above the published {pinned:.4e}"
-            ]
-        if measured <= pinned - margin:
-            return [
-                f"{label} {measured:.4e} is {margin:g} or more below the published {pinned:.4e}"
-            ]
-        return []
-
-    @staticmethod
-    def _assert_none_moved(moved: list[str]) -> None:
-        assert not moved, (
-            "\n".join(moved) + "\nIf the start index matters more or less now, regenerate "
-            "docs/VALIDATION_REPORT.md with scripts/validation_numbers.py and move these "
-            "figures with it."
+    def _assert_reported(label: str, row: str) -> None:
+        lines = REPORT.read_text(encoding="utf-8").splitlines()
+        if row in lines:
+            return
+        published = "\n".join(line for line in lines if line.startswith(f"| {label} |"))
+        pytest.fail(
+            f"measured:\n{row}\nis not in docs/VALIDATION_REPORT.md, whose {label} rows are:\n"
+            f"{published}\nIf the start index matters more or less now, regenerate the "
+            "report with scripts/validation_numbers.py."
         )
 
     def test_a_symmetric_track_is_untouched_by_the_start_index(
@@ -353,45 +333,33 @@ class TestStartIndexSensitivity:
         # A circle maps onto itself under every shift of its control points, so
         # this isolates the sensitivity to the shape rather than the mechanism:
         # whatever moves the lap on other tracks must not move it here.
-        laps = self._laps(circle_request, 4)
+        laps = []
+        for rotated in validation_numbers.rotations(circle_request, 4):
+            result = simulate(rotated)
+            assert result.summary is not None
+            laps.append(result.summary.lap_time_s)
         assert max(laps) == pytest.approx(min(laps), rel=1e-9)
 
     def test_the_lap_moves_with_the_start_index_by_a_known_amount(
-        self, serpentine_track: TrackV1, kart: KartV1
+        self, serpentine: validation_numbers.StartIndexRuns
     ) -> None:
-        laps = self._laps(SimulationRequestV1(track=serpentine_track, kart=kart), 12)
-
-        spread = self._relative_range(laps)
-        assert spread < self.SERPENTINE_SPREAD_CEILING, (
-            f"start-index spread {spread:.4%} exceeds the documented "
-            f"{self.SERPENTINE_SPREAD:.3%} by more than the margin"
-        )
-        assert spread > self.SERPENTINE_SPREAD_FLOOR, (
-            f"start-index spread {spread:.4%} fell below the documented "
-            f"{self.SERPENTINE_SPREAD:.3%} by more than the margin -- if the start "
-            "index matters less now, regenerate the report and move this figure with it"
-        )
+        self._assert_reported("Serpentine fixture", validation_numbers.lap_row(serpentine))
 
     def test_a_shipped_circuit_moves_by_a_known_amount(self) -> None:
         """Adria, exactly as the parity gate sends it, over 5 start indices.
 
         One shipped circuit, not five, because every rotation is a full solve.
         The report's rows for the other four are printed by
-        `scripts/validation_numbers.py` and are not pinned by any test.
+        `scripts/validation_numbers.py` and are checked by no test.
         """
 
-        request = SimulationRequestV1.model_validate_json(
-            (PARITY_FIXTURES / "parity-request-adria-karting-raceway--default.json").read_text(
-                encoding="utf-8"
-            )
+        runs = validation_numbers.run_start_indices(
+            validation_numbers.start_index_case("Adria Karting Raceway"), control=False
         )
-        spread = self._relative_range(self._laps(request, 5))
-        self._assert_none_moved(
-            self._moved("Adria start-index spread", spread, self.ADRIA_SPREAD, self.SPREAD_MARGIN)
-        )
+        self._assert_reported("Adria Karting Raceway", validation_numbers.lap_row(runs))
 
     def test_without_the_solver_the_corridor_and_the_lap_still_move(
-        self, serpentine_track: TrackV1, kart: KartV1
+        self, serpentine: validation_numbers.StartIndexRuns
     ) -> None:
         """The control: what is left of the spread with the solver skipped.
 
@@ -401,58 +369,23 @@ class TestStartIndexSensitivity:
         the solver-on spread and decide nothing. With the solver skipped the
         line is the prepared corridor's midline, unmoved.
 
-        Two things are then pinned, over the same 12 start indices as the
-        solver-on figure. The lap spread, 2.09% against 3.48% with the solver
-        on, which shows the spread does not need the solver. And the corridor
-        itself, read from `validation.metrics` -- what `prepare_track`
-        measured -- whose centreline length moves by 5.8e-4 and mean width by
-        7.8e-4. An earlier version compared `summary.track_length_m` across one
-        rotation and called it a property of the polygon. That is the returned
-        racing line's length, which is solver output, and at the half-lap shift
-        it tried the two lengths agree to 2.8e-12 on this fixture, so it could
-        not have seen the corridor move.
-
-        If either figure collapses, the attribution in the class docstring is
-        stale.
+        Two rows are then held to the report, over the same 12 start indices as
+        the solver-on figure. The control row puts the lap spread with the
+        solver skipped beside the spread with it running, which shows the
+        spread does not need the solver. The corridor row reads
+        `validation.metrics` -- what `prepare_track` measured. An earlier
+        version compared `summary.track_length_m` and called it a property of
+        the polygon; that is the returned racing line's length, which is solver
+        output.
         """
 
-        settings = SimulationSettingsV1(path_smoothing_iterations=0)
-        request = SimulationRequestV1(track=serpentine_track, kart=kart, settings=settings)
-
-        laps: list[float] = []
-        lengths: list[float] = []
-        widths: list[float] = []
-        for result in self._results(request, 12):
+        assert serpentine.unsolved is not None
+        for result in serpentine.unsolved:
             diagnostics = result.path_diagnostics
-            assert diagnostics is not None and result.summary is not None
+            assert diagnostics is not None
             assert diagnostics.termination_reason == "skipped"
             assert diagnostics.iterations == 0
             assert diagnostics.final_objective == diagnostics.initial_objective
-            metrics = result.validation.metrics
-            assert metrics is not None
-            laps.append(result.summary.lap_time_s)
-            lengths.append(metrics.track_length_m)
-            widths.append(metrics.mean_width_m)
 
-        self._assert_none_moved(
-            [
-                *self._moved(
-                    "solver-free start-index spread",
-                    self._relative_range(laps),
-                    self.SERPENTINE_SOLVER_OFF_SPREAD,
-                    self.SPREAD_MARGIN,
-                ),
-                *self._moved(
-                    "prepared centreline length movement",
-                    self._relative_range(lengths),
-                    self.SERPENTINE_CENTRELINE_LENGTH_MOVES,
-                    self.CORRIDOR_MARGIN,
-                ),
-                *self._moved(
-                    "prepared mean width movement",
-                    self._relative_range(widths),
-                    self.SERPENTINE_MEAN_WIDTH_MOVES,
-                    self.CORRIDOR_MARGIN,
-                ),
-            ]
-        )
+        self._assert_reported("Serpentine fixture", validation_numbers.control_row(serpentine))
+        self._assert_reported("Serpentine fixture", validation_numbers.corridor_row(serpentine))

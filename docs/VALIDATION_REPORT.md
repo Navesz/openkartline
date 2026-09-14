@@ -102,9 +102,10 @@ are identical whichever index is called zero. A converged solver would return
 the same lap.
 
 This one does not. Every table in this section is printed by
-`uv run python scripts/validation_numbers.py`, which rotates the boundary lists
-exactly as `tests/python/test_simulation.py::TestStartIndexSensitivity` does:
-with `n` points and `d` start indices tried, the shifts are `i · n // d`. A
+`uv run python scripts/validation_numbers.py`, whose rotation
+`tests/python/test_simulation.py::TestStartIndexSensitivity` imports rather
+than copies: with `n` points and `d` start indices tried, the shifts are
+`i · n // d`. A
 spread is `(max − min) / min` over those rotations. It depends on which
 rotations were tried, so every figure is given with its count. The shipped
 circuits are the committed `--default` parity requests, which the web suite
@@ -161,6 +162,20 @@ Both columns are relative ranges of `validation.metrics`, which is what
 line's length, which is solver output and says nothing about the corridor; an
 earlier revision of the tests read it as a property of the polygon.
 
+The pipeline after preparation is measured on its own by preparing the
+serpentine once, with the solver skipped, and rolling that prepared corridor
+through every one of its samples. The geometry is then the same to the last
+bit, so what the lap still does comes from the zero-iteration midline,
+`path_channels` and `solve_speed_profile`:
+
+| Track | Prepared samples, every shift tried | Lap moves |
+|---|---:|---:|
+| Serpentine fixture | 300 | 7.5e-04 |
+
+That is a relative range, like the corridor columns above, taken over 300
+shifts rather than 12, and it is under a twentieth of the 2.09% the serpentine
+spreads across its 12 start indices with the solver skipped.
+
 The solver does have its own, separate defect, not to be confused with this
 one. On every shipped request it stops on `iteration_limit` at 200 iterations,
 the published cap — and since the loop reads the cap only to stop, at every
@@ -184,14 +199,17 @@ would have to attack instead.
 
 What makes this one uncomfortable is who meets it: a user who exports the same
 circuit from a tool that happens to start the point list elsewhere gets a
-different answer for the same track. `TestStartIndexSensitivity` pins the
-circle's zero, and pins from both sides Adria's spread and the serpentine's
-spread with and without the solver, together with its corridor movement. Each
-of those fails once it moves by one unit of the last digit printed here, in
-either direction — a move large enough to show in this report. The other
-shipped rows are characterised here and pinned by no test. None of it is
-suppressed: pinning the anchor would make the figure stable without making it
-right.
+different answer for the same track. `TestStartIndexSensitivity` measures
+Adria's row in the first table and the serpentine's rows in the first three,
+formats them with the script's own row functions, and fails unless this page
+carries each resulting line verbatim. So a change that would print any figure
+in those four rows differently — larger or smaller, a collapse included — fails
+until this section is regenerated. How small a move that takes depends on where
+the figure sits between two printed values: at most one unit of the last
+printed digit, and it can be far less. The circle is held to within 1e-9 of
+zero rather than to its row. The other shipped rows, and the rolled corridor,
+are characterised here and checked by no test. None of it is suppressed:
+pinning the anchor would make the figure stable without making it right.
 
 ### Path-solver termination
 

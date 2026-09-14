@@ -40,6 +40,9 @@ include = ["openkartline_engine*", "openkartline_api*"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=openkartline_engine --cov=openkartline_api --cov-report=term-missing"
 testpaths = ["tests/python"]
+# `scripts/validation_numbers.py` prints the report's start-index rows, and
+# TestStartIndexSensitivity imports its row functions to hold the report to them.
+pythonpath = ["scripts"]
 
 [tool.coverage.run]
 branch = true
