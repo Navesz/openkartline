@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { TRACK_PNG } from './fixtures'
 
 /**
@@ -112,25 +112,97 @@ test('the image calibration overlay has no accessibility violations', async ({ p
   expect(results.violations).toEqual([])
 })
 
-test('the whole editor is reachable from the keyboard', async ({ page }) => {
+/**
+ * Presses Tab until `target` has focus, and fails if it never does.
+ *
+ * Tab order is a cycle, so returning to the element focus started on means
+ * every stop has been visited without reaching the target. The step cap only
+ * matters when focus starts somewhere outside the cycle, such as the skip
+ * link's target, and is well over the number of stops the page has.
+ */
+async function tabTo(page: Page, target: Locator) {
+  const wanted = await target.elementHandle()
+  const origin = await page.evaluateHandle(() => document.activeElement)
+  const visited: string[] = []
+  for (let step = 0; step < 200; step += 1) {
+    await page.keyboard.press('Tab')
+    const stop = await page.evaluate(
+      ([wantedElement, originElement]) => {
+        const element = document.activeElement
+        // `getAttribute`, not `className`: on an SVG element `className` is an
+        // SVGAnimatedString, which stringifies to "[object SVGAnimatedString]".
+        const classes = element?.getAttribute('class')
+        const name = element?.getAttribute('aria-label') ?? element?.textContent?.trim().slice(0, 24)
+        return {
+          reached: element === wantedElement,
+          cycled: element === originElement,
+          label: `${element?.tagName.toLowerCase()}${element?.id ? `#${element.id}` : ''}${
+            classes ? `.${classes.split(/\s+/).join('.')}` : ''
+          } "${name ?? ''}"`,
+        }
+      },
+      [wanted, origin] as const,
+    )
+    if (stop.reached) return
+    visited.push(stop.label)
+    if (stop.cycled) break
+  }
+  throw new Error(`Tab never reached ${target}. It visited: ${visited.join(' -> ')}`)
+}
+
+test('Tab reaches the canvas tools, Save, calibration and the point editor, and the skip link focuses the track', async ({
+  page,
+}) => {
+  // Scrolling is smooth otherwise. Measured mid-scroll, the toolbar has not yet
+  // risen to where it lands, so it could clear the header while the landing
+  // does not.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('./')
-  // The skip link is the first stop, and it has to go somewhere real.
+  await expect(page.getByRole('heading', { name: 'Plan a faster lap.' })).toBeVisible()
+
+  // The skip link is the first stop, and activating it puts focus on the
+  // section it names, so the next Tab starts inside that section -- on a tool
+  // the sticky header is not covering.
   await page.keyboard.press('Tab')
-  const skip = page.getByRole('link', { name: /skip to/i })
+  const skip = page.getByRole('link', { name: 'Skip to the track' })
   await expect(skip).toBeFocused()
   await skip.press('Enter')
+  await expect(page.getByRole('region', { name: 'Track visual editor' })).toBeFocused()
+  const toolbar = page.getByRole('toolbar', { name: 'Editor tools' })
+  const firstTool = toolbar.getByRole('button', { name: 'Edit', exact: true })
+  await page.keyboard.press('Tab')
+  await expect(firstTool).toBeFocused()
+  const header = await page.getByRole('banner').boundingBox()
+  const tool = await firstTool.boundingBox()
+  expect(tool!.y).toBeGreaterThanOrEqual(header!.y + header!.height)
 
-  // Every control the editor offers must be reachable without a pointer, and
-  // the canvas must not swallow the focus ring on the way past.
-  const reached = new Set<string>()
-  for (let step = 0; step < 120; step += 1) {
-    await page.keyboard.press('Tab')
-    const marker = await page.evaluate(() => {
-      const el = document.activeElement
-      if (!el || el === document.body) return null
-      return `${el.tagName.toLowerCase()}#${el.id || ''}.${el.className || ''}`
-    })
-    if (marker) reached.add(marker)
+  await tabTo(page, page.getByRole('button', { name: 'Save', exact: true }))
+
+  // An image brings up the fields that calibrate it without the two-click
+  // canvas gesture. The file picker it opens belongs to the browser, so the
+  // file goes straight to the input once the button is shown to be reachable.
+  await tabTo(page, page.getByRole('button', { name: 'Track image', exact: true }))
+  await page.getByLabel('Import track image').setInputFiles({
+    name: 'track.png',
+    mimeType: 'image/png',
+    buffer: TRACK_PNG,
+  })
+  await expect(page.getByText(/Image added/i)).toBeVisible()
+  await tabTo(page, page.getByLabel('Known distance on the image'))
+  await tabTo(page, page.getByLabel('That distance in real metres'))
+  await tabTo(page, page.getByRole('button', { name: 'Set scale' }))
+
+  // The point editor is closed by default; its fields are only reachable once
+  // the keyboard has opened it.
+  await tabTo(page, page.locator('summary', { hasText: 'Edit point by coordinates' }))
+  await page.keyboard.press('Enter')
+  await tabTo(page, page.getByRole('combobox', { name: 'Point', exact: true }))
+  await tabTo(page, page.getByRole('spinbutton', { name: 'Point 1 · X' }))
+  await tabTo(page, page.getByRole('spinbutton', { name: 'Point 1 · Y' }))
+  await tabTo(page, page.getByRole('button', { name: 'Remove point 1' }))
+
+  // Every canvas tool, Calibrate included now that there is an image.
+  for (const name of ['Edit', 'Point', 'Move', 'Calibrate', 'Fit', 'Animate']) {
+    await tabTo(page, toolbar.getByRole('button', { name, exact: true }))
   }
-  expect(reached.size).toBeGreaterThan(15)
 })

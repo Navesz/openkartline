@@ -349,7 +349,10 @@ export function TrackCanvas({
   const startRight = result?.samples[0]?.rightBoundary ?? boundaries.right[0]
 
   return (
-    <section className="track-stage" id="workspace" aria-label={t('canvas.sectionLabel')}>
+    // `tabIndex={-1}` keeps this out of the Tab order but lets the skip link
+    // that targets it take focus. Without it, following the link moved where
+    // the next Tab starts and left focus itself on <body>.
+    <section className="track-stage" id="workspace" tabIndex={-1} aria-label={t('canvas.sectionLabel')}>
       <div className="canvas-toolbar" role="toolbar" aria-label={t('canvas.toolbarLabel')}>
         <button
           className={tool === 'edit' ? 'active' : ''}
