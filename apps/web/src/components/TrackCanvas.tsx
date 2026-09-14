@@ -543,8 +543,12 @@ export function TrackCanvas({
                   stroke="#101512"
                   strokeWidth=".7"
                 />
+                {/* Translated to the world position, as the circle is: the
+                    scene group negates y for both. Translating to -y as well
+                    mirrored each number across y = 0, which on the default
+                    track left them below the canvas, clipped out of sight. */}
                 <text
-                  transform={`translate(${sample.position.x} ${-sample.position.y}) scale(1, -1)`}
+                  transform={`translate(${sample.position.x} ${sample.position.y}) scale(1, -1)`}
                   y={0.85}
                   textAnchor="middle"
                 >
