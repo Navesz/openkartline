@@ -260,9 +260,11 @@ describe('the version a rejected file declared', () => {
   })
 
   it('does not let a file choose how much of the interface it fills', () => {
-    const long = rendered('9'.repeat(500))
-    expect(long.length).toBeLessThan(120)
-    expect(long).toContain('…')
+    // Exact strings, not a length ceiling: `length < 120` held for every cap up
+    // to 88, so doubling it to 80 went unnoticed.
+    expect(rendered('9'.repeat(500))).toBe(`Unsupported project version: ${'9'.repeat(40)}….`)
+    expect(rendered('9'.repeat(41))).toBe(`Unsupported project version: ${'9'.repeat(40)}….`)
+    expect(rendered('9'.repeat(40))).toBe(`Unsupported project version: ${'9'.repeat(40)}.`)
   })
 
   it('will not quote an object, whatever it holds', () => {
