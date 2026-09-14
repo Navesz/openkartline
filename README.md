@@ -50,7 +50,7 @@ If you want the best possible racing line for a race car, use the first one on t
 
 ## Quick start
 
-Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.13, and [uv](https://docs.astral.sh/uv/).
+Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.14, and [uv](https://docs.astral.sh/uv/).
 
 The editor is tested on Chromium, Firefox and WebKit — every end-to-end run
 exercises all three, because the canvas leans on exactly where they diverge:

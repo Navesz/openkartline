@@ -19,6 +19,7 @@ All notable changes to OpenKartLine are documented here. The format follows [Kee
 
 ### Changed
 
+- Python 3.14 is supported, and `requires-python` is now `>=3.11,<3.15`. CI runs the Python suite on 3.14 alongside 3.11–3.13, and the upper bound keeps the published wheel from admitting an interpreter the suite has never run on.
 - Figures are formatted in the reader's language. Every number came from `toFixed`, so Portuguese showed `1.05` for a grip coefficient and `1200` where the language groups as `1.200`. SVG path data and lap times are deliberately excluded: a comma is a coordinate separator in the first, and motorsport convention in the second.
 - A solved lap follows the language toggle. Event labels, result notes and the status line were rendered to strings when the lap was computed, so switching locale left the panel half translated.
 - The published `.okl.json` schema describes what the app produces: `power_hp` and `brake_decel_mps2` are widened to the editor's own limits, so the shipped Superkart preset stops emitting a file that fails its own schema, and `attribution` is added so the ODbL credit on OpenStreetMap-derived circuits survives a save. Recorded in ADR 0004.
