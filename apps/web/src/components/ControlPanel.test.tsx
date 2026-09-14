@@ -14,8 +14,8 @@ import { ControlPanel } from './ControlPanel'
  * every test declared after it running in that language, and one below does.
  *
  * Load-bearing, not hygiene: delete this line and 33 of the 49 tests in this
- * file fail. It is one line guarding a third of the file, which is exactly the
- * shape somebody tidies away as noise, so the number is written down.
+ * file fail. It is one line guarding two thirds of the file, which is exactly
+ * the shape somebody tidies away as noise, so the number is written down.
  */
 beforeEach(() => localStorage.clear())
 

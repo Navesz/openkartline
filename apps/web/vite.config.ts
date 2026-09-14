@@ -32,15 +32,18 @@ export default defineConfig({
       // Set just under what the suite actually reaches -- 92.23 / 86.30 / 93.79
       // / 94.00 -- leaving a point or two for the wobble between platforms.
       //
-      // These were 85/78/80/86 for exactly one release. #103 changed the
-      // coverage provider, which attributed JSX render branches more finely and
-      // showed the three big components were far less covered than the previous
-      // meter implied; the gates were lowered to that honest reading rather
-      // than to the old standard, on the explicit condition that raising the
-      // real number was the next piece of work. #106 did it -- ControlPanel and
-      // TrackCanvas to 100% of functions -- so the gates follow it back up. A
-      // threshold left below what the suite reaches records a past ambition
-      // instead of defending the present one.
+      // These were 85/78/80/86 from #103 to #107, with no release in between.
+      // #103 kept the v8 provider but moved @vitest/coverage-v8 from 3.2.7 to
+      // 4.1.11, and the new major reads the same code differently: over the
+      // source and tests #102 left, 3.2.7 reads 92.04 / 85.06 / 79.25 / 92.04
+      // and 4.1.11 reads 86.32 / 79.17 / 82.26 / 87.93, steepest in
+      // ControlPanel.tsx, whose statements fall from 97.07 to 57.81. The gates
+      // were lowered to that honest reading rather than to the old standard, on
+      // the explicit condition that raising the real number was the next piece
+      // of work. #106 did it -- ControlPanel and TrackCanvas to 100% of
+      // functions -- so the gates follow it back up. A threshold left below what
+      // the suite reaches records a past ambition instead of defending the
+      // present one.
       thresholds: {
         statements: 91,
         branches: 85,
