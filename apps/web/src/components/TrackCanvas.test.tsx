@@ -6,7 +6,19 @@ import { simulateInBrowser } from '../domain/simulator'
 import type { Point } from '../domain/types'
 import { INPUT_LIMITS } from '../domain/validation'
 import { I18nProvider } from '../i18n/I18nProvider'
+import { useI18n } from '../i18n/context'
 import { TrackCanvas, type EditorTool } from './TrackCanvas'
+
+/*
+ * `I18nProvider` persists the locale, so a test that switches language leaves
+ * every test declared after it running in that language, and one below does.
+ *
+ * Nothing fails without this line today: none of the tests after that one
+ * reads English text. They do run in Portuguese, though, and the first to look
+ * for a label would fail for a reason nowhere near it. The guard goes in with
+ * the test that needs it, not with the one that trips over its absence.
+ */
+beforeEach(() => localStorage.clear())
 
 function renderCanvas(ui: React.ReactElement) {
   return render(<I18nProvider>{ui}</I18nProvider>)
@@ -814,6 +826,38 @@ describe('TrackCanvas calibration', () => {
     expect(screen.getByRole('spinbutton')).toBeInTheDocument()
   })
 
+  it('translates that reason when the language changes afterwards', () => {
+    // The reason is kept as the note and rendered at paint. Rendered into state
+    // when the calibration was rejected, it stayed in the language on screen at
+    // that moment while the buttons beside it followed the toggle.
+    const props = canvasProps({ tool: 'calibrate', track: tracedTrack })
+    function Harness() {
+      const { setLocale } = useI18n()
+      return (
+        <>
+          <button onClick={() => setLocale('pt-BR')}>switch</button>
+          <TrackCanvas {...props} />
+        </>
+      )
+    }
+    const { container } = renderCanvas(<Harness />)
+    stubRect(screen.getByRole('img'))
+    const surface = container.querySelector('.canvas-bg')!
+
+    fireEvent.pointerDown(surface, { clientX: 400, clientY: 250, button: 0 })
+    fireEvent.pointerDown(surface, { clientX: 405, clientY: 255, button: 0 })
+    fireEvent.click(screen.getByRole('button', { name: /apply scale/i }))
+    expect(container.querySelector('.calibration-error')).toHaveTextContent(
+      'Mark two points farther apart on the image.',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'switch' }))
+
+    expect(container.querySelector('.calibration-error')).toHaveTextContent(
+      'Marque dois pontos mais afastados na imagem.',
+    )
+  })
+
   it('abandons the measurement on Escape', () => {
     const onCalibrate: Mock<(pixelDistance: number, realMeters: number) => void> = vi.fn()
     const { container } = mountCanvas(canvasProps({ tool: 'calibrate', track: tracedTrack, onCalibrate }))
@@ -843,5 +887,48 @@ describe('TrackCanvas calibration', () => {
     expect(onCalibrate).toHaveBeenCalledTimes(1)
     expect(onCalibrate.mock.calls[0][0]).toBeCloseTo(38.4, 6)
     expect(onCalibrate.mock.calls[0][1]).toBe(50)
+  })
+})
+
+describe('TrackCanvas racing line', () => {
+  it('tells the drive modes apart by pattern as well as by colour', () => {
+    // Braking, coasting and throttle are red, amber and green -- the axis
+    // red-green colour blindness runs along -- so each mode carries a dash
+    // pattern too. Throttle is the ordinary state and stays solid; the other
+    // two are dashed, and dashed differently from each other, or the pattern
+    // would separate braking from throttle and still lose it against coasting.
+    // The hairpin, because its lap at these inputs uses all three modes; the
+    // technical circuit's does not coast at all, so it cannot show the third.
+    const result = simulateInBrowser({
+      track: PRESETS.hairpin,
+      kart: DEFAULT_KART,
+      settings: { safetyMarginM: 0.15, sampleCount: 200 },
+    })
+    const { container } = renderCanvas(<TrackCanvas {...canvasProps({ track: PRESETS.hairpin, result })} />)
+
+    // One polyline per run of consecutive samples in the same mode, in order.
+    const runModes = result.samples
+      .map((sample) => sample.mode)
+      .filter((mode, index, modes) => index === 0 || mode !== modes[index - 1])
+    const lines = [...container.querySelectorAll('g[filter="url(#line-glow)"] polyline')]
+    expect(lines).toHaveLength(runModes.length)
+    expect(new Set(runModes)).toEqual(new Set(['brake', 'coast', 'throttle']))
+
+    const patterns = new Map<string, Set<string | null>>()
+    lines.forEach((line, index) => {
+      const seen = patterns.get(runModes[index]) ?? new Set<string | null>()
+      seen.add(line.getAttribute('stroke-dasharray'))
+      patterns.set(runModes[index], seen)
+    })
+    // Every run of a mode is drawn alike, so each mode has exactly one pattern.
+    const [brake, coast, throttle] = ['brake', 'coast', 'throttle'].map((mode) => {
+      expect(patterns.get(mode)?.size).toBe(1)
+      return [...patterns.get(mode)!][0]
+    })
+
+    expect(throttle).toBeNull()
+    expect(brake).not.toBeNull()
+    expect(coast).not.toBeNull()
+    expect(brake).not.toBe(coast)
   })
 })
