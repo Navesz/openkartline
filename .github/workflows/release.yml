@@ -1,10 +1,9 @@
 name: Release
 
 # docs/RELEASES.md steps 5 to 9 were manual: build in clean environments,
-# attach artifacts and SHA-256 checksums, publish. This is the automation for
-# them, but it is not yet verified: its shell steps were run locally, not on
-# GitHub, so RELEASES.md keeps the caveat that a tag must not imply installers
-# exist until a dispatch run has exercised the whole workflow end to end.
+# attach artifacts and SHA-256 checksums, publish. This workflow is written to
+# automate them, but it has never run, so RELEASES.md keeps the caveat that a
+# tag must not imply installers exist until a run has exercised it end to end.
 #
 # `workflow_dispatch` builds and attests exactly the same way but uploads to the
 # run instead of to a release, so the whole path can be exercised without
@@ -59,7 +58,19 @@ jobs:
           fi
 
       - name: Build the Python distributions
-        run: uv build --out-dir dist
+        # The build backend writes the files that get checksummed and attested,
+        # yet uv.lock does not cover it: `uv build` installs it into its own
+        # isolated environment, from pyproject.toml's setuptools>=84.0.0, which
+        # would take whatever release is newest. So the backend is held to one
+        # file by hash. setuptools declares no dependencies of its own, so that
+        # file is the whole build environment. Raising pyproject.toml's floor
+        # past this pin fails the build until the pin is raised with it.
+        run: |
+          printf '%s\n' \
+            'setuptools==84.0.0 --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670' \
+            > "$RUNNER_TEMP/build-constraints.txt"
+          uv build --build-constraints "$RUNNER_TEMP/build-constraints.txt" \
+            --require-hashes --out-dir dist
 
       - name: Build and pack the web application
         run: |
@@ -80,24 +91,24 @@ jobs:
         # the `dev` extra, which `uv export` leaves out unless asked; --no-dev
         # keeps out a `dev` dependency group too, which it would otherwise add.
         #
-        # `pnpm sbom` rather than cdxgen: cdxgen's --required-only listed
-        # @playwright/test and @testing-library/react and missed scheduler.
-        # cyclonedx-py reads an exported requirements file because, given no
-        # interpreter, `cyclonedx-py environment` inventories the uvx
-        # environment it runs in -- cyclonedx-bom's own dependencies.
+        # This step runs after dist/ is written and before the checksums and
+        # the attestation vouch for it, in a job that can write to releases, so
+        # it runs only tools that are already pinned: pnpm by `packageManager`,
+        # uv above. cyclonedx-bom, fetched here before, brought code that no pin
+        # or lock covers: even at an exact version, it declares its own
+        # dependencies by range. The price is that uv writes CycloneDX 1.5, not
+        # 1.6, in a format uv calls experimental; with uv pinned, that format
+        # changes only when the pin does.
         #
-        # cyclonedx-bom is pinned exactly because it runs between the build and
-        # the checksums; the dependencies it declares by range still resolve
-        # when it runs. pnpm is pinned by `packageManager`, uv above.
+        # `pnpm sbom` rather than cdxgen also because cdxgen's --required-only
+        # listed @playwright/test and @testing-library/react and missed
+        # scheduler.
         run: |
           pnpm --filter @openkartline/web sbom --sbom-format cyclonedx \
             --sbom-spec-version 1.6 --sbom-type application --prod \
             --out dist/sbom-web.cdx.json
-          uv export --quiet --locked --no-dev --no-emit-project \
-            --format requirements.txt -o "$RUNNER_TEMP/requirements-runtime.txt"
-          uvx --from cyclonedx-bom==7.3.1 cyclonedx-py requirements \
-            --pyproject pyproject.toml --mc-type library --sv 1.6 --of JSON \
-            -o dist/sbom-python.cdx.json "$RUNNER_TEMP/requirements-runtime.txt"
+          uv export --quiet --locked --no-dev --format cyclonedx1.5 \
+            --preview-features sbom-export -o dist/sbom-python.cdx.json
 
       - name: Checksum every artifact
         working-directory: dist

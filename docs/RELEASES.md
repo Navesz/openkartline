@@ -35,18 +35,18 @@ Before tagging, the release manager verifies:
 6. Smoke-test those artifacts, not only the source tree.
 7. Open a release pull request containing only release metadata and necessary fixes.
 8. Merge, create a signed annotated tag `vX.Y.Z`, and push the tag.
-9. The same workflow runs on the tag and attaches the artifacts, their `SHA256SUMS`, and both SBOMs to the drafted release. Review the draft and publish it.
+9. The same workflow runs on the tag and is written to attach the artifacts, their `SHA256SUMS`, and both SBOMs to the drafted release. Review the draft, check that those files are really on it, and publish it.
 10. Verify public downloads and start a fresh-install test from the published instructions.
 
 ## What a tag produces
 
-The release workflow exists, but it has not yet been exercised end to end. Its shell steps have been run locally one by one; the steps that are GitHub Actions — the provenance attestation, the upload to the run, attaching to the release — only run on GitHub, and the workflow has not run there. Until it has, a tag must not imply that installers exist. Its first use should be a manual dispatch on a branch (step 5), not a tag. A dispatch run attests too, and because the repository is public, that attestation is signed with Sigstore's public-good instance.
+The release workflow exists, but it has never run on GitHub, on a tag or by dispatch, so none of it, from the build to attaching the files to a release, has yet been seen to work there. Until a run has exercised it end to end, a tag must not imply that installers exist. Its first use should be a manual dispatch on a branch (step 5), not a tag. A dispatch run attests too, and because the repository is public, that attestation is signed with Sigstore's public-good instance.
 
 Pushing `vX.Y.Z` runs the workflow on the tag, which is written to build, checksum, attest and attach:
 
 - `openkartline-X.Y.Z.tar.gz` and `openkartline-X.Y.Z-py3-none-any.whl` — the engine and API distributions;
 - `openkartline-web-vX.Y.Z.tar.gz` — the production web build;
-- `sbom-python.cdx.json` and `sbom-web.cdx.json` — CycloneDX 1.6 bills of materials for what ships, not for the tools that build it. The web one lists the production dependencies bundled into the web build. The Python one lists the runtime dependencies of the distributions, without the `dev` extra, at the versions locked in `uv.lock` and without the edges between them; the wheel itself declares version ranges, so an installation can resolve newer versions;
+- `sbom-python.cdx.json` and `sbom-web.cdx.json` — bills of materials for what ships, not for the tools that build it. The web one is CycloneDX 1.6 and lists the production dependencies bundled into the web build. The Python one is CycloneDX 1.5, written by `uv export`, whose SBOM format uv still calls experimental. It lists the runtime dependencies of the distributions, without the `dev` extra, at the versions locked in `uv.lock`, with the edges between them; a dependency installed only in some environments carries its environment marker. The wheel itself declares version ranges, so an installation can resolve newer versions;
 - `SHA256SUMS` — checksums over all of the above.
 
 The Python distributions carry a [build provenance attestation](https://docs.github.com/en/actions/concepts/security/artifact-attestations), so a consumer can verify which workflow run, from which commit, produced the file they downloaded:
