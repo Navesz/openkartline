@@ -13,7 +13,7 @@ import { ControlPanel } from './ControlPanel'
  * `I18nProvider` persists the locale, so a test that switches language leaves
  * every test declared after it running in that language, and one below does.
  *
- * Load-bearing, not hygiene: delete this line and 33 of the 49 tests in this
+ * Load-bearing, not hygiene: delete this line and 34 of the 50 tests in this
  * file fail. It is one line guarding two thirds of the file, which is exactly
  * the shape somebody tidies away as noise, so the number is written down.
  */
