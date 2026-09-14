@@ -74,9 +74,11 @@ export const app = defineMessages({
     en: 'Import a project file',
     'pt-BR': 'Importar um arquivo de projeto',
   },
+  // Not "calibrated against": a photo is dropped whether or not it was ever
+  // calibrated, and calibration measures the image, not the circuit.
   'app.statusPresetDroppedImage': {
-    en: 'The background image was removed: it was calibrated against a different circuit.',
-    'pt-BR': 'A imagem de fundo foi removida: ela estava calibrada para outro circuito.',
+    en: 'The background image was removed: it belonged to a different circuit.',
+    'pt-BR': 'A imagem de fundo foi removida: ela pertencia a outro circuito.',
   },
   'app.statusFixBeforeSimulating': {
     en: 'Fix the highlighted fields before simulating.',

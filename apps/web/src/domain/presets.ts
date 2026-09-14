@@ -620,12 +620,33 @@ export function trackPresetKeyFor(track: TrackInput): string {
       preset.direction === track.direction &&
       preset.widthM === track.widthM &&
       preset.attribution === track.attribution &&
-      preset.centerline.length === track.centerline.length &&
-      preset.centerline.every(
-        (point, index) => point.x === track.centerline[index].x && point.y === track.centerline[index].y,
-      ),
+      sameCenterline(preset, track),
   )
   return entry ? entry[0] : ''
+}
+
+/**
+ * The preset whose centreline a track has exactly, or `''` when it has none of
+ * theirs.
+ *
+ * Looser than `trackPresetKeyFor`, which decides what the picker may name: the
+ * name, width, direction, credit and photo are ignored here, because each can
+ * be edited without moving to another circuit. It is what an imported project
+ * has to go on to say which circuit it is, since the file records geometry and
+ * no circuit.
+ */
+export function presetKeyForCenterline(track: Pick<TrackInput, 'centerline'>): string {
+  const entry = Object.entries(PRESETS).find(([, preset]) => sameCenterline(preset, track))
+  return entry ? entry[0] : ''
+}
+
+function sameCenterline(a: Pick<TrackInput, 'centerline'>, b: Pick<TrackInput, 'centerline'>): boolean {
+  return (
+    a.centerline.length === b.centerline.length &&
+    a.centerline.every(
+      (point, index) => point.x === b.centerline[index].x && point.y === b.centerline[index].y,
+    )
+  )
 }
 
 /**

@@ -13,7 +13,7 @@ import { I18nProvider } from './i18n/I18nProvider'
  * The chosen locale is persisted, so a test that switches language leaves every
  * test declared after it running in that language, and one of them does.
  *
- * Load-bearing, not hygiene: delete this line and 16 of the 26 tests in this
+ * Load-bearing, not hygiene: delete this line and 22 of the 32 tests in this
  * file fail. The number is written down because one line guarding most of a
  * file is exactly the shape somebody tidies away.
  */
@@ -267,8 +267,10 @@ describe('a project rejected on import', () => {
     // `parseProject` used to render the failure with whichever translator it
     // was handed, and the run bar then held that sentence as plain text. A
     // project rejected in English stayed English after switching to
-    // Portuguese -- the staleness #81 removed everywhere else, surviving in
-    // the one path that went through `validationErrorMessage`.
+    // Portuguese -- the staleness #81 removed from the import throws,
+    // surviving here through `validationErrorMessage`. It was not the last
+    // such path: the engine adapter did the same, which "the language switch"
+    // covers below.
     const user = userEvent.setup()
     const { container } = renderApp()
 
@@ -383,6 +385,77 @@ describe('loading a circuit while a background photo is attached', () => {
 
     expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
     expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
+  })
+
+  // Which circuit a photo belonged to used to be read off the track name, a
+  // free-text field, so both directions went wrong: a renamed circuit lost its
+  // own photo with a message saying it belonged elsewhere, and another
+  // circuit's photo saved under this one's name stayed over this geometry.
+  it('keeps the photo of a circuit that was renamed before it is loaded again', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, PRESETS.oval)
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    const name = screen.getByLabelText(/track name/i)
+    await user.clear(name)
+    await user.type(name, 'My oval')
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+  })
+
+  it('recognises a saved circuit by its geometry, not by the name it was saved under', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, { ...PRESETS.oval, name: 'My oval' })
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+  })
+
+  it("drops another circuit's photo even when it was saved under this circuit's name", async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, { ...PRESETS.hairpin, name: PRESETS.oval.name })
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
+  })
+
+  it('still knows which circuit the photo belongs to after an undo', async () => {
+    // Undo moves the track without going through a loader, so a circuit held
+    // beside the history rather than inside it would still name Hairpin here.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, PRESETS.oval)
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'hairpin')
+    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
+    await user.click(screen.getByTitle(/undo/i))
+    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
+    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
   })
 })
 
@@ -830,5 +903,62 @@ describe('the language switch', () => {
     expect(await screen.findByText(/Validation Oval loaded\./)).toBeInTheDocument()
     expect(screen.queryByText(/carregado/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('re-renders an engine failure caught before the switch', async () => {
+    // `runSimulation` rendered its own failures with the translator it was
+    // handed, so the run bar held the English sentence as plain text and kept
+    // it after the toggle while the header beside it turned Portuguese.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) =>
+        String(input).includes('/health')
+          ? new Response('{}', { status: 200 })
+          : new Response('Internal Server Error', { status: 500 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+    expect(await screen.findByText(/responded with HTTP 500\./)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'PT' }))
+    expect(await screen.findByText(/respondeu com HTTP 500\./)).toBeInTheDocument()
+    expect(screen.queryByText(/responded with HTTP 500/)).not.toBeInTheDocument()
+  })
+})
+
+describe('an engine that rejects several fields', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('shows every one of them, not just the first', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) =>
+        String(input).includes('/health')
+          ? new Response('{}', { status: 200 })
+          : new Response(
+              JSON.stringify({
+                detail: [
+                  { loc: ['body', 'kart', 'power_hp'], msg: 'too big' },
+                  { loc: ['body', 'settings', 'sample_count'], msg: 'too small' },
+                ],
+              }),
+              { status: 422, headers: { 'Content-Type': 'application/json' } },
+            ),
+      ),
+    )
+    const user = userEvent.setup()
+    const { container } = renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+
+    expect(await screen.findByText(/rejected settings\.sample_count/)).toBeInTheDocument()
+    expect(container.querySelector('.run-message')).toHaveTextContent(
+      'The engine rejected kart.power_hp: too big. The engine rejected settings.sample_count: too small.',
+    )
   })
 })
