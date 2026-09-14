@@ -15,7 +15,7 @@ import { I18nProvider } from './i18n/I18nProvider'
  * The chosen locale is persisted, so a test that switches language leaves every
  * test declared after it running in that language, and one of them does.
  *
- * Load-bearing, not hygiene: delete this line and 19 of the 29 tests in this
+ * Load-bearing, not hygiene: delete this line and 20 of the 30 tests in this
  * file fail. The number is written down because one line guarding most of a
  * file is exactly the shape somebody tidies away.
  */
@@ -25,9 +25,9 @@ beforeEach(() => window.localStorage.clear())
  * Every render probes `/health`, so every test has to say what answers it:
  * offline, unless a test installs the engine itself. And every stub is undone
  * afterwards. A stub installed inside a test used to outlive it: in the full
- * file the tests declared after the two that talk to the engine, up to the
- * first describe that undid its stubs, ran against a connected engine, and run
- * on their own they got the real `fetch`. Which code path a test covered
+ * file every test declared after the first one that talks to the engine, up to
+ * the first describe that undid its stubs, ran against a connected engine, and
+ * run on their own they got the real `fetch`. Which code path a test covered
  * depended on where it was declared.
  */
 beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
@@ -783,6 +783,78 @@ describe('picking a sample', () => {
     expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(fromCanvas))
     expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
       String(DEMO.samples[fromCanvas].position.x),
+    )
+  })
+})
+
+describe('two solves in flight at once', () => {
+  it('keeps the sample a short lap cut the pick to, when a longer lap lands after it', async () => {
+    // `simulate` clears the pick as it starts, but Simulate comes back as soon
+    // as the status leaves 'running', and a refused upload sets it to 'error'.
+    // So a second solve can start before the first lands, and a sample picked
+    // after that start is still stored when both arrive. The first lap here is
+    // one sample long and can only show POINT 1. Unless `installResult` clamps
+    // the stored pick to that lap, the full lap landing next brings back a pick
+    // the screen had already stopped showing.
+    let releaseFirst: (() => void) | undefined
+    let releaseSecond: (() => void) | undefined
+    const first = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const second = new Promise<void>((resolve) => (releaseSecond = resolve))
+    let solves = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) => {
+        if (String(input).includes('/health')) return new Response('{}', { status: 200 })
+        solves += 1
+        if (solves === 1) {
+          await first
+          return new Response(JSON.stringify(API_RESULT), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        // Busy slots hand the solve to the browser, and with the inputs
+        // untouched that is the lap the app opened on.
+        await second
+        return new Response('{}', { status: 429 })
+      }),
+    )
+
+    const user = userEvent.setup()
+    const { container } = renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+
+    const simulateButton = screen.getByRole('button', { name: /simulate again/i })
+    await user.click(simulateButton)
+    expect(simulateButton).toBeDisabled()
+
+    const trace = new File(['<gpx></gpx>'], 'huge.gpx', { type: 'application/gpx+xml' })
+    Object.defineProperty(trace, 'size', { value: GPS_LIMITS.uploadBytes + 1 })
+    await user.upload(container.querySelector('input[type="file"][accept*="gpx"]') as HTMLInputElement, trace)
+    expect(await screen.findByText(/exceeds the 16 MB limit/)).toBeInTheDocument()
+    expect(simulateButton).toBeEnabled()
+    await user.click(simulateButton)
+    await vi.waitFor(() => expect(solves).toBe(2))
+
+    // The panel lists only the lap's first ten events, so the pick is the last
+    // one it lists rather than the lap's last event.
+    const events = container.querySelectorAll<HTMLButtonElement>('.event-list button')
+    const picked = DEMO.events[events.length - 1].sampleIndex
+    expect(picked).toBeGreaterThan(0)
+    await user.click(events[events.length - 1])
+    expect(selectedPoint(container)).toBe(`POINT ${picked + 1}`)
+
+    // The engine's lap is ten seconds long, which is how it reads on screen.
+    releaseFirst!()
+    await vi.waitFor(() => expect(document.body.textContent).toContain('0:10.00'))
+    expect(selectedPoint(container)).toBe('POINT 1')
+
+    releaseSecond!()
+    expect(await screen.findByText(/computed locally in the browser/i)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('0:10.00')
+    expect(selectedPoint(container)).toBe('POINT 1')
+    expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
+      String(DEMO.samples[0].position.x),
     )
   })
 })

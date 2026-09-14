@@ -109,14 +109,16 @@ export default function App() {
    * cursor and the readout at an arbitrary point of the new lap before they
    * snapped back to the start line.
    *
-   * The selection clamp is not part of that fix: nothing paints the stored
-   * index as it is. Every reader goes through `safeSelectedSample`, which clamps
-   * against the lap being rendered, and clamping twice against the same lap is
-   * clamping once. The two could only disagree on a lap installed after this
-   * one, and the stored index never gets there: `simulate` clears the selection
-   * before each solve, and `reset` clears it in the same update as its install.
-   * The clamp keeps the state in range; the frame on screen is the same without
-   * it.
+   * The selection clamp is not part of that fix, since nothing paints the
+   * stored index as it is: every reader goes through `safeSelectedSample`, which
+   * clamps against the lap being rendered. What it does is keep the stored pick
+   * the one on screen when two solves overlap. `simulate` clears the pick as it
+   * starts, but Simulate is disabled only while the status is 'running' or an
+   * input is invalid, and saving, importing or calibrating all set the status
+   * to something else. So a second solve can start before the first lands, and
+   * a sample picked after that is still stored when both arrive. A shorter
+   * first lap paints that pick cut to its own last sample; without the clamp,
+   * the longer lap landing next paints the original pick again.
    */
   const installResult = useCallback((next: SimulationResult) => {
     setResult(next)
