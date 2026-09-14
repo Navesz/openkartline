@@ -74,9 +74,11 @@ export const app = defineMessages({
     en: 'Import a project file',
     'pt-BR': 'Importar um arquivo de projeto',
   },
-  'app.statusPresetDroppedImage': {
-    en: 'The background image was removed: it was calibrated against a different circuit.',
-    'pt-BR': 'A imagem de fundo foi removida: ela estava calibrada para outro circuito.',
+  // States only what the app knows. Whether the photo shows this circuit is
+  // for the user to judge, since nothing here looks at the picture.
+  'app.statusPresetKeptImage': {
+    en: 'The background image is still attached: remove it if it does not show this circuit.',
+    'pt-BR': 'A imagem de fundo continua anexada: remova-a se ela não mostrar este circuito.',
   },
   'app.statusFixBeforeSimulating': {
     en: 'Fix the highlighted fields before simulating.',

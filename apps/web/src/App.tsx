@@ -257,21 +257,27 @@ export default function App() {
   const selectPreset = (key: string) => {
     const next = freshPreset(key)
     const photo = trackHistory.value.background
-    // A background is a photograph of one particular circuit, calibrated
-    // against it. Re-selecting the circuit it belongs to is the user asking for
-    // the geometry back, not asking to throw the photograph away -- and since
-    // the picker reads "Custom track" the moment a photo is attached, that
-    // click is exactly what the interface invites. Loading a *different*
-    // circuit leaves the photo describing something else, so it goes; the run
-    // bar says so rather than dropping it in silence.
-    const sameCircuit = next.name === trackHistory.value.name
-    trackHistory.set(photo && sameCircuit ? { ...next, background: photo } : next)
+    // The photo stays, whichever circuit is loaded. What a photograph shows is
+    // known only to the person looking at it: this app never reads the picture,
+    // so a rule for when to drop it can only guess, and the run bar stated the
+    // guess as fact. It went by the track name, which is free text: a renamed
+    // Oval lost its own photo with a message blaming a different circuit, and a
+    // Hairpin saved under Oval's name kept its photo over Oval. Nothing else the
+    // app holds does better. The circuit that was open when the photo arrived
+    // is wrong for a photo of Adria attached over Technical, and an exact
+    // centreline match stops matching after one nudged point.
+    //
+    // A GPS trace, the other way to replace the geometry under a photo, keeps
+    // it too. The run bar says the photo is still there, so one left over the
+    // wrong circuit is not left there in silence, and "remove" sits beside it
+    // in the panel.
+    trackHistory.set(photo ? { ...next, background: photo } : next)
     setFitRequest((value) => value + 1)
     setSelectedSample(null)
     markDirty()
     setMessage([
       { key: 'app.statusPresetLoaded', params: { name: next.name } },
-      ...(photo && !sameCircuit ? ([{ key: 'app.statusPresetDroppedImage' }] as const) : []),
+      ...(photo ? ([{ key: 'app.statusPresetKeptImage' }] as const) : []),
     ])
   }
 
@@ -286,11 +292,7 @@ export default function App() {
     setSelectedSample(null)
     const solvedVersion = inputVersion.current
     try {
-      const next = await runSimulation(
-        { track: trackHistory.value, kart, settings },
-        apiAvailable === true,
-        t,
-      )
+      const next = await runSimulation({ track: trackHistory.value, kart, settings }, apiAvailable === true)
       // Something newer is already on screen -- "Restore example" installs a
       // result synchronously -- so this one describes inputs that no longer
       // exist and has nothing to add.
@@ -312,7 +314,7 @@ export default function App() {
             : 'app.statusSolvedStale',
         },
       ])
-      // A browser result does not mean the engine is gone. `api.ts:74` falls
+      // A browser result does not mean the engine is gone. `runSimulation` falls
       // back on 429, and MAX_CONCURRENT_COMPUTATIONS is 2, so a second tab can
       // momentarily take both slots -- latching false here stranded this tab on
       // the browser solver until the window lost and regained focus. `/health`
@@ -324,7 +326,8 @@ export default function App() {
       }
     } catch (error) {
       setStatus('error')
-      setMessage([noteForError(error, { key: 'app.statusSolveFailed' })])
+      // The engine can reject several fields at once, one note each.
+      setMessage(notesForError(error, { key: 'app.statusSolveFailed' }))
     }
   }
 

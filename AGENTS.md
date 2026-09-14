@@ -61,8 +61,11 @@ The interface is English by default with a Portuguese toggle. Never write a lite
 into a component. Add the message to the right module under `apps/web/src/i18n/messages/`
 with both `en` and `pt-BR`, then render it through `t('key')` from `useI18n()`.
 
-Functions in `domain/` and `services/` that produce user-facing text receive the translator
-as a parameter. Keep it that way; do not reach for a global or a module-level locale.
+Functions in `domain/` and `services/` that produce user-facing text do not render it. They
+return message notes (`{ key, params }`), or throw a `LocalisedError` carrying them, and the
+component renders them with `t()` when it paints. A sentence rendered where it was produced
+stays in the language that was active then, after the toggle has changed everything around
+it. Do not reach for a global or a module-level locale either.
 
 `MessageKey` is derived from the dictionary, so a mistyped key fails `tsc` rather than
 silently rendering nothing.
