@@ -1,9 +1,10 @@
 name: Release
 
 # docs/RELEASES.md steps 5 to 9 were manual: build in clean environments,
-# attach artifacts and SHA-256 checksums, publish. That note ends with "until
-# artifact publication is fully automated and verified, a tag must not imply
-# that installers exist" -- this is that automation.
+# attach artifacts and SHA-256 checksums, publish. This is the automation for
+# them, but it is not yet verified: its shell steps were run locally, not on
+# GitHub, so RELEASES.md keeps the caveat that a tag must not imply installers
+# exist until a dispatch run has exercised the whole workflow end to end.
 #
 # `workflow_dispatch` builds and attests exactly the same way but uploads to the
 # run instead of to a release, so the whole path can be exercised without
@@ -37,6 +38,7 @@ jobs:
           cache: pnpm
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: "0.11.31"
           enable-cache: true
 
       - name: Install dependencies
@@ -62,18 +64,40 @@ jobs:
       - name: Build and pack the web application
         run: |
           pnpm --filter @openkartline/web build
+          # On a dispatch, GITHUB_REF_NAME is the branch, and a branch such as
+          # codex/lap-plan-recovery would make tar look for a directory that
+          # does not exist. upload-artifact also rejects " < > |, which git
+          # allows in a branch name. A tag such as v0.2.0 passes unchanged.
+          ref="${GITHUB_REF_NAME//[^A-Za-z0-9._+-]/-}"
           tar --create --gzip \
-            --file "dist/openkartline-web-${GITHUB_REF_NAME:-dev}.tar.gz" \
+            --file "dist/openkartline-web-${ref}.tar.gz" \
             --directory apps/web/dist .
 
       - name: Generate software bills of materials
-        # Both ecosystems, because a lap time produced by this project depends
-        # on the resolved graph of both. cdxgen rather than cyclonedx-npm: the
-        # latter shells out to `npm ls`, which cannot read a pnpm workspace.
+        # Each describes what ships, not the toolchain that built it: the
+        # production dependencies bundled into the web build, and the locked
+        # runtime requirements of the Python distributions. The dev tools are
+        # the `dev` extra, which `uv export` leaves out unless asked; --no-dev
+        # keeps out a `dev` dependency group too, which it would otherwise add.
+        #
+        # `pnpm sbom` rather than cdxgen: cdxgen's --required-only listed
+        # @playwright/test and @testing-library/react and missed scheduler.
+        # cyclonedx-py reads an exported requirements file because, given no
+        # interpreter, `cyclonedx-py environment` inventories the uvx
+        # environment it runs in -- cyclonedx-bom's own dependencies.
+        #
+        # cyclonedx-bom is pinned exactly because it runs between the build and
+        # the checksums; the dependencies it declares by range still resolve
+        # when it runs. pnpm is pinned by `packageManager`, uv above.
         run: |
-          uvx --from cyclonedx-bom cyclonedx-py environment \
-            --of JSON -o dist/sbom-python.cdx.json
-          pnpm dlx @cyclonedx/cdxgen@11 -t pnpm --no-recurse -o dist/sbom-node.cdx.json .
+          pnpm --filter @openkartline/web sbom --sbom-format cyclonedx \
+            --sbom-spec-version 1.6 --sbom-type application --prod \
+            --out dist/sbom-web.cdx.json
+          uv export --quiet --locked --no-dev --no-emit-project \
+            --format requirements.txt -o "$RUNNER_TEMP/requirements-runtime.txt"
+          uvx --from cyclonedx-bom==7.3.1 cyclonedx-py requirements \
+            --pyproject pyproject.toml --mc-type library --sv 1.6 --of JSON \
+            -o dist/sbom-python.cdx.json "$RUNNER_TEMP/requirements-runtime.txt"
 
       - name: Checksum every artifact
         working-directory: dist
