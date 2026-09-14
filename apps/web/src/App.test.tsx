@@ -1,7 +1,9 @@
+import { Profiler } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { GPS_LIMITS } from './domain/gpx'
 import { frameAtElapsed } from './domain/playback'
 import { DEFAULT_KART, PRESETS } from './domain/presets'
 import { simulateInBrowser } from './domain/simulator'
@@ -13,11 +15,23 @@ import { I18nProvider } from './i18n/I18nProvider'
  * The chosen locale is persisted, so a test that switches language leaves every
  * test declared after it running in that language, and one of them does.
  *
- * Load-bearing, not hygiene: delete this line and 16 of the 26 tests in this
+ * Load-bearing, not hygiene: delete this line and 19 of the 29 tests in this
  * file fail. The number is written down because one line guarding most of a
  * file is exactly the shape somebody tidies away.
  */
 beforeEach(() => window.localStorage.clear())
+
+/*
+ * Every render probes `/health`, so every test has to say what answers it:
+ * offline, unless a test installs the engine itself. And every stub is undone
+ * afterwards. A stub installed inside a test used to outlive it: in the full
+ * file the tests declared after the two that talk to the engine, up to the
+ * first describe that undid its stubs, ran against a connected engine, and run
+ * on their own they got the real `fetch`. Which code path a test covered
+ * depended on where it was declared.
+ */
+beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
+afterEach(() => vi.unstubAllGlobals())
 
 const TINY_JPEG =
   'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAa//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ISP/2gAMAwEAAgADAAAAEB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ECP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ECP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/ECP/2Q=='
@@ -31,8 +45,6 @@ function renderApp() {
 }
 
 describe('OpenKartLine application', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-
   it('starts with a useful local demo and recalculates edited kart inputs', async () => {
     const user = userEvent.setup()
     renderApp()
@@ -286,6 +298,52 @@ describe('a project rejected on import', () => {
     expect(await screen.findByText(/quantidade de amostras/i)).toBeInTheDocument()
     expect(screen.queryByText(/must be an integer between/i)).not.toBeInTheDocument()
   })
+
+  it('names every reason, not only the first', async () => {
+    // Validation collects all of its failures and the run bar renders a list,
+    // so the import path passes the whole list on. Cut to the first, a file
+    // wrong in two places would name its second fault only after the first had
+    // been fixed and the file imported again.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const { project } = toProject(PRESETS.oval, DEFAULT_KART, { safetyMarginM: 0.5, sampleCount: 240 })
+    project.kart.parameters.power_hp = 500
+    project.simulation.settings.sample_count = 32.5
+    const file = new File([JSON.stringify(project)], 'twice.okl.json', { type: 'application/json' })
+
+    const input = container.querySelector('input[type="file"][accept*="okl"]') as HTMLInputElement
+    await user.upload(input, file)
+
+    expect(await screen.findByText(/power must be between/i)).toBeInTheDocument()
+    const message = container.querySelector('.run-message')?.textContent ?? ''
+    expect(message).toMatch(/Power must be between \d+ and \d+ hp\./)
+    expect(message).toMatch(/Sample count must be an integer between \d+ and \d+\./)
+  })
+})
+
+describe('a GPS trace over the upload limit', () => {
+  it('is refused on its size, before it is read', async () => {
+    // `file.text()` decodes the whole file before anything can count it, so the
+    // limit is checked on `File.size` first. `parseGpsFile` checks the decoded
+    // bytes too, which is why a refusal alone cannot tell the two apart: this
+    // file declares more than the limit and holds almost nothing, so only the
+    // check before the read can turn it away.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const trace = new File(['<gpx></gpx>'], 'huge.gpx', { type: 'application/gpx+xml' })
+    Object.defineProperty(trace, 'size', { value: GPS_LIMITS.uploadBytes + 1 })
+    const read = vi.fn(() => Promise.resolve('<gpx></gpx>'))
+    Object.defineProperty(trace, 'text', { value: read })
+
+    const input = container.querySelector('input[type="file"][accept*="gpx"]') as HTMLInputElement
+    await user.upload(input, trace)
+
+    expect(await screen.findByText(/The GPS trace exceeds the 16 MB limit\./)).toBeInTheDocument()
+    expect(container.querySelector('.run-bar')).toHaveClass('error')
+    expect(read).not.toHaveBeenCalled()
+  })
 })
 
 describe('an undo with nothing to undo', () => {
@@ -424,9 +482,15 @@ const DEMO = simulateInBrowser({
   settings: { safetyMarginM: 0.15, sampleCount: 200 },
 })
 
-/** `POINT n` in the results panel, which is the selection every panel reads. */
+/**
+ * `POINT n` in the results panel, which is the selection every panel reads.
+ *
+ * The label alone, so it can be compared whole. The readout runs the point
+ * straight into the speed -- `POINT 7634 km/h` -- and a substring match on that
+ * accepted `POINT 7` followed by a speed starting with 6 as `POINT 76`.
+ */
 const selectedPoint = (container: HTMLElement) =>
-  container.querySelector('.selected-readout')?.textContent ?? ''
+  container.querySelector('.selected-readout > span')?.textContent ?? ''
 
 /** The simulated clock, as `elapsed / lap s`. */
 const playbackClock = (container: HTMLElement) =>
@@ -516,9 +580,6 @@ function captureDownload() {
 }
 
 describe('playing the lap back', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-  afterEach(() => vi.unstubAllGlobals())
-
   it('opens the replay already running, and rewinds it when the toggle goes off', async () => {
     // Turning playback off is the only thing that clears the clock -- nothing
     // else does until a new lap is solved -- so a replay reopened after a first
@@ -541,6 +602,49 @@ describe('playing the lap back', () => {
 
     await user.click(toggle)
     expect(playbackClock(container)).toMatch(/^0\.00 \//)
+  })
+
+  it('starts a newly solved lap at the start line, from the first frame it paints', async () => {
+    // A new lap is a new clock. The reset used to be an effect keyed on the
+    // result, and an effect lands a commit late: the commit installing the lap
+    // painted the old elapsed time against the new lap before snapping back to
+    // zero. So every commit is read here, not only the one the test ends on.
+    const runFrames = fakeFrames()
+    const user = userEvent.setup()
+    const painted: string[] = []
+    const { container } = render(
+      <Profiler id="app" onRender={() => painted.push(playbackClock(document.body))}>
+        <I18nProvider>
+          <App />
+        </I18nProvider>
+      </Profiler>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Animate' }))
+    await runFrames(8)
+    expect(playbackClock(container)).toBe(`2.00 / ${DEMO.lapTimeS.toFixed(2)} s`)
+
+    // More power is a different lap time, so a commit painting the old clock
+    // against the new lap cannot be mistaken for one from before the solve.
+    const faster = simulateInBrowser({
+      track: PRESETS.technical,
+      kart: { ...DEFAULT_KART, powerHp: 20 },
+      settings: { safetyMarginM: 0.15, sampleCount: 200 },
+    })
+    const newLap = ` / ${faster.lapTimeS.toFixed(2)} s`
+    expect(faster.lapTimeS.toFixed(2)).not.toBe(DEMO.lapTimeS.toFixed(2))
+
+    const power = screen.getByLabelText(/power/i)
+    await user.clear(power)
+    await user.type(power, '20')
+    painted.length = 0
+    await user.click(screen.getByRole('button', { name: /recalculate lap/i }))
+    expect(await screen.findByText(/computed locally in the browser/i)).toBeInTheDocument()
+
+    const ofNewLap = painted.filter((clock) => clock.endsWith(newLap))
+    expect(ofNewLap.length).toBeGreaterThan(0)
+    expect(ofNewLap).toEqual(ofNewLap.map(() => `0.00${newLap}`))
+    expect(playbackClock(container)).toBe(`0.00${newLap}`)
   })
 
   it('stops the clock on pause and picks it up again on play', async () => {
@@ -603,7 +707,7 @@ describe('playing the lap back', () => {
     })
 
     expect(playbackClock(container)).toMatch(/^10\.00 \//)
-    expect(selectedPoint(container)).toContain(`POINT ${landing + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${landing + 1}`)
 
     // Back to start rewinds without pausing.
     await user.click(screen.getByRole('button', { name: 'Back to start' }))
@@ -623,23 +727,23 @@ describe('playing the lap back', () => {
 
     const picked = DEMO.events[1].sampleIndex
     await user.click(container.querySelectorAll<HTMLButtonElement>('.event-list button')[1])
-    expect(selectedPoint(container)).toContain(`POINT ${picked + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${picked + 1}`)
 
     await user.click(screen.getByRole('button', { name: 'Animate' }))
     await runFrames(8)
 
     const driving = frameAtElapsed(DEMO, 8 * perFrameS(1))!.index
     expect(driving).not.toBe(picked)
-    expect(selectedPoint(container)).toContain(`POINT ${driving + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${driving + 1}`)
     expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(driving))
 
     // The chart hands its hover straight to the selection when the lap is
     // still; while it plays that would fight the kart for the same state.
     fireEvent.pointerMove(chartWithBox(), { clientX: 377, clientY: 40 })
-    expect(selectedPoint(container)).toContain(`POINT ${driving + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${driving + 1}`)
 
     await user.click(screen.getByRole('button', { name: 'Animate' }))
-    expect(selectedPoint(container)).toContain(`POINT ${picked + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${picked + 1}`)
     expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
       String(DEMO.samples[picked].position.x),
     )
@@ -647,9 +751,6 @@ describe('playing the lap back', () => {
 })
 
 describe('picking a sample', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-  afterEach(() => vi.unstubAllGlobals())
-
   it('moves the canvas, the charts and the results panel onto the same sample', async () => {
     // Three panels, one index. A reference is only useful if the corner drawn
     // on the map, the cursor on the trace and the speed in the panel are the
@@ -659,7 +760,7 @@ describe('picking a sample', () => {
 
     const fromPanel = DEMO.events[2].sampleIndex
     await user.click(container.querySelectorAll<HTMLButtonElement>('.event-list button')[2])
-    expect(selectedPoint(container)).toContain(`POINT ${fromPanel + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${fromPanel + 1}`)
     expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(fromPanel))
     expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
       String(DEMO.samples[fromPanel].position.x),
@@ -668,7 +769,7 @@ describe('picking a sample', () => {
     // Half a chart-width along the trace is sample 100 of 200; distinct from
     // the panel's choice, so nothing here is satisfied by the previous state.
     fireEvent.pointerMove(chartWithBox(), { clientX: 377, clientY: 40 })
-    expect(selectedPoint(container)).toContain('POINT 101')
+    expect(selectedPoint(container)).toBe('POINT 101')
     expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(100))
     expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
       String(DEMO.samples[100].position.x),
@@ -678,7 +779,7 @@ describe('picking a sample', () => {
     const fromCanvas = DEMO.events[4].sampleIndex
     expect(fromCanvas).not.toBe(fromPanel)
     fireEvent.click(container.querySelectorAll('.event-marker')[4])
-    expect(selectedPoint(container)).toContain(`POINT ${fromCanvas + 1}`)
+    expect(selectedPoint(container)).toBe(`POINT ${fromCanvas + 1}`)
     expect(container.querySelector('.hover-readout strong')?.textContent).toBe(kph(fromCanvas))
     expect(container.querySelector('.selected-kart circle')?.getAttribute('cx')).toBe(
       String(DEMO.samples[fromCanvas].position.x),
@@ -687,9 +788,6 @@ describe('picking a sample', () => {
 })
 
 describe('the import button in the header', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-  afterEach(() => vi.unstubAllGlobals())
-
   it('opens the project picker and not one of the other two hidden file inputs', async () => {
     // Three file inputs are hidden in the page -- the project, the background
     // image and the GPS trace -- and the header button reaches its own by ref.
@@ -711,11 +809,7 @@ describe('the import button in the header', () => {
 })
 
 describe('saving the project', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.unstubAllGlobals()
-  })
+  afterEach(() => vi.restoreAllMocks())
 
   it('writes the track and kart that are on screen, not the ones it started from', async () => {
     // Save builds the file from the live inputs at the moment it is clicked.
@@ -806,9 +900,6 @@ describe('saving the project', () => {
 })
 
 describe('the language switch', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline'))))
-  afterEach(() => vi.unstubAllGlobals())
-
   it('re-renders a sentence composed before the switch, in both directions', async () => {
     // The run bar holds its message as parts and renders it at paint, so a
     // sentence built when the circuit was loaded follows the toggle instead of

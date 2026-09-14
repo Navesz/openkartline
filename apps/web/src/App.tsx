@@ -102,13 +102,21 @@ export default function App() {
    * A solved lap is a new clock and a new sample range, so install all three
    * together.
    *
-   * The clock reset and the selection clamp used to be effects keyed on
-   * `result`, and an effect is a render late: `useEffect` is passive, so the
-   * commit that installs the lap paints once with the previous elapsed time --
-   * folded modulo the new lap length by `wrapElapsed` -- and with a selection
-   * index clamped against the previous sample count. With playback open that
-   * paints the kart, the chart cursor and the readout at an arbitrary point of
-   * the new lap before they snap back to the start line.
+   * The clock reset used to be an effect keyed on `result`, and an effect is a
+   * render late: `useEffect` is passive, so the commit that installed the lap
+   * painted once with the previous elapsed time -- folded modulo the new lap
+   * length by `wrapElapsed`. With playback open that put the kart, the chart
+   * cursor and the readout at an arbitrary point of the new lap before they
+   * snapped back to the start line.
+   *
+   * The selection clamp is not part of that fix: nothing paints the stored
+   * index as it is. Every reader goes through `safeSelectedSample`, which clamps
+   * against the lap being rendered, and clamping twice against the same lap is
+   * clamping once. The two could only disagree on a lap installed after this
+   * one, and the stored index never gets there: `simulate` clears the selection
+   * before each solve, and `reset` clears it in the same update as its install.
+   * The clamp keeps the state in range; the frame on screen is the same without
+   * it.
    */
   const installResult = useCallback((next: SimulationResult) => {
     setResult(next)
