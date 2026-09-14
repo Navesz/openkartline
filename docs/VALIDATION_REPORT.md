@@ -13,11 +13,17 @@ This report records software and synthetic numerical evidence for the first runn
 
 ## Local verification
 
-The numerical tables below are regenerated from the current engine, so this
-section is too. Re-measure both together, or the document describes two
-revisions at once without saying so.
+This table is a dated snapshot, not a current record. An earlier revision of
+this paragraph promised it would be re-measured whenever the numerical tables
+below were, and it was not: the Python and web test suites, the web coverage
+gates and the browser matrix have all changed since, so its counts describe the
+revision it was measured on. Hosted CI is the current record. The sample-count
+and start-index tables further down are a different kind of evidence —
+`scripts/validation_numbers.py` regenerates them from the engine — and the
+engine's numerics have not changed since this snapshot, only its schema
+examples.
 
-Last measured 2026-08-25 on Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31,
+Measured 2026-08-25 on Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31,
 Python 3.12.10. Independent engine runs also exercised Python 3.11 and 3.13.
 
 | Gate | Result |
@@ -95,64 +101,115 @@ labelling choice and nothing more: the polygon, its winding and its geometry
 are identical whichever index is called zero. A converged solver would return
 the same lap.
 
-This one does not. Rotating the boundary lists and re-solving moves the lap
-time:
+This one does not. Every table in this section is printed by
+`uv run python scripts/validation_numbers.py`, whose rotation
+`tests/python/test_simulation.py::TestStartIndexSensitivity` imports rather
+than copies: with `n` points and `d` start indices tried, the shifts are
+`i · n // d`. A
+spread is `(max − min) / min` over those rotations. It depends on which
+rotations were tried, so every figure is given with its count. The shipped
+circuits are the committed `--default` parity requests, which the web suite
+exports through the same adapter the app uses to call the engine.
 
-| Track | Points | Start indices tried | Lap-time spread |
-|---|---:|---:|---:|
-| Circle fixture | 12 | 4 | **0** |
-| Kartódromo de Baltar | 200 | 5 | 0.53% |
-| Castelo Branco | 200 | 5 | 0.81% |
-| Adria Karting Raceway | 200 | 5 | 0.92% (674 ms of a 73.8 s lap) |
-| Serpentine fixture | 400 | 12 | **6.31%** |
+| Track | Boundary points | Start indices tried | Lap at index 0 | Spread | Relative |
+|---|---:|---:|---:|---:|---:|
+| Circle fixture | 12 | 4 | 9.34 s | 0 ms | **0** |
+| Adria Karting Raceway | 200 | 5 | 73.79 s | 819 ms | 1.11% |
+| Kartódromo de Baltar | 200 | 5 | 64.25 s | 181 ms | 0.28% |
+| Kartódromo de Castelo Branco | 200 | 5 | 68.16 s | 438 ms | 0.64% |
+| Circuito Aurora | 200 | 5 | 23.52 s | 341 ms | 1.47% |
+| Kartódromo Internacional de Volta Redonda | 200 | 5 | 53.42 s | 174 ms | 0.33% |
+| Serpentine fixture | 400 | 12 | 36.83 s | 1250 ms | 3.48% |
 
 The circle is unmoved because every shift of a uniformly sampled circle is an
 exact symmetry of it, which isolates the effect to the shape rather than to the
 mechanism.
 
 An earlier revision of this section blamed the path solver. That was wrong, and
-the control that shows it is simple: set `path_smoothing_iterations` to 0, which
-skips `minimum_bending_path` entirely, and rotate the same lists again.
+not for want of a control. The revision that made the claim had already set
+`path_smoothing_iterations` to 0, which skips `minimum_bending_path` entirely,
+on the API example request, found a larger spread with the solver skipped than
+with it running, and misread that row. The same control on every track above:
 
-| Track | Spread with no solver | Spread at the default 20 |
+| Track | Start indices | No solver | Termination | Default | Termination |
+|---|---:|---:|---|---:|---|
+| Adria Karting Raceway | 5 | 0.36% | `skipped` | 1.11% | `iteration_limit` |
+| Kartódromo de Baltar | 5 | 0.98% | `skipped` | 0.28% | `iteration_limit` |
+| Kartódromo de Castelo Branco | 5 | 0.39% | `skipped` | 0.64% | `iteration_limit` |
+| Circuito Aurora | 5 | 1.50% | `skipped` | 1.47% | `iteration_limit` |
+| Kartódromo Internacional de Volta Redonda | 5 | 0.36% | `skipped` | 0.33% | `iteration_limit` |
+| Serpentine fixture | 12 | 2.09% | `skipped` | 3.48% | `iteration_limit` |
+
+With the solver skipped, every track still spreads. The solver neither creates
+the artefact nor removes it: stopped at its iteration limit, it widens the
+spread on some tracks and narrows it on others. What the start index changes
+before any solver runs is the corridor. Rotating the control-point list
+re-lands the periodic spline resample, so the corridor `prepare_track` measures
+is not quite the same object, and the curvature and speed pipeline — which is
+not exactly start-free itself — carries that into the lap time:
+
+| Track | Start indices | Centreline length moves | Mean width moves |
+|---|---:|---:|---:|
+| Adria Karting Raceway | 5 | 3.7e-04 | 7.2e-04 |
+| Kartódromo de Baltar | 5 | 2.5e-04 | 4.1e-04 |
+| Kartódromo de Castelo Branco | 5 | 1.1e-04 | 2.0e-04 |
+| Circuito Aurora | 5 | 4.3e-04 | 2.0e-04 |
+| Kartódromo Internacional de Volta Redonda | 5 | 1.4e-04 | 6.1e-04 |
+| Serpentine fixture | 12 | 5.8e-04 | 7.8e-04 |
+
+Both columns are relative ranges of `validation.metrics`, which is what
+`prepare_track` measured. The returned `summary.track_length_m` is the racing
+line's length, which is solver output and says nothing about the corridor; an
+earlier revision of the tests read it as a property of the polygon.
+
+The pipeline after preparation is measured on its own by preparing the
+serpentine once, with the solver skipped, and rolling that prepared corridor
+through every one of its samples. The geometry is then the same to the last
+bit, so what the lap still does comes from the zero-iteration midline,
+`path_channels` and `solve_speed_profile`:
+
+| Track | Prepared samples, every shift tried | Lap moves |
 |---|---:|---:|
-| Adria Karting Raceway | 1.05% | 0.92% |
-| Circuito Aurora | 1.26% | 2.18% |
-| Kartódromo Internacional | 0.61% | 0.52% |
-| Kartódromo de Baltar | 0.65% | 0.53% |
-| Castelo Branco | 0.75% | 0.81% |
+| Serpentine fixture | 300 | 7.5e-04 |
 
-The artefact is already there before the solver runs, and on three of the five
-it is *larger* without it. Rotating the control-point list re-lands the periodic
-spline resample, so the prepared corridor is not quite the same object —
-centreline length moves by 3.5e-4 to 5.1e-4 relative, mean width by 7.0e-4 to
-9.9e-4 — and the discrete curvature and speed pipeline amplifies that into the
-lap time. `prepare_track` and the discretisation own most of this, not
-`minimum_bending_path`.
+That is a relative range, like the corridor columns above, taken over 300
+shifts rather than 12, and it is under a twentieth of the 2.09% the serpentine
+spreads across its 12 start indices with the solver skipped.
 
-The solver does have its own, separate defect, measured in the same
-investigation and not to be confused with this one: it reports `iteration_limit`
-on every shipped circuit at every allowed setting, and the lap it returns is
-0.5–5.2 s slower than the minimum of the very objective the API names. That
-makes the headline number depend on a knob documented as a smoothing setting —
-the same Adria request returns 74.01 s at 20 iterations, 73.35 s at 60 and
-72.63 s at 200. Fixing it would remove that dependence; it would *not* remove
-the spread in this section, which is why the two must not be sold as one.
+The solver does have its own, separate defect, not to be confused with this
+one. On every shipped request it stops on `iteration_limit` at 200 iterations,
+the published cap — and since the loop reads the cap only to stop, at every
+nonzero budget below it too — and the lap it returns depends on a knob
+documented as a smoothing setting:
 
-A quasi-Newton replacement closes that gap — projected L-BFGS cuts the objective
-excess from +1.97% to +0.004% on Adria at the same budget — and is nevertheless
-ruled out, because its iteration map amplifies roundoff by a decade every
-fourteen iterations and the two engines cannot then agree to 1e-5 m.
-[ADR 0005](adr/0005-parity-constrains-the-solver.md) records the measurement and
-what a future fix would have to attack instead.
+| Track | Lap at 20 | Lap at 60 | Lap at 200 | Run at 200 |
+|---|---:|---:|---:|---|
+| Adria Karting Raceway | 73.79 s | 73.30 s | 72.78 s | 200 iterations, `iteration_limit` |
+| Kartódromo de Baltar | 64.25 s | 64.04 s | 63.90 s | 200 iterations, `iteration_limit` |
+| Kartódromo de Castelo Branco | 68.16 s | 67.65 s | 66.56 s | 200 iterations, `iteration_limit` |
+| Circuito Aurora | 23.52 s | 23.41 s | 23.31 s | 200 iterations, `iteration_limit` |
+| Kartódromo Internacional de Volta Redonda | 53.42 s | 53.25 s | 53.20 s | 200 iterations, `iteration_limit` |
 
-This is larger than the sample-count spread above, and it is the more
-uncomfortable of the two: a user who exports the same circuit from a tool that
-happens to start the point list elsewhere gets a different answer for the same
-track. `tests/python/test_simulation.py::TestStartIndexSensitivity` pins these
-as ceilings, so the number cannot grow quietly. It is characterised rather than
-suppressed: pinning the anchor would make the figure stable without making it
-right.
+Fixing that would remove the dependence on `path_smoothing_iterations`. It
+would not make the corridor the solver is handed independent of the start
+index, which is why the two must not be sold as one.
+[ADR 0005](adr/0005-parity-constrains-the-solver.md) records why a quasi-Newton
+replacement was measured and nevertheless ruled out, and what a future fix
+would have to attack instead.
+
+What makes this one uncomfortable is who meets it: a user who exports the same
+circuit from a tool that happens to start the point list elsewhere gets a
+different answer for the same track. `TestStartIndexSensitivity` measures
+Adria's row in the first table and the serpentine's rows in the first three,
+formats them with the script's own row functions, and fails unless this page
+carries each resulting line verbatim. So a change that would print any figure
+in those four rows differently — larger or smaller, a collapse included — fails
+until this section is regenerated. How small a move that takes depends on where
+the figure sits between two printed values: at most one unit of the last
+printed digit, and it can be far less. The circle is held to within 1e-9 of
+zero rather than to its row. The other shipped rows, and the rolled corridor,
+are characterised here and checked by no test. None of it is suppressed:
+pinning the anchor would make the figure stable without making it right.
 
 ### Path-solver termination
 
