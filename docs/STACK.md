@@ -71,4 +71,4 @@ The deterministic physics model provides inspectable constraints and tests. Data
 
 ## Runtime policy
 
-Supported development targets are Node.js 24, pnpm 11, and Python 3.11–3.13. Lockfiles are committed. CI runs the Python suite on Ubuntu, Windows, and macOS, the web quality/build suite, browser smoke tests, documentation checks, dependency review, and CodeQL.
+Supported development targets are Node.js 24, pnpm 11, and Python 3.11–3.14. Lockfiles are committed. CI runs the Python suite on Ubuntu, Windows, and macOS, the web quality/build suite, browser smoke tests, documentation checks, dependency review, and CodeQL.

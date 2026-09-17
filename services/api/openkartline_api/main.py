@@ -191,12 +191,21 @@ async def validate_track(request: TrackValidationRequest) -> TrackValidationResu
     across the centreline normal rather than between same-index boundary
     samples, which a corner would skew.
 
-    `valid` is false when an error would stop a simulation: fewer than four
-    points on a boundary, a self-crossing edge, or a corridor narrower than the
-    kart plus twice `safety_margin_m`. Warnings do not block a run.
+    `valid` is false when an error would stop a simulation, and `errors` names
+    each one by `code`. Among them are a boundary that crosses itself or the
+    other, and a corridor whose narrowest measured width is no more than twice
+    `safety_margin_m` plus 0.05 m (`INSUFFICIENT_USABLE_WIDTH`). Warnings do not
+    block a run.
 
-    The response is the same shape whether the track passes or fails; there is
-    no error status to branch on.
+    The engine has no kart width, so that rule counts only the margins: a
+    corridor narrower than a real kart passes when the margins are small
+    enough. To count the kart, include half its width in `safety_margin_m`.
+
+    A track that fails is still answered with HTTP 200 in this shape, with
+    `metrics` null when it failed before its width was measured. A request the
+    schema rejects, such as one with a boundary of fewer than four points or
+    fewer than three distinct ones, never reaches these checks: it is answered
+    with HTTP 422 and a `detail` list instead.
     """
 
     outcome = await _run_bounded(
@@ -225,15 +234,30 @@ async def validate_track(request: TrackValidationRequest) -> TrackValidationResu
 async def create_simulation(request: SimulationRequestV1) -> SimulationResultV1:
     """Solve a racing line for the corridor and integrate a lap around it.
 
-    Two stages. A minimum-bending line is fitted inside the corridor, inset by
-    the kart half-width plus `safety_margin_m`; then a cyclic point-mass speed
-    profile is integrated over it, bounded by grip, power, braking and drag.
+    Two stages. A minimum-bending line is fitted inside the corridor, held at
+    each station at least `safety_margin_m` inside both edges of the width
+    measured there; then a cyclic point-mass speed profile is integrated over
+    it, bounded by grip, power, braking and drag.
 
-    The result always carries a `status`, and a solver that did not converge
-    says so there rather than by failing the request: a lap that hit the
-    iteration limit is returned with `iteration_limit` and its samples intact,
-    so a caller can decide whether to trust it. Read `status.state` before
-    reading `summary`.
+    The engine has no kart width: the margin keeps the line itself off the
+    edges. To keep a whole kart inside the corridor, add half its width to
+    `safety_margin_m`, as the web editor does for its 1.4 m kart.
+
+    A track that fails validation or a solve that fails numerically is still
+    answered with HTTP 200 in this shape, so read the result in two steps.
+    `status.state` says whether there is a lap: `success` carries `summary` and
+    `samples`, while `invalid_input` (reasons in `validation.errors`) and
+    `numerical_failure` carry neither. `success` means only that the speed
+    profile converged; whether the line did is in `status.code`. It is
+    `SPEED_PROFILE_CONVERGED` when the line met its convergence criterion and
+    `PATH_NOT_CONVERGED` when it stopped short, with
+    `path_diagnostics.termination_reason` saying why. That lap keeps its
+    samples, so a caller can decide whether to trust it. The published example
+    is one: its 20 path smoothing iterations end at `iteration_limit`.
+
+    A request the schema rejects, such as one with a boundary of fewer than
+    four points or fewer than three distinct ones, never reaches the engine:
+    it is answered with HTTP 422 and a `detail` list instead.
 
     Determinism is part of the contract: identical input yields identical
     output, and the browser port in `apps/web/src/domain/` is held to the same
