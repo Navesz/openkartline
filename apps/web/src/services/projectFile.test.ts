@@ -260,9 +260,11 @@ describe('the version a rejected file declared', () => {
   })
 
   it('does not let a file choose how much of the interface it fills', () => {
-    const long = rendered('9'.repeat(500))
-    expect(long.length).toBeLessThan(120)
-    expect(long).toContain('…')
+    // Exact strings, not a length ceiling: `length < 120` held for every cap up
+    // to 88, so doubling it to 80 went unnoticed.
+    expect(rendered('9'.repeat(500))).toBe(`Unsupported project version: ${'9'.repeat(40)}….`)
+    expect(rendered('9'.repeat(41))).toBe(`Unsupported project version: ${'9'.repeat(40)}….`)
+    expect(rendered('9'.repeat(40))).toBe(`Unsupported project version: ${'9'.repeat(40)}.`)
   })
 
   it('will not quote an object, whatever it holds', () => {
@@ -283,16 +285,29 @@ describe('a file that is valid JSON but not a project', () => {
     return ''
   }
 
-  it.each(['null', '42', '"0.2.0"', 'true', '[]', '[{"schema_version":"0.2.0"}]'])(
-    'answers %s in this app\u2019s own words',
+  const noteFor = (text: string): unknown => {
+    try {
+      parseProject(text)
+    } catch (error) {
+      return error instanceof LocalisedError ? error.note : String(error)
+    }
+    return undefined
+  }
+
+  it.each(['null', '42', '"0.2.0"', '"0.1.0"', 'true', '[]', '[{"schema_version":"0.2.0"}]'])(
+    'answers %s as not a project, rather than as a version',
     (text) => {
       // `null`, a number, a string and an array are all valid JSON. Reading
       // `schema_version` off `null` threw a raw `TypeError`, and the run bar
       // showed it verbatim: "Cannot read properties of null".
-      const rendered = message(text)
-      expect(rendered).toMatch(/unsupported project version/i)
-      expect(rendered).not.toMatch(/cannot read propert/i)
-      expect(rendered).not.toMatch(/TypeError/)
+      //
+      // The key is asserted exactly. Every one of these used to be answered
+      // "Unsupported project version: …" -- `"0.2.0"` as "Unsupported project
+      // version: 0.2.0.", a version this app reads -- and a pattern on that
+      // sentence noticed the guard was gone only for `null`, because the rest
+      // still produced it without the guard.
+      expect(noteFor(text)).toEqual({ key: 'project.notAnObject' })
+      expect(message(text)).not.toMatch(/version/i)
     },
   )
 
