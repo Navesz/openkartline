@@ -42,6 +42,9 @@ jobs:
         run: pnpm --filter @openkartline/web build
         env:
           VITE_BASE_PATH: /openkartline/
+          # Pages serves static files and nothing answers at /api, so build a
+          # page that solves in the browser and never probes /api/health.
+          VITE_API_URL: none
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       # Keep the transitive upload action pinned as required by repository policy.
       - name: Archive static demo
