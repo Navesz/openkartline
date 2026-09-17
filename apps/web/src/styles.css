@@ -10,15 +10,21 @@
   --panel-soft: #171f1a;
   --line: #2a342e;
   --line-soft: #202923;
+  --header-height: 68px;
   --muted: #91a097;
   /*
-   * Dim text that still clears WCAG AA at small sizes. The nine hardcoded
-   * greens it replaces ranged from 1.82:1 to 4.48:1 against the surface behind
-   * them, where 4.5:1 is the floor for text under 18pt; the worst of them, the
-   * step numbers, were very nearly invisible. This clears 4.55:1 on the
-   * darkest surface it is used on and 5.18:1 on the page background.
+   * Dim text that still clears WCAG AA at small sizes, where 4.5:1 is the floor
+   * for text under 18pt. It replaced nine hardcoded greens, eight of which fell
+   * short on the surface behind them, from 1.83:1 for the step numbers up to
+   * 4.49:1.
+   *
+   * Light text on dark surfaces is closest to failing on the lightest surface,
+   * not the darkest. Here that is a hovered or selected event row (#19211c),
+   * where this reads 4.63:1; it reads 5.39:1 on the page background. The
+   * previous #7b8880 was 4.45:1 on that row. A new surface lighter than the row
+   * needs this checked again.
    */
-  --muted-soft: #7b8880;
+  --muted-soft: #7e8b83;
   --green: #6ee7a8;
   --green-deep: #35b878;
   --yellow: #ffd166;
@@ -87,7 +93,7 @@ summary:focus-visible {
 }
 
 .app-header {
-  height: 68px;
+  height: var(--header-height);
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
@@ -545,6 +551,9 @@ main {
   position: relative;
   background: #111713;
   overflow: hidden;
+  /* The skip link scrolls this to the top of the viewport, where the sticky
+     header would sit over the toolbar holding the first thing Tab reaches. */
+  scroll-margin-top: calc(var(--header-height) + 0.85rem);
 }
 .track-svg {
   display: block;
@@ -643,9 +652,26 @@ main {
   display: flex;
   gap: 0.45rem;
 }
+/*
+ * Painted here rather than left to the browser's own button face. Chromium's
+ * dark ButtonFace is #6b6b6b, and the overlay's #d5ddd7 text read 3.84:1 on it;
+ * Firefox paints #2b2a33, so the ratio depended on the engine. Confirming takes
+ * the Simulate button's green and dark text instead.
+ */
+.calibration-actions button {
+  border: 1px solid var(--green);
+  border-radius: 5px;
+  padding: 0.4rem 0.7rem;
+  background: var(--green);
+  color: #0a140e;
+  font-weight: 700;
+  cursor: pointer;
+}
 .calibration-actions .ghost {
   background: transparent;
   border-color: #2d3831;
+  color: inherit;
+  font-weight: 400;
 }
 .calibration-error {
   margin: 0;
@@ -1395,8 +1421,10 @@ footer a {
 }
 
 @media (max-width: 820px) {
+  :root {
+    --header-height: 60px;
+  }
   .app-header {
-    height: 60px;
     padding: 0 0.8rem;
   }
   .header-status {

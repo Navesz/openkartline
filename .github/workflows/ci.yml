@@ -49,6 +49,11 @@ jobs:
             python: "3.11"
           - os: ubuntu-latest
             python: "3.13"
+          # A new entry reports as a new check, `Python 3.14 on ubuntu-latest`;
+          # it leaves the names the "Protect main" ruleset requires unchanged,
+          # and is only required once it is added to that list.
+          - os: ubuntu-latest
+            python: "3.14"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

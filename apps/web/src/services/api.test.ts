@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KART_HALF_WIDTH_M, kartEnvelope } from '../domain/kartModel'
 import { INPUT_LIMITS } from '../domain/validation'
@@ -6,7 +9,13 @@ import type { SimulationRequest, SimulationResult } from '../domain/types'
 import type { Translate } from '../i18n/context'
 import type { Locale } from '../i18n/locales'
 import { translate } from '../i18n/translate'
-import { ScientificSimulationError, runSimulation, toApiRequest } from './api'
+import {
+  NO_ENGINE_API_URL,
+  ScientificSimulationError,
+  checkApiHealth,
+  runSimulation,
+  toApiRequest,
+} from './api'
 
 const t: Translate = (key, params) => translate('en', key, params)
 
@@ -167,6 +176,43 @@ describe('engine API adapter', () => {
         frictionUtilization: 0.42,
       }),
     )
+  })
+})
+
+describe('the engine health probe', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('asks the proxied engine when no API URL is configured', async () => {
+    // `pnpm dev` and `pnpm preview` leave VITE_API_URL unset and proxy `/api`
+    // to the Python service; the e2e API run depends on this probe going out.
+    const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+
+    expect(await checkApiHealth()).toBe(true)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledWith('/api/health', expect.anything())
+  })
+
+  it('never asks when the build has no engine', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response('Not Found', { status: 404 }))
+    vi.stubGlobal('fetch', fetch)
+    vi.stubEnv('VITE_API_URL', NO_ENGINE_API_URL)
+
+    expect(await checkApiHealth()).toBe(false)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('is told there is no engine by the workflow that builds the Pages demo', () => {
+    // The value is only honoured if the workflow spells it the way the code
+    // does, and nothing else would notice the two drifting apart.
+    const workflow = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../../.github/workflows/pages.yml'),
+      'utf8',
+    )
+    expect(workflow).toMatch(new RegExp(`^\\s+VITE_API_URL: "?${NO_ENGINE_API_URL}"?\\s*$`, 'm'))
   })
 })
 

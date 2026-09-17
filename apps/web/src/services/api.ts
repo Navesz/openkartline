@@ -47,7 +47,20 @@ function isAvailabilityFailure(error: unknown): boolean {
   )
 }
 
+/**
+ * The `VITE_API_URL` that builds a page with no engine behind it.
+ *
+ * The GitHub Pages demo is static files: nothing answers at `/api`, so the
+ * probe on load, and again on every window focus, only ever put a 404 for
+ * `/api/health` in the console. Unset still means `/api`, which the dev and
+ * preview servers proxy to the local Python service.
+ */
+export const NO_ENGINE_API_URL = 'none'
+
 export async function checkApiHealth(): Promise<boolean> {
+  // Read at call time rather than beside API_BASE so a test can stub it. In a
+  // build, Vite replaces it with the literal either way.
+  if (import.meta.env.VITE_API_URL === NO_ENGINE_API_URL) return false
   try {
     const response = await fetchWithTimeout(`${API_BASE}/health`)
     return response.ok
