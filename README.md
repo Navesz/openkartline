@@ -2,7 +2,9 @@
 
 ![OpenKartLine racing line lab](docs/assets/openkartline-logo.svg)
 
-> An open-source, local-first 2D kart racing-line and lap-planning application.
+> Draw or import a kart track, pick a kart class, and get a racing line, braking points, a speed trace and an estimated lap time. In your browser, free, no account.
+
+**[▶ Try the web demo](https://navesz.github.io/openkartline/)**
 
 [![CI](https://github.com/Navesz/openkartline/actions/workflows/ci.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml)
@@ -10,9 +12,19 @@
 [![License](https://img.shields.io/github/license/Navesz/openkartline)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-orange)](docs/ROADMAP.md)
 
-[Leia em português](README.pt-BR.md) · [Try the web demo](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribute](CONTRIBUTING.md)
+[Leia em português](README.pt-BR.md) · [Roadmap](docs/ROADMAP.md) · [Contribute](CONTRIBUTING.md)
 
-![OpenKartLine demo: draw a track, calculate, and watch the racing line, speed profile, and lap time](docs/assets/openkartline-demo.gif)
+[![OpenKartLine demo: draw a track, calculate, and watch the racing line, speed profile, and lap time](docs/assets/openkartline-demo.gif)](https://navesz.github.io/openkartline/)
+
+**Status: alpha.** Read every lap time, speed and braking point it gives you as an estimate.
+
+- It treats the kart as a single point with limits on power, braking and grip (a quasi-steady point-mass model), on a flat, dry track with uniform grip.
+- The racing line is a smooth baseline, not a proven fastest line.
+- The model has not been validated against real lap times yet.
+
+The [validation report](docs/VALIDATION_REPORT.md) records what has been checked so far, and what that does not prove.
+
+Tell us where it is wrong. If you know a track or a kart better than the model does, [start a discussion](https://github.com/Navesz/openkartline/discussions), help [add a real circuit](https://github.com/Navesz/openkartline/issues/41), or [offer lap data or a track fixture](https://github.com/Navesz/openkartline/issues/new?template=data_contribution.yml).
 
 OpenKartLine turns a metric track shape and kart characteristics into an explainable lap estimate: a baseline racing line, speed profile, estimated lap time, and braking, apex, and acceleration references. The runnable alpha works in a browser without an account; when the local Python engine is available, the same interface automatically uses its stricter geometry and point-mass simulation.
 
@@ -48,7 +60,9 @@ OpenKartLine differs in scope and in delivery. The scope is karts and a point-ma
 
 If you want the best possible racing line for a race car, use the first one on that list. If you want to reason about a kart lap in your browser and read the code that produced the number, this is aimed at you.
 
-## Quick start
+## Run it locally (for development)
+
+Only want to try it? The [web demo](https://navesz.github.io/openkartline/) runs in your browser with nothing to install.
 
 Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.14, and [uv](https://docs.astral.sh/uv/).
 
@@ -86,7 +100,7 @@ Run the complete local verification:
 
 ```bash
 pnpm check
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
 uv run ruff check .
 uv run ruff format --check .

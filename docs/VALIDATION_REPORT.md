@@ -15,32 +15,42 @@ This report records software and synthetic numerical evidence for the first runn
 
 This table is a dated snapshot, not a current record. An earlier revision of
 this paragraph promised it would be re-measured whenever the numerical tables
-below were, and it was not: the Python and web test suites, the web coverage
-gates and the browser matrix have all changed since, so its counts describe the
-revision it was measured on. Hosted CI is the current record. The sample-count
-and start-index tables further down are a different kind of evidence —
+below were, and it was not: from 2026-08-25 the table stood unchanged while the
+Python and web test suites, the web coverage gates and the browser matrix all
+moved. It has been re-measured since, but its counts still describe only the
+revision named below. Hosted CI is the current record. The sample-count and
+start-index tables further down are a different kind of evidence —
 `scripts/validation_numbers.py` regenerates them from the engine — and the
-engine's numerics have not changed since this snapshot, only its schema
-examples.
+engine's numerics have not changed since the 2026-08-25 snapshot, only its
+schema examples.
 
-Measured 2026-08-25 on Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31,
-Python 3.12.10. Independent engine runs also exercised Python 3.11 and 3.13.
+Measured 2026-09-17 at 64da4c9 on Windows 11, Node.js 24.13.0, pnpm 11.16.0,
+uv 0.11.31, Python 3.12.10. Python 3.11, 3.13 and 3.14 were not run locally for
+this measurement; the CI matrix runs them. A first re-measurement on 2026-09-16
+at 3a1d626 was overtaken before it merged: #115, #116, #117, #118, #119, #121
+and #123 merged after it, adding tests and changing the web bundle, so every
+row below was run again at 64da4c9 except Zizmor, which says so.
 
 | Gate | Result |
 |---|---|
-| Python tests | 104 passed, 1 xfailed |
-| Python coverage | 93.69% statements/branches combined; 92% gate satisfied |
+| Python tests | 116 passed, 1 xfailed |
+| Python coverage | 93.76% statements/branches combined; 92% gate satisfied |
 | Python lint/types | Ruff format/lint and strict mypy passed |
 | Python packaging | source distribution and universal wheel built |
-| Web tests | 1106 passed, 1 skipped across 29 files |
-| Web coverage | 91.61% statements, 83.64% branches; 90/82 gates satisfied |
+| Web tests | 1228 passed, 1 skipped across 30 files |
+| Web coverage | 92.54% statements, 86.59% branches, 94.03% functions, 94.29% lines; 91/85/92/92 gates satisfied |
 | Web quality | Prettier, ESLint, TypeScript, and production build passed |
-| Browser E2E | fallback-only and real Python API flows passed in Chromium |
-| Static web bundle | 250.35 kB JavaScript / 78.20 kB gzip; 18.28 kB CSS / 5.04 kB gzip |
-| Project contract | JSON meta-schema and synthetic `.okl.json` example passed |
-| Documentation | 35 Markdown files passed markdownlint; CFF 1.2 metadata passed |
-| Workflow security | all actions pinned by SHA; strict Zizmor audit reported no findings |
-| Dependency audit | no known pnpm production or Python environment vulnerabilities after lock update |
+| Browser E2E | 37 passed with the Python API running: 17 in Chromium, 10 each in Firefox and WebKit, which skip `accessibility.spec.ts` |
+| Static web bundle | 318.25 kB JavaScript / 101.22 kB gzip; 22.76 kB CSS / 5.95 kB gzip |
+| Project contract | 0.1.0 and 0.2.0 schemas passed the JSON meta-schema; synthetic `circuito-aurora.okl.json` passed the 0.2.0 schema |
+| Documentation | 37 Markdown files passed markdownlint-cli2 0.23.2; CFF 1.2 metadata passed |
+| Workflow security | all 37 action references pinned by SHA; Zizmor was not re-run, and last reported no findings on 2026-08-25 |
+| Dependency audit | `pnpm audit` and `pip-audit`, run as the scheduled audit runs them, found no known vulnerabilities |
+
+In the Browser E2E run, three workers shared the machine, and 15 of the 17
+Chromium tests timed out before their test body started, while setting up the
+page or in a `beforeEach` hook; Firefox and WebKit passed in that run. Chromium
+then passed on its own with one worker, all 17.
 
 Expected non-blocking warning: Starlette's test client recommends the future `httpx2` package. It does not affect the running API or current test result.
 

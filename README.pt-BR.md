@@ -2,7 +2,9 @@
 
 ![OpenKartLine racing line lab](docs/assets/openkartline-logo.svg)
 
-> Uma aplicação 2D, open source e local-first para planejar linha de corrida e volta de kart.
+> Desenhe ou importe uma pista de kart, escolha a categoria do kart e receba a linha de corrida, os pontos de frenagem, o gráfico de velocidade e o tempo de volta estimado. No navegador, grátis e sem conta.
+
+**[▶ Testar a demo web](https://navesz.github.io/openkartline/)**
 
 [![CI](https://github.com/Navesz/openkartline/actions/workflows/ci.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml/badge.svg)](https://github.com/Navesz/openkartline/actions/workflows/codeql.yml)
@@ -10,9 +12,19 @@
 [![Licença](https://img.shields.io/github/license/Navesz/openkartline)](LICENSE)
 [![Estado](https://img.shields.io/badge/estado-alpha-orange)](docs/ROADMAP.md)
 
-[Read in English](README.md) · [Testar a demo web](https://navesz.github.io/openkartline/) · [Roadmap](docs/ROADMAP.md) · [Contribuir](CONTRIBUTING.md)
+[Read in English](README.md) · [Roadmap](docs/ROADMAP.md) · [Contribuir](CONTRIBUTING.md)
 
-![Demo do OpenKartLine: desenhe a pista, calcule e veja a linha de corrida, o perfil de velocidade e o tempo de volta](docs/assets/openkartline-demo.gif)
+[![Demo do OpenKartLine: desenhe a pista, calcule e veja a linha de corrida, o perfil de velocidade e o tempo de volta](docs/assets/openkartline-demo.gif)](https://navesz.github.io/openkartline/)
+
+**Estado: alpha.** Leia todo tempo de volta, velocidade e ponto de frenagem que ele mostra como uma estimativa.
+
+- Ele trata o kart como um único ponto com limites de potência, frenagem e aderência (um modelo point-mass quase estacionário), numa pista plana e seca, com aderência uniforme.
+- A linha de corrida é uma linha-base suave, não uma linha comprovadamente mais rápida.
+- O modelo ainda não foi validado contra tempos de volta reais.
+
+O [relatório de validação](docs/VALIDATION_REPORT.md) registra o que já foi verificado e o que isso não prova.
+
+Diga onde ele erra. Se você conhece uma pista ou um kart melhor do que o modelo, [abra uma discussão](https://github.com/Navesz/openkartline/discussions), ajude a [adicionar um circuito real](https://github.com/Navesz/openkartline/issues/41) ou [ofereça dados de volta ou uma fixture de pista](https://github.com/Navesz/openkartline/issues/new?template=data_contribution.yml).
 
 O OpenKartLine transforma o formato métrico de uma pista e as características do kart em uma estimativa explicável de volta: linha-base, perfil de velocidade, tempo estimado e referências de frenagem, ápice e retomada. O alpha já funciona no navegador sem conta; quando o motor Python local está disponível, a mesma interface passa automaticamente a usar sua geometria e simulação point-mass mais rigorosas.
 
@@ -48,7 +60,9 @@ O OpenKartLine difere no escopo e na entrega. O escopo é kart e modelo point-ma
 
 Se você quer o melhor traçado possível para um carro de corrida, use o primeiro da lista. Se você quer raciocinar sobre uma volta de kart no navegador e ler o código que produziu o número, este aqui é para você.
 
-## Início rápido
+## Rodar localmente (para desenvolvimento)
+
+Só quer testar? A [demo web](https://navesz.github.io/openkartline/) roda no navegador, sem instalar nada.
 
 Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.14 e [uv](https://docs.astral.sh/uv/).
 
@@ -87,7 +101,7 @@ Para executar a verificação local completa:
 
 ```bash
 pnpm check
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
 uv run ruff check .
 uv run ruff format --check .
