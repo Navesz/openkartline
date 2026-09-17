@@ -42,10 +42,12 @@ def _ellipse_boundary(radius_x: float, radius_y: float, count: int) -> list[Json
     ]
 
 
-# A corridor 8 m wide around a 120 x 70 m oval. Small enough to read in the
-# generated documentation, and valid: `test_openapi.py` posts these very
-# objects to the endpoints that publish them, so an example cannot drift into
-# describing a request the service would reject.
+# An oval whose centreline spans 240 x 140 m, between edges 8 m apart on its
+# axes (the service measures 7.66 m at the narrowest). Small enough to read in
+# the generated documentation, and valid: `TestPublishedExamples` in
+# `tests/python/test_api.py` posts these very objects to the endpoints that
+# publish them, so an example cannot drift into describing a request the
+# service would reject.
 EXAMPLE_TRACK: dict[str, JsonValue] = {
     "schema_version": "1.0",
     "name": "Example oval",
