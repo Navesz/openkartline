@@ -17,24 +17,29 @@ The numerical tables below are regenerated from the current engine, so this
 section is too. Re-measure both together, or the document describes two
 revisions at once without saying so.
 
-Last measured 2026-08-25 on Windows, Node.js 24.13.0, pnpm 11.16.0, uv 0.11.31,
-Python 3.12.10. Independent engine runs also exercised Python 3.11 and 3.13.
+Last measured 2026-09-16 at 3a1d626 on Windows 11, Node.js 24.13.0, pnpm 11.16.0,
+uv 0.11.31, Python 3.12.10. Python 3.11 and 3.13 were not run locally for this
+measurement; the CI matrix runs them.
 
 | Gate | Result |
 |---|---|
-| Python tests | 104 passed, 1 xfailed |
-| Python coverage | 93.69% statements/branches combined; 92% gate satisfied |
+| Python tests | 115 passed, 1 xfailed |
+| Python coverage | 93.76% statements/branches combined; 92% gate satisfied |
 | Python lint/types | Ruff format/lint and strict mypy passed |
 | Python packaging | source distribution and universal wheel built |
-| Web tests | 1106 passed, 1 skipped across 29 files |
-| Web coverage | 91.61% statements, 83.64% branches; 90/82 gates satisfied |
+| Web tests | 1210 passed, 1 skipped across 30 files |
+| Web coverage | 92.51% statements, 86.57% branches, 94.01% functions, 94.27% lines; 91/85/92/92 gates satisfied |
 | Web quality | Prettier, ESLint, TypeScript, and production build passed |
-| Browser E2E | fallback-only and real Python API flows passed in Chromium |
-| Static web bundle | 250.35 kB JavaScript / 78.20 kB gzip; 18.28 kB CSS / 5.04 kB gzip |
-| Project contract | JSON meta-schema and synthetic `.okl.json` example passed |
-| Documentation | 35 Markdown files passed markdownlint; CFF 1.2 metadata passed |
-| Workflow security | all actions pinned by SHA; strict Zizmor audit reported no findings |
-| Dependency audit | no known pnpm production or Python environment vulnerabilities after lock update |
+| Browser E2E | 22 passed with the Python API running: 10 in Chromium, 6 each in Firefox and WebKit, which skip `accessibility.spec.ts` |
+| Static web bundle | 318.00 kB JavaScript / 101.12 kB gzip; 22.46 kB CSS / 5.90 kB gzip |
+| Project contract | 0.1.0 and 0.2.0 schemas passed the JSON meta-schema; synthetic `circuito-aurora.okl.json` passed the 0.2.0 schema |
+| Documentation | 37 Markdown files passed markdownlint-cli2 0.23.2; CFF 1.2 metadata passed |
+| Workflow security | all 37 action references pinned by SHA; Zizmor was not re-run, and last reported no findings on 2026-08-25 |
+| Dependency audit | `pnpm audit` and `pip-audit`, run as the scheduled audit runs them, found no known vulnerabilities |
+
+In the Browser E2E run, the ten Chromium tests first timed out while opening the
+page, with ten workers sharing the machine; Firefox and WebKit passed in that run.
+Chromium then passed on its own with one worker.
 
 Expected non-blocking warning: Starlette's test client recommends the future `httpx2` package. It does not affect the running API or current test result.
 
