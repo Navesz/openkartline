@@ -52,10 +52,13 @@ If you want the best possible racing line for a race car, use the first one on t
 
 Requirements: Node.js 24, pnpm 11 through Corepack, Python 3.11–3.13, and [uv](https://docs.astral.sh/uv/).
 
-The editor is tested on Chromium, Firefox and WebKit — every end-to-end run
-exercises all three, because the canvas leans on exactly where they diverge:
-pointer capture during a control-point drag, `getBoundingClientRect` read under
-an SVG user-space transform, and a non-passive wheel listener for zoom.
+The editor is tested on Chromium, Firefox and WebKit, because the canvas leans on
+exactly where they diverge: pointer capture during a control-point drag,
+`getBoundingClientRect` read under an SVG user-space transform, and a
+non-passive wheel listener for zoom. `canvas-gestures.spec.ts` drives each of
+those on all three engines with real pointer and wheel input. The other
+end-to-end specs run on all three as well, except the axe accessibility scan,
+which runs on Chromium only: its rules describe the page, not the engine.
 
 ```bash
 git clone https://github.com/Navesz/openkartline.git

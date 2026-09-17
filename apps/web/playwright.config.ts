@@ -15,7 +15,8 @@ export default defineConfig({
    * Three engines, because this app leans on exactly where they diverge:
    * pointer capture during a control-point drag, `getBoundingClientRect` read
    * under an SVG user-space transform, and a non-passive wheel listener for
-   * zoom. Chromium alone could not have told us whether any of that held.
+   * zoom. Chromium alone could not have told us whether any of that held;
+   * `e2e/canvas-gestures.spec.ts` is what drives each of them.
    *
    * The axe pass runs on Chromium only: the rules describe the page, not the
    * engine, so running it three times would triple the wall clock to re-derive

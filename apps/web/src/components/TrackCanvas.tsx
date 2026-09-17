@@ -81,6 +81,39 @@ function fitPoints(points: Point[]): ViewBox {
   return { x: (minX + maxX - width) / 2, y: (minY + maxY - height) / 2, width, height }
 }
 
+/**
+ * Where the view box really lands inside the surface.
+ *
+ * The surface is sized by the stylesheet and the view box by the track, so
+ * their aspect ratios rarely agree. SVG settles that with the default
+ * `preserveAspectRatio` -- `xMidYMid meet` -- one uniform scale, and the slack
+ * split into equal bands on the longer side. Scaling each axis by its own
+ * rect/view ratio instead, as the pointer mapping used to, stretched the pointer
+ * across those bands. A point dragged near the top of the Aurora Circuit on a
+ * 1280x720 desktop came to rest 14 px below the cursor, pan ran slower than the
+ * hand along that axis, and a calibration span along it measured short.
+ */
+function surfaceFrame(rect: DOMRect, view: ViewBox) {
+  const scale = Math.min(rect.width / view.width, rect.height / view.height)
+  return {
+    /** CSS pixels per world metre, the same on both axes. */
+    scale,
+    left: rect.left + (rect.width - view.width * scale) / 2,
+    top: rect.top + (rect.height - view.height * scale) / 2,
+  }
+}
+
+/** Client coordinates to world metres, through the frame above. */
+function worldAt(rect: DOMRect, view: ViewBox, clientX: number, clientY: number): Point {
+  const frame = surfaceFrame(rect, view)
+  return {
+    x: view.x + (clientX - frame.left) / frame.scale,
+    // Undo the render flip: the drawing group negates y, so moving the pointer
+    // down the screen decreases world y.
+    y: view.y + view.height - (clientY - frame.top) / frame.scale,
+  }
+}
+
 const pathOf = (points: Point[], close = true) =>
   points.length
     ? // Path data, not display: never localised, see i18n/formatNumber.ts.
@@ -215,12 +248,7 @@ export function TrackCanvas({
   const clientToWorld = (clientX: number, clientY: number): Point => {
     const rect = svgRef.current?.getBoundingClientRect()
     if (!rect) return { x: 0, y: 0 }
-    return {
-      x: viewBox.x + ((clientX - rect.left) / rect.width) * viewBox.width,
-      // Undo the render flip: the drawing group negates y, so moving the
-      // pointer down the screen decreases world y.
-      y: viewBox.y + viewBox.height - ((clientY - rect.top) / rect.height) * viewBox.height,
-    }
+    return worldAt(rect, viewBox, clientX, clientY)
   }
 
   // React registers `wheel` passively on the root, so a JSX `onWheel` handler
@@ -233,10 +261,9 @@ export function TrackCanvas({
       event.preventDefault()
       const rect = svg.getBoundingClientRect()
       setViewBox((current) => {
-        const cursor = {
-          x: current.x + ((event.clientX - rect.left) / rect.width) * current.width,
-          y: current.y + current.height - ((event.clientY - rect.top) / rect.height) * current.height,
-        }
+        const cursor = worldAt(rect, current, event.clientX, event.clientY)
+        // Holding the cursor's ratio across the view is enough to hold it on
+        // screen: the aspect ratio does not change, so neither do the bands.
         const factor = event.deltaY > 0 ? 1.12 : 0.89
         const width = Math.min(600, Math.max(25, current.width * factor))
         const height = (current.height * width) / current.width
@@ -319,10 +346,11 @@ export function TrackCanvas({
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = svgRef.current?.getBoundingClientRect()
     if (panOrigin && panOrigin.pointerId === event.pointerId && rect) {
+      const { scale } = surfaceFrame(rect, panOrigin.view)
       setViewBox({
         ...panOrigin.view,
-        x: panOrigin.view.x - ((event.clientX - panOrigin.clientX) / rect.width) * panOrigin.view.width,
-        y: panOrigin.view.y + ((event.clientY - panOrigin.clientY) / rect.height) * panOrigin.view.height,
+        x: panOrigin.view.x - (event.clientX - panOrigin.clientX) / scale,
+        y: panOrigin.view.y + (event.clientY - panOrigin.clientY) / scale,
       })
     }
     if (drag && drag.pointerId === event.pointerId) {
