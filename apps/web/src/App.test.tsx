@@ -15,7 +15,7 @@ import { I18nProvider } from './i18n/I18nProvider'
  * The chosen locale is persisted, so a test that switches language leaves every
  * test declared after it running in that language, and one of them does.
  *
- * Load-bearing, not hygiene: delete this line and 20 of the 30 tests in this
+ * Load-bearing, not hygiene: delete this line and 26 of the 36 tests in this
  * file fail. The number is written down because one line guarding most of a
  * file is exactly the shape somebody tidies away.
  */
@@ -279,8 +279,10 @@ describe('a project rejected on import', () => {
     // `parseProject` used to render the failure with whichever translator it
     // was handed, and the run bar then held that sentence as plain text. A
     // project rejected in English stayed English after switching to
-    // Portuguese -- the staleness #81 removed everywhere else, surviving in
-    // the one path that went through `validationErrorMessage`.
+    // Portuguese -- the staleness #81 removed from the import throws,
+    // surviving here through `validationErrorMessage`. It was not the last
+    // such path: the engine adapter did the same, which "the language switch"
+    // covers below.
     const user = userEvent.setup()
     const { container } = renderApp()
 
@@ -411,9 +413,14 @@ describe('loading a circuit while a background photo is attached', () => {
     )
   }
 
+  const photoIsAttached = () => screen.queryByLabelText(/known distance on the image/i) !== null
+  const loadedWithPhoto = (name: string) =>
+    `${name} loaded. Adjust the points or run a simulation. ` +
+    'The background image is still attached: remove it if it does not show this circuit.'
+
   it('keeps the photo when the same circuit is loaded again', async () => {
     // The picker reads "Custom track" the moment a photo is attached, which is
-    // what invites the click. Before this, that click discarded the photo and
+    // what invites the click. Before #95, that click discarded the photo and
     // the run bar said only that the circuit had loaded.
     const user = userEvent.setup()
     const { container } = renderApp()
@@ -425,11 +432,20 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'oval')
 
-    expect(screen.getByLabelText(/known distance on the image/i)).toBeInTheDocument()
-    expect(screen.queryByText(/background image was removed/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
   })
 
-  it('says so when a different circuit replaces it', async () => {
+  // Nothing in the app looks at the picture, so it cannot tell which circuit a
+  // photo shows. It used to guess from the track name, drop the photo when the
+  // guess said "a different circuit", and state that as fact. In each case
+  // below a guess -- by the name, by the circuit open when the photo arrived,
+  // or by matching the centreline -- either drops a photo that may well show
+  // the circuit being loaded, or keeps one without a word.
+
+  it('keeps the photo when a different circuit is loaded, says so, and it can still be removed', async () => {
+    // The app cannot tell this apart from a photo of Hairpin that was attached
+    // while Oval happened to be open, which loading Hairpin should keep.
     const user = userEvent.setup()
     const { container } = renderApp()
 
@@ -439,8 +455,76 @@ describe('loading a circuit while a background photo is attached', () => {
 
     await user.selectOptions(picker, 'hairpin')
 
-    expect(await screen.findByText(/background image was removed/i)).toBeInTheDocument()
-    expect(screen.queryByLabelText(/known distance on the image/i)).not.toBeInTheDocument()
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.hairpin.name))
+
+    await user.click(screen.getByRole('button', { name: /^remove$/i }))
+    expect(photoIsAttached()).toBe(false)
+  })
+
+  it('keeps the photo of a circuit that was renamed before it is loaded again', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, PRESETS.oval)
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    const name = screen.getByLabelText(/track name/i)
+    await user.clear(name)
+    await user.type(name, 'My oval')
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
+  })
+
+  it("says the photo is still there even when the track carried this circuit's name", async () => {
+    // Hairpin's geometry saved under Oval's name. Going by the name, loading Oval
+    // kept the photo over Oval's geometry and said nothing about it.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    await importWithPhoto(user, container, { ...PRESETS.hairpin, name: PRESETS.oval.name })
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'oval')
+
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.oval.name))
+  })
+
+  it('keeps the photo of a reopened project whose points were edited', async () => {
+    // A saved project records geometry and no circuit, so the only way to name
+    // its circuit is to match the centreline, and one nudged point defeats that.
+    // Tracing a photo is exactly the work that nudges points.
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    const picker = screen.getByLabelText(/start from an example/i)
+    const nudged = PRESETS.adria.centerline.map((point, index) =>
+      index === 0 ? { ...point, x: point.x + 0.5 } : point,
+    )
+    await importWithPhoto(user, container, { ...PRESETS.adria, centerline: nudged })
+    expect(await screen.findByLabelText(/known distance on the image/i)).toBeInTheDocument()
+
+    await user.selectOptions(picker, 'adria')
+
+    expect(photoIsAttached()).toBe(true)
+    expect(container.querySelector('.run-message')).toHaveTextContent(loadedWithPhoto(PRESETS.adria.name))
+  })
+
+  it('mentions no photo when none is attached', async () => {
+    const user = userEvent.setup()
+    const { container } = renderApp()
+
+    await user.selectOptions(screen.getByLabelText(/start from an example/i), 'oval')
+
+    expect(container.querySelector('.run-message')).toHaveTextContent(
+      /^Validation Oval loaded\. Adjust the points or run a simulation\.$/,
+    )
   })
 })
 
@@ -993,5 +1077,60 @@ describe('the language switch', () => {
     expect(await screen.findByText(/Validation Oval loaded\./)).toBeInTheDocument()
     expect(screen.queryByText(/carregado/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('re-renders an engine failure caught before the switch', async () => {
+    // `runSimulation` rendered its own failures with the translator it was
+    // handed, so the run bar held the English sentence as plain text and kept
+    // it after the toggle while the header beside it turned Portuguese.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) =>
+        String(input).includes('/health')
+          ? new Response('{}', { status: 200 })
+          : new Response('Internal Server Error', { status: 500 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+    expect(await screen.findByText(/responded with HTTP 500\./)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'PT' }))
+    expect(await screen.findByText(/respondeu com HTTP 500\./)).toBeInTheDocument()
+    expect(screen.queryByText(/responded with HTTP 500/)).not.toBeInTheDocument()
+  })
+})
+
+describe('an engine that rejects several fields', () => {
+  it('shows every one of them, not just the first', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) =>
+        String(input).includes('/health')
+          ? new Response('{}', { status: 200 })
+          : new Response(
+              JSON.stringify({
+                detail: [
+                  { loc: ['body', 'kart', 'power_hp'], msg: 'too big' },
+                  { loc: ['body', 'settings', 'sample_count'], msg: 'too small' },
+                ],
+              }),
+              { status: 422, headers: { 'Content-Type': 'application/json' } },
+            ),
+      ),
+    )
+    const user = userEvent.setup()
+    const { container } = renderApp()
+    expect(await screen.findByText('MVP engine connected')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /recalculate lap|simulate again/i }))
+
+    expect(await screen.findByText(/rejected settings\.sample_count/)).toBeInTheDocument()
+    expect(container.querySelector('.run-message')).toHaveTextContent(
+      'The engine rejected kart.power_hp: too big. The engine rejected settings.sample_count: too small.',
+    )
   })
 })

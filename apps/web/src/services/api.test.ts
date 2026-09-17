@@ -7,6 +7,7 @@ import { INPUT_LIMITS } from '../domain/validation'
 import { DEFAULT_KART, PRESETS } from '../domain/presets'
 import type { SimulationRequest, SimulationResult } from '../domain/types'
 import type { Translate } from '../i18n/context'
+import type { Locale } from '../i18n/locales'
 import { translate } from '../i18n/translate'
 import {
   NO_ENGINE_API_URL,
@@ -23,6 +24,23 @@ const request: SimulationRequest = {
   kart: DEFAULT_KART,
   settings: { safetyMarginM: 0.5, sampleCount: 80 },
 }
+
+/** The run bar's sentence for a run that failed, rendered only now, in `locale`. */
+async function failureText(run: Promise<unknown>, locale: Locale): Promise<string> {
+  const error = await run.then(
+    () => {
+      throw new Error('the run was expected to fail')
+    },
+    (caught: unknown) => caught,
+  )
+  expect(error).toBeInstanceOf(ScientificSimulationError)
+  return (error as ScientificSimulationError).notes
+    .map((note) => ('key' in note ? translate(locale, note.key, note.params) : note.text))
+    .join(' ')
+}
+
+const respondWith = (body: string, status: number) =>
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status })))
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -44,7 +62,7 @@ describe('engine API adapter', () => {
 
   it('uses the browser solver when the API request fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
-    const result = await runSimulation(request, true, t)
+    const result = await runSimulation(request, true)
     expect(result.source).toBe('browser')
     expect(result.samples).toHaveLength(80)
   })
@@ -61,7 +79,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    const result = await runSimulation(request, true, t)
+    const result = await runSimulation(request, true)
     expect(result.source).toBe('browser')
     expect(result.samples).toHaveLength(80)
   })
@@ -89,7 +107,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true, t)).rejects.toThrow(ScientificSimulationError)
+    await expect(runSimulation(request, true)).rejects.toThrow(ScientificSimulationError)
 
     const scientificFailure = {
       engine_version: '0.1.0',
@@ -110,7 +128,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true, t)).rejects.toThrow(/did not converge/)
+    expect(await failureText(runSimulation(request, true), 'en')).toBe('solver did not converge')
   })
 
   it('maps engine channels into the unified UI result', async () => {
@@ -145,7 +163,7 @@ describe('engine API adapter', () => {
         }),
       ),
     )
-    const result = await runSimulation(request, true, t)
+    const result = await runSimulation(request, true)
     expect(result.source).toBe('api')
     expect(result.solver).toBe('engine-0.1.0')
     expect(result.events[0]).toEqual(expect.objectContaining({ kind: 'throttle', sampleIndex: 1 }))
@@ -224,7 +242,9 @@ describe('engine validation errors reach the user', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true, t)).rejects.toThrow(/kart\.max_accel_mps2/)
+    expect(await failureText(runSimulation(request, true), 'en')).toBe(
+      'The engine rejected kart.max_accel_mps2: Input should be less than or equal to 50.',
+    )
   })
 
   it('still carries the plain-string detail the size middleware sends', async () => {
@@ -237,7 +257,58 @@ describe('engine validation errors reach the user', () => {
         }),
       ),
     )
-    await expect(runSimulation(request, true, t)).rejects.toThrow(/too large/)
+    expect(await failureText(runSimulation(request, true), 'en')).toBe('Request body is too large.')
+  })
+})
+
+describe('engine failures follow the language on screen', () => {
+  // The adapter rendered these with the translator it was handed, and the run
+  // bar held the result as text, so the sentence stayed in the language that
+  // was active when the engine answered. Rendering the same failure in both
+  // locales is only possible if it left here as a message, not a sentence.
+  it('names the HTTP status when the body says nothing', async () => {
+    respondWith('Internal Server Error', 500)
+    const run = runSimulation(request, true)
+    expect(await failureText(run, 'en')).toBe('The MVP physics engine responded with HTTP 500.')
+    expect(await failureText(run, 'pt-BR')).toBe('O motor físico MVP respondeu com HTTP 500.')
+  })
+
+  it('names the rejected field in either language, keeping the reason the server gave', async () => {
+    respondWith(
+      JSON.stringify({
+        detail: [
+          { loc: ['body', 'kart', 'power_hp'], msg: 'too big' },
+          { loc: ['body', 'settings', 'sample_count'], msg: 'too small' },
+        ],
+      }),
+      422,
+    )
+    const run = runSimulation(request, true)
+    expect(await failureText(run, 'en')).toBe(
+      'The engine rejected kart.power_hp: too big. The engine rejected settings.sample_count: too small.',
+    )
+    expect(await failureText(run, 'pt-BR')).toBe(
+      'O motor recusou kart.power_hp: too big. O motor recusou settings.sample_count: too small.',
+    )
+  })
+
+  it('says the engine did not finish when it gives no reason', async () => {
+    respondWith(
+      JSON.stringify({
+        engine_version: '0.1.0',
+        status: { state: 'numerical_failure', message: '' },
+        validation: { errors: [], warnings: [] },
+        summary: null,
+        samples: [],
+        markers: [],
+        assumptions: [],
+        warnings: [],
+      }),
+      200,
+    )
+    const run = runSimulation(request, true)
+    expect(await failureText(run, 'en')).toBe('The MVP physics engine did not complete the simulation.')
+    expect(await failureText(run, 'pt-BR')).toBe('O motor físico MVP não concluiu a simulação.')
   })
 })
 
@@ -337,7 +408,7 @@ describe('engine notes are stated once', () => {
       ),
     )
 
-    const rendered = render(await runSimulation(request, true, t))
+    const rendered = render(await runSimulation(request, true))
 
     expect(rendered.filter((line) => /converg/i.test(line))).toHaveLength(1)
     expect(rendered.some((line) => /configured iteration limit/.test(line))).toBe(true)
@@ -356,7 +427,7 @@ describe('engine notes are stated once', () => {
       ),
     )
 
-    const rendered = render(await runSimulation(request, true, t))
+    const rendered = render(await runSimulation(request, true))
 
     expect(rendered.filter((line) => line === 'Large width variation.')).toHaveLength(1)
   })
@@ -380,6 +451,8 @@ describe('a malformed validation body', () => {
       ),
     )
 
-    await expect(runSimulation(request, true, t)).rejects.toThrow(/kart\.power_hp/)
+    expect(await failureText(runSimulation(request, true), 'en')).toBe(
+      'The engine rejected kart.power_hp: too big.',
+    )
   })
 })
