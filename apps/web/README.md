@@ -33,4 +33,4 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-Build GitHub Pages with `VITE_BASE_PATH=/openkartline/`. The static demo cannot host the Python service and therefore uses the browser fallback; clone the repository to use the scientific engine.
+Build GitHub Pages with `VITE_BASE_PATH=/openkartline/ VITE_API_URL=none`. The static demo cannot host the Python service and therefore uses the browser fallback; `VITE_API_URL=none` tells the page there is no engine, so it does not probe `/api/health` for one. Leave `VITE_API_URL` unset for `pnpm dev` and `pnpm preview`, which proxy `/api` to the local Python service. Clone the repository to use the scientific engine.

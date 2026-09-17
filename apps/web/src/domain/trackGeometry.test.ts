@@ -115,11 +115,19 @@ describe('the sample-count floor', () => {
     expect(buildCanonicalTrackGeometry(PRESETS.oval, asked).center).toHaveLength(expected)
   })
 
-  it('still closes the corridor at the floor', () => {
+  it('keeps the corridor the width of the track at the floor', () => {
+    // A station's normal comes from its two neighbours. With one station both
+    // neighbours are the station itself, and with two they are the same other
+    // station, so the normal is zero and both edges collapse onto the
+    // centreline. The lengths and coordinates are still consistent and finite,
+    // which is all this case used to check, and it passed with the floor gone.
     const { center, left, right } = buildCanonicalTrackGeometry(PRESETS.oval, 1)
+    const halfWidthM = PRESETS.oval.widthM / 2
     expect(left).toHaveLength(center.length)
     expect(right).toHaveLength(center.length)
-    expect(center.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
-    expect(left.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
+    center.forEach((point, index) => {
+      expect(Math.hypot(left[index].x - point.x, left[index].y - point.y)).toBeCloseTo(halfWidthM, 9)
+      expect(Math.hypot(right[index].x - point.x, right[index].y - point.y)).toBeCloseTo(halfWidthM, 9)
+    })
   })
 })
