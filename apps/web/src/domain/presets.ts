@@ -606,11 +606,12 @@ export const REAL_TRACK_KEYS = ['voltaRedonda', 'adria', 'casteloBranco', 'balta
  * still reading "Oval".
  *
  * Every field is compared, not just the geometry. A track carrying a calibrated
- * satellite photo is not the preset it started from, and saying it is put the
- * picker one click from throwing that photo away: re-selecting a preset loads
- * a fresh copy, which has no image, and the status line reports only that the
- * circuit was loaded. `attribution` likewise -- a circuit stripped of its ODbL
- * credit is not the circuit the picker would be naming.
+ * satellite photo is not the preset it started from, since no preset ships
+ * with one. Naming the preset anyway used to leave the picker one click from
+ * throwing that photo away, when re-selecting a preset loaded a fresh copy with
+ * no image; loading a preset now keeps the photo. `attribution` likewise -- a
+ * circuit stripped of its ODbL credit is not the circuit the picker would be
+ * naming.
  */
 export function trackPresetKeyFor(track: TrackInput): string {
   if (track.background) return ''

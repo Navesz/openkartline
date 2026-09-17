@@ -7,17 +7,25 @@ import {
   KART_HALF_WIDTH_M,
   kartEnvelope,
 } from '../domain/kartModel'
+import { LocalisedError } from '../domain/localisedError'
 import { simulateInBrowser } from '../domain/simulator'
 import { buildCanonicalTrackGeometry, matchCenterlineIndices } from '../domain/trackGeometry'
 import type { LapSample, ResultNote, SimulationRequest, SimulationResult } from '../domain/types'
-import type { Translate } from '../i18n/context'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 const REQUEST_TIMEOUT_MS = 4_000
 
-export class ScientificSimulationError extends Error {
-  constructor(message: string) {
-    super(message)
+/**
+ * The engine refused the request or could not solve it.
+ *
+ * A `LocalisedError`, so it names its messages instead of rendering them. This
+ * adapter used to take the translator and build the sentence as it threw, and
+ * the run bar then held that sentence as text: after the language toggle it
+ * stayed in the language that was on screen when the engine answered.
+ */
+export class ScientificSimulationError extends LocalisedError {
+  constructor(notes: ResultNote[]) {
+    super(notes)
     this.name = 'ScientificSimulationError'
   }
 }
@@ -67,33 +75,30 @@ interface ValidationEntry {
 }
 
 /**
- * Render a FastAPI validation body into one line naming the field that was
- * rejected. `loc` is a path like `["body", "kart", "max_accel_mps2"]`; the
- * leading `body` carries no meaning for a user, and the message that follows
- * comes from the server, so it stays in the server's language.
+ * Turn a FastAPI validation body into one note per readable entry, naming the
+ * field that was rejected. `loc` is a path like
+ * `["body", "kart", "max_accel_mps2"]`; the leading `body` carries no meaning
+ * for a user, and the message that follows comes from the server, so it stays
+ * in the server's language.
  */
-function validationDetail(detail: unknown, t: Translate): string {
-  if (!Array.isArray(detail)) return ''
-  const parts = (detail as unknown[])
-    .map((candidate) => {
-      // A `null` here used to throw reading `.loc`, and the catch around the
-      // JSON parse swallowed it, so one malformed entry cost the user every
-      // sibling message and the bare "HTTP 422" came back.
-      if (!candidate || typeof candidate !== 'object') return ''
-      const entry = candidate as ValidationEntry
-      const path = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== 'body').join('.') : ''
-      const message = typeof entry.msg === 'string' ? entry.msg : ''
-      if (!path && !message) return ''
-      return path ? t('app.engineFieldRejected', { field: path, reason: message }) : message
-    })
-    .filter(Boolean)
-  return parts.join(' ')
+function validationDetail(detail: unknown): ResultNote[] {
+  if (!Array.isArray(detail)) return []
+  return (detail as unknown[]).flatMap((candidate): ResultNote[] => {
+    // A `null` here used to throw reading `.loc`, and the catch around the
+    // JSON parse swallowed it, so one malformed entry cost the user every
+    // sibling message and the bare "HTTP 422" came back.
+    if (!candidate || typeof candidate !== 'object') return []
+    const entry = candidate as ValidationEntry
+    const path = Array.isArray(entry.loc) ? entry.loc.filter((part) => part !== 'body').join('.') : ''
+    const message = typeof entry.msg === 'string' ? entry.msg : ''
+    if (path) return [{ key: 'app.engineFieldRejected', params: { field: path, reason: message } }]
+    return message ? [{ text: message }] : []
+  })
 }
 
 export async function runSimulation(
   request: SimulationRequest,
   preferApi: boolean,
-  t: Translate,
 ): Promise<SimulationResult> {
   if (!preferApi) return simulateInBrowser(request)
 
@@ -114,20 +119,23 @@ export async function runSimulation(
     // is wrong. The deterministic browser solver is the intended relief valve,
     // so use it instead of surfacing a transient capacity error.
     if (response.status === 429) return simulateInBrowser(request)
-    let detail = ''
+    let detail: ResultNote[] = []
     try {
       const payload = (await response.json()) as { detail?: unknown }
       // A FastAPI validation body is a list of {type, loc, msg, input}; only the
       // request-size middleware answers with a plain string. Reading just the
       // string meant every 422 reached the user as a bare "HTTP 422" with no
       // field and no bound.
-      detail = typeof payload.detail === 'string' ? payload.detail : validationDetail(payload.detail, t)
+      if (typeof payload.detail !== 'string') detail = validationDetail(payload.detail)
+      else if (payload.detail) detail = [{ text: payload.detail }]
     } catch {
       // The HTTP status remains the authoritative error when the body is not JSON.
     }
-    throw new ScientificSimulationError(detail || t('app.engineHttpError', { status: response.status }))
+    throw new ScientificSimulationError(
+      detail.length ? detail : [{ key: 'app.engineHttpError', params: { status: response.status } }],
+    )
   }
-  return fromApiResult((await response.json()) as ApiResult, request, t)
+  return fromApiResult((await response.json()) as ApiResult, request)
 }
 
 interface ApiPoint {
@@ -234,10 +242,13 @@ function engineNotes(result: ApiResult): ResultNote[] {
   return notes
 }
 
-export function fromApiResult(result: ApiResult, request: SimulationRequest, t: Translate): SimulationResult {
+export function fromApiResult(result: ApiResult, request: SimulationRequest): SimulationResult {
   if (result.status.state !== 'success' || !result.summary || !result.samples.length) {
     const reasons = result.validation.errors.map((issue) => issue.message).join(' ')
-    throw new ScientificSimulationError(reasons || result.status.message || t('app.engineIncomplete'))
+    // The engine's own wording, when it gave any, cannot be re-rendered; only
+    // the sentence this app writes for silence can.
+    const said = reasons || result.status.message
+    throw new ScientificSimulationError([said ? { text: said } : { key: 'app.engineIncomplete' }])
   }
   const canonical = buildCanonicalTrackGeometry(request.track, result.samples.length)
   const stations = matchCenterlineIndices(
