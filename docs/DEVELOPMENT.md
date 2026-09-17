@@ -45,7 +45,7 @@ uv run mypy engine services
 uv run pytest
 
 pnpm check
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
 ```
 

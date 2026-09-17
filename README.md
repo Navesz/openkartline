@@ -100,7 +100,7 @@ Run the complete local verification:
 
 ```bash
 pnpm check
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
 uv run ruff check .
 uv run ruff format --check .
