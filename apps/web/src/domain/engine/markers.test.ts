@@ -103,6 +103,34 @@ describe('apex spacing wraps across the start line', () => {
   })
 })
 
+describe('the minimum apex gap, at its boundary', () => {
+  /** Stations exactly 1 m apart, so every gap below is an integer with no rounding in it. */
+  function metreLap(lengthM: number) {
+    const { path } = circularLap(lengthM, lengthM / (2 * Math.PI))
+    return { path, station: path.map((_, index) => index), lengthM }
+  }
+
+  it.each([
+    // On 200 m the floor of 4 m decides, since 200 / 100 is only 2.
+    [200, 4, 2],
+    [200, 3, 1],
+    // On 1,000 m the length decides: 1,000 / 100 is 10.
+    [1000, 10, 2],
+    [1000, 9, 1],
+  ])('on a %s m lap, two peaks %s m apart give %s apex markers', (lengthM, gapM, expected) => {
+    // `simulation.py` keeps a pair whose gap is `>= minimum_gap`, and this is
+    // a 1:1 port. The wrap case above was moved off the minimum on purpose,
+    // and nothing else sat on it, so every other test in this file passed
+    // with `>` in its place.
+    const { path, station } = metreLap(lengthM)
+    const curvature = curvatureWithPeaksAt(lengthM, [10, 10 + gapM])
+
+    const markers = buildDrivingMarkers(station, path, curvature, flatProfile(lengthM), lengthM)
+
+    expect(markers.filter((marker) => marker.kind === 'apex')).toHaveLength(expected)
+  })
+})
+
 describe('pedal edges', () => {
   it('marks the transition, not every station the pedal is held', () => {
     const count = 40
