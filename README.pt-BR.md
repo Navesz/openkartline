@@ -50,7 +50,7 @@ Se você quer o melhor traçado possível para um carro de corrida, use o primei
 
 ## Início rápido
 
-Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.13 e [uv](https://docs.astral.sh/uv/).
+Requisitos: Node.js 24, pnpm 11 via Corepack, Python 3.11–3.14 e [uv](https://docs.astral.sh/uv/).
 
 O editor é testado em Chromium, Firefox e WebKit, porque o canvas depende
 justamente de onde eles divergem: captura de ponteiro durante o arrasto de um
