@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -179,7 +181,7 @@ class TestPublishedExamples:
 
     def test_both_operations_describe_themselves(self) -> None:
         # A summary is a label; the description is where the corridor
-        # conventions and the read-status-before-summary rule are written down.
+        # conventions and the fields that report the outcome are written down.
         spec = client.get("/openapi.json").json()
         for path, method in (
             ("/health", "get"),
@@ -212,3 +214,101 @@ class TestPublishedExamples:
         body = response.json()
         assert body["valid"] is True
         assert body["metrics"]["min_width_m"] > 0
+
+    def test_the_simulation_description_names_what_the_published_example_reports(self) -> None:
+        # The description once sent callers to `status.state` to learn whether
+        # a lap converged. That field is `success` for this very example, whose
+        # line stops at its iteration limit, so every field and value the
+        # description tells a caller to read is checked against what it returns.
+        spec = client.get("/openapi.json").json()
+        description = " ".join(spec["paths"]["/v1/simulations"]["post"]["description"].split())
+        example = spec["components"]["schemas"]["SimulationRequestV1"]["examples"][0]
+
+        body = client.post("/v1/simulations", json=example).json()
+
+        for named in (
+            "`status.state`",
+            "`status.code`",
+            "`PATH_NOT_CONVERGED`",
+            "`path_diagnostics.termination_reason`",
+            "`iteration_limit`",
+            "its 20 path smoothing iterations",
+        ):
+            assert named in description, f"the description no longer mentions {named}"
+        assert body["status"]["state"] == "success"
+        assert body["status"]["code"] == "PATH_NOT_CONVERGED"
+        assert body["path_diagnostics"]["converged"] is False
+        assert body["path_diagnostics"]["termination_reason"] == "iteration_limit"
+        assert example["settings"]["path_smoothing_iterations"] == 20
+        assert body["path_diagnostics"]["iterations"] == 20
+        assert body["summary"] is not None
+        assert len(body["samples"]) == example["settings"]["sample_count"]
+
+    def test_the_width_rule_the_validation_description_states_has_no_kart_in_it(self) -> None:
+        # The description once said the corridor had to fit the kart plus two
+        # margins. The engine has no kart width, so the rule is pinned on both
+        # sides of the threshold the description gives. 1 cm of margin either
+        # way moves the limit 2 cm past the measured width, so a kart term of
+        # 2 cm or more would already fail the request that is meant to fit.
+        spec = client.get("/openapi.json").json()
+        description = " ".join(spec["paths"]["/v1/tracks/validate"]["post"]["description"].split())
+        example = spec["components"]["schemas"]["TrackValidationRequest"]["examples"][0]
+        assert "no more than twice `safety_margin_m` plus 0.05 m" in description
+
+        measured = client.post("/v1/tracks/validate", json=example).json()
+        min_width_m = measured["metrics"]["min_width_m"]
+        threshold_margin_m = (min_width_m - 0.05) / 2
+
+        fits = client.post(
+            "/v1/tracks/validate", json={**example, "safety_margin_m": threshold_margin_m - 0.01}
+        ).json()
+        too_wide = client.post(
+            "/v1/tracks/validate", json={**example, "safety_margin_m": threshold_margin_m + 0.01}
+        ).json()
+
+        # The margin must not move the width it is compared with, or the
+        # threshold computed above would be measuring a different corridor.
+        assert fits["metrics"]["min_width_m"] == min_width_m
+        assert fits["valid"] is True
+        assert too_wide["valid"] is False
+        assert [error["code"] for error in too_wide["errors"]] == ["INSUFFICIENT_USABLE_WIDTH"]
+
+    def test_a_failing_track_is_a_200_and_a_rejected_request_a_422(self) -> None:
+        spec = client.get("/openapi.json").json()
+        validation_example = spec["components"]["schemas"]["TrackValidationRequest"]["examples"][0]
+        simulation_example = spec["components"]["schemas"]["SimulationRequestV1"]["examples"][0]
+
+        crossed = copy.deepcopy(validation_example["track"])
+        edge = crossed["left_boundary"]
+        edge[3], edge[9] = edge[9], edge[3]
+
+        validation = client.post(
+            "/v1/tracks/validate", json={**validation_example, "track": crossed}
+        )
+        assert validation.status_code == 200
+        assert validation.json()["valid"] is False
+        assert "SELF_INTERSECTION" in {error["code"] for error in validation.json()["errors"]}
+        assert validation.json()["metrics"] is None
+
+        simulation = client.post("/v1/simulations", json={**simulation_example, "track": crossed})
+        assert simulation.status_code == 200
+        assert simulation.json()["status"]["state"] == "invalid_input"
+        assert simulation.json()["summary"] is None
+        assert simulation.json()["samples"] == []
+
+        # Below four points, or three distinct ones, the schema answers before
+        # the engine is asked, on both endpoints. The simulation description once
+        # promised a 200 for any invalid track, so each description must say so.
+        points = validation_example["track"]["left_boundary"]
+        for left_boundary in (points[:3], [points[0], points[1], points[0], points[1]]):
+            rejected_track = {**validation_example["track"], "left_boundary": left_boundary}
+            for path, example in (
+                ("/v1/tracks/validate", validation_example),
+                ("/v1/simulations", simulation_example),
+            ):
+                description = " ".join(spec["paths"][path]["post"]["description"].split())
+                assert "answered with HTTP 422 and a `detail` list" in description, path
+
+                rejected = client.post(path, json={**example, "track": rejected_track})
+                assert rejected.status_code == 422, (path, len(left_boundary))
+                assert rejected.json()["detail"][0]["loc"] == ["body", "track", "left_boundary"]
