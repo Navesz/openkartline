@@ -7,10 +7,12 @@ name = "openkartline"
 version = "0.1.0"
 description = "Open-source kart racing line and lap simulation engine"
 readme = "README.md"
-# Upper bound because it is a claim, not a wish: CI tests 3.11, 3.12 and 3.13,
-# and the README says 3.11-3.13. Unbounded, `uv sync` installed cleanly into a
-# 3.14 nobody had run the suite on.
-requires-python = ">=3.11,<3.14"
+# Upper bound because it is a claim, not a wish: CI tests 3.11 through 3.14, and
+# the README says 3.11-3.14. Unbounded, the metadata would admit a 3.15 nobody
+# has run the suite on. Move it together with the `python-tests` matrix in
+# .github/workflows/ci.yml; tests/python/test_supported_pythons.py fails when
+# the two name different interpreters.
+requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "OpenKartLine contributors" }]
@@ -27,6 +29,7 @@ dev = [
   "mypy>=2.3.0,<3",
   "pytest>=9.0.3,<10",
   "pytest-cov>=7.1.0,<8",
+  "pyyaml>=6.0.3,<7",
   "ruff>=0.11,<1",
 ]
 

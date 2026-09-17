@@ -46,6 +46,13 @@ describe('the no-literal-prose rule catches', () => {
     ['a title attribute', '<button title="Start the simulation" />'],
     ['an aria-label', '<div aria-label="Racing line editor" />'],
     ['image alt text', '<img src="x.png" alt="Diagram of the racing line" />'],
+    // One case per remaining name in the attribute list. Without them, taking
+    // any of these five out of `eslint.config.js` left this file green.
+    ['a placeholder', '<input placeholder="Track name" />'],
+    ['an aria-description', '<div aria-description="Drag a point to move it" />'],
+    ['an aria-placeholder', '<div role="textbox" aria-placeholder="Track name" />'],
+    ['an aria-roledescription', '<div role="group" aria-roledescription="Track point" />'],
+    ['an aria-valuetext', '<div role="slider" aria-valuenow={n} aria-valuetext="Nine metres" />'],
     ['a string in child position', "<p>{'Ready to simulate'}</p>"],
     ['a template in child position', '<p>{`Lap ${n} is ready`}</p>'],
     ['a title written as an expression', "<button title={'Start the simulation'} />"],

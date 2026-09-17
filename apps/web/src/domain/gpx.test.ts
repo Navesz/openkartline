@@ -157,9 +157,18 @@ describe('a GPS trace this app is willing to read', () => {
     expect(() => parseGpsFile('trace.csv', padding)).toThrow('imports.gpsTooLarge')
   })
 
+  it('passes a file of exactly the limit on to the parser', () => {
+    // The limit is one the file may reach, as "exceeds" in the message says.
+    // One byte past it and a small trace could not tell `>` from `>=`.
+    const exact = ' '.repeat(GPS_LIMITS.uploadBytes)
+    expect(() => parseGpsFile('trace.gpx', exact)).toThrow('imports.gpxNoPoints')
+  })
+
   it('measures bytes rather than characters', () => {
     // A multi-byte character costs what it costs on the wire. Counting string
-    // length would admit three times the bytes for an accented trace.
+    // length would admit twice the limit in bytes for an accented trace: `é`
+    // is one UTF-16 unit and two UTF-8 bytes. Three times is reachable too,
+    // with characters such as `€` that take three bytes in one unit.
     const justUnder = 'é'.repeat(Math.floor(GPS_LIMITS.uploadBytes / 2) + 1)
     expect(justUnder.length).toBeLessThan(GPS_LIMITS.uploadBytes)
     expect(() => parseGpsFile('trace.gpx', justUnder)).toThrow('imports.gpsTooLarge')

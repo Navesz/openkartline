@@ -102,13 +102,23 @@ export default function App() {
    * A solved lap is a new clock and a new sample range, so install all three
    * together.
    *
-   * The clock reset and the selection clamp used to be effects keyed on
-   * `result`, and an effect is a render late: `useEffect` is passive, so the
-   * commit that installs the lap paints once with the previous elapsed time --
-   * folded modulo the new lap length by `wrapElapsed` -- and with a selection
-   * index clamped against the previous sample count. With playback open that
-   * paints the kart, the chart cursor and the readout at an arbitrary point of
-   * the new lap before they snap back to the start line.
+   * The clock reset used to be an effect keyed on `result`, and an effect is a
+   * render late: `useEffect` is passive, so the commit that installed the lap
+   * painted once with the previous elapsed time -- folded modulo the new lap
+   * length by `wrapElapsed`. With playback open that put the kart, the chart
+   * cursor and the readout at an arbitrary point of the new lap before they
+   * snapped back to the start line.
+   *
+   * The selection clamp is not part of that fix, since nothing paints the
+   * stored index as it is: every reader goes through `safeSelectedSample`, which
+   * clamps against the lap being rendered. What it does is keep the stored pick
+   * the one on screen when two solves overlap. `simulate` clears the pick as it
+   * starts, but Simulate is disabled only while the status is 'running' or an
+   * input is invalid, and saving, importing or calibrating all set the status
+   * to something else. So a second solve can start before the first lands, and
+   * a sample picked after that is still stored when both arrive. A shorter
+   * first lap paints that pick cut to its own last sample; without the clamp,
+   * the longer lap landing next paints the original pick again.
    */
   const installResult = useCallback((next: SimulationResult) => {
     setResult(next)
